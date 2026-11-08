@@ -1,7 +1,7 @@
 // Runs a library import in the worker: resolves each row to a catalogue media, then adds it
 // to the user's library. Existing entries are kept as they are (V1 choice).
 import { eq } from 'drizzle-orm';
-import { upsertMedia, type Providers } from '../catalogue';
+import { importMedia, upsertMedia, type Providers } from '../catalogue';
 import type { Db } from '../db';
 import { activityEvents, importJobs, libraryEntries, media } from '../db/schema';
 import { cached, DAY } from '../providers/cache';
@@ -21,6 +21,10 @@ async function resolve(db: Db, providers: Providers, item: ImportItem): Promise<
 		);
 		return found ? upsertMedia(db, found) : null;
 	}
+	// Provider id given by the source (Trakt gives TMDB ids): import it from that provider
+	if (item.ref && providers[item.type].name === item.ref.provider) {
+		return importMedia(db, providers, item.type, item.ref.externalId);
+	}
 	return null;
 }
 
@@ -33,9 +37,26 @@ export async function saveImportedEntry(
 	userId: string,
 	mediaId: number,
 	source: ImportSource,
-	e: ImportedEntry
+	imported: ImportedEntry
 ): Promise<'imported' | 'kept'> {
 	return db.transaction(async (tx) => {
+		const [m] = await tx
+			.select({
+				type: media.type,
+				runtime: media.runtimeMinutes,
+				total: media.totalUnits,
+				status: media.status
+			})
+			.from(media)
+			.where(eq(media.id, mediaId));
+		// A finished work whose every unit was seen is completed, even if the source says otherwise
+		const done =
+			imported.status === 'in_progress' &&
+			!!m.total &&
+			imported.progress >= m.total &&
+			(m.status === 'finished' || m.status === 'cancelled');
+		const e = done ? { ...imported, status: 'completed' as const } : imported;
+
 		const [created] = await tx
 			.insert(libraryEntries)
 			.values({ userId, mediaId, ...e })
@@ -43,10 +64,6 @@ export async function saveImportedEntry(
 			.returning({ id: libraryEntries.id });
 		if (!created) return 'kept';
 
-		const [m] = await tx
-			.select({ type: media.type, runtime: media.runtimeMinutes })
-			.from(media)
-			.where(eq(media.id, mediaId));
 		const at = (date: string | null) => (date ? new Date(`${date}T12:00:00Z`) : new Date());
 		const when = at(e.completedOn ?? e.startedOn);
 		const key = (kind: string) => `import:${source}:${mediaId}:${kind}`;
