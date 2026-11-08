@@ -45,6 +45,36 @@ export function createOpenLibraryClient(
 	return {
 		types: ['book'],
 
+		// One search request per attempt: the search index carries everything a book needs.
+		async lookup({ isbn13, isbn, title, author }) {
+			const words = (s: string) => s.replace(/[^\p{L}\p{N}\s']/gu, ' ').trim();
+			const attempts = [
+				isbn13 && `isbn:${isbn13}`,
+				isbn && `isbn:${isbn}`,
+				words(title) &&
+					`title:(${words(title)})${author && words(author) ? ` author:(${words(author)})` : ''}`
+			].filter((q): q is string => !!q);
+			for (const q of attempts) {
+				const [doc] = await searchDocs(q, 1);
+				if (doc) {
+					return {
+						media: {
+							type: 'book',
+							title: doc.title,
+							status: 'finished',
+							startDate: doc.first_publish_year ? `${doc.first_publish_year}-01-01` : null,
+							posterUrl: cover(doc.cover_i, 'L'),
+							totalUnits: doc.number_of_pages_median ?? null,
+							extra: { authors: doc.author_name ?? [] }
+						},
+						externalIds: [{ provider: 'openlibrary', externalId: workId(doc.key) }],
+						titles: uniqueTitles([{ title: doc.title, locale: null }])
+					};
+				}
+			}
+			return null;
+		},
+
 		async search(q) {
 			return (await searchDocs(q, 20)).map((d): SearchResult => ({
 				provider: 'openlibrary',
