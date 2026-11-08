@@ -11,7 +11,8 @@
 		{ href: resolve(''), label: 'En cours' },
 		{ href: resolve('library'), label: 'Bibliothèque' },
 		{ href: resolve('calendar'), label: 'Calendrier' },
-		{ href: resolve('import'), label: 'Importer' }
+		{ href: resolve('import'), label: 'Importer' },
+		{ href: resolve('integrations'), label: 'Intégrations' }
 	];
 
 	async function signOut() {
