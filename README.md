@@ -18,7 +18,10 @@ cp .env.example .env      # puis remplir les clés si besoin
 pnpm db:up                # PostgreSQL 16 dans Docker, port 5432
 pnpm db:migrate           # crée les tables
 pnpm db:seed              # données de démonstration (facultatif)
+pnpm invite toi@exemple.fr # l'inscription est sur invitation pendant la bêta
 ```
+
+Dans `.env`, `BETTER_AUTH_SECRET` doit faire au moins 32 caractères (`openssl rand -base64 32`). La connexion Google ou GitHub est facultative : renseigne les identifiants OAuth indiqués dans `.env.example` pour afficher les boutons correspondants.
 
 Puis, dans deux terminaux :
 

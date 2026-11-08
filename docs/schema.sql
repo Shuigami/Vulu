@@ -1,7 +1,7 @@
 -- Vulu — schéma PostgreSQL de la V1
 -- Films, séries, anime, mangas, livres dans un catalogue unique.
--- Les tables d'authentification (session, compte OAuth, vérification e-mail)
--- sont générées par la bibliothèque d'auth et ne figurent pas ici.
+-- Authentification : Better Auth utilise la table users (name -> display_name,
+-- image -> avatar_url) et les tables sessions, accounts et verifications.
 
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 CREATE EXTENSION IF NOT EXISTS unaccent;
@@ -40,7 +40,60 @@ CREATE TABLE users (
   profile_visibility visibility NOT NULL DEFAULT 'private',
   plan          text NOT NULL DEFAULT 'free',          -- prêt pour le freemium
   created_at    timestamptz NOT NULL DEFAULT now(),
-  updated_at    timestamptz NOT NULL DEFAULT now()
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  email_verified boolean NOT NULL DEFAULT false        -- Better Auth
+);
+
+-- ---------------------------------------------------------------------------
+-- Authentification (Better Auth)
+-- ---------------------------------------------------------------------------
+CREATE TABLE sessions (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id     uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  token       text NOT NULL UNIQUE,
+  expires_at  timestamptz NOT NULL,
+  ip_address  text,
+  user_agent  text,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX sessions_user_idx ON sessions (user_id);
+
+-- Une ligne par méthode de connexion ; provider_id 'credential' porte le hash du mot de passe
+CREATE TABLE accounts (
+  id                        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id                   uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  provider_id               text NOT NULL,
+  account_id                text NOT NULL,
+  access_token              text,
+  refresh_token             text,
+  id_token                  text,
+  access_token_expires_at   timestamptz,
+  refresh_token_expires_at  timestamptz,
+  scope                     text,
+  password                  text,
+  created_at                timestamptz NOT NULL DEFAULT now(),
+  updated_at                timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (provider_id, account_id)
+);
+CREATE INDEX accounts_user_idx ON accounts (user_id);
+
+CREATE TABLE verifications (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  identifier  text NOT NULL,
+  value       text NOT NULL,
+  expires_at  timestamptz NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX verifications_identifier_idx ON verifications (identifier);
+
+-- Bêta sur invitation : l'inscription (mot de passe ou OAuth) exige un e-mail invité
+CREATE TABLE invites (
+  email       citext PRIMARY KEY,
+  invited_by  uuid REFERENCES users (id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  used_at     timestamptz
 );
 
 -- ---------------------------------------------------------------------------

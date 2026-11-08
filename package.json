@@ -21,7 +21,8 @@
 		"db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
-		"db:seed": "tsx --env-file-if-exists=.env src/lib/server/db/seed.ts"
+		"db:seed": "tsx --env-file-if-exists=.env src/lib/server/db/seed.ts",
+		"invite": "tsx --env-file-if-exists=.env src/lib/server/db/invite.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -49,6 +50,7 @@
 		"vitest": "^4.1.8"
 	},
 	"dependencies": {
+		"better-auth": "^1.7.18",
 		"drizzle-orm": "^0.45.4",
 		"pg": "^8.23.1",
 		"pg-boss": "^12.38.1"

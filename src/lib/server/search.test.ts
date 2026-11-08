@@ -44,8 +44,11 @@ describe('searchMedia', () => {
 			await tx.insert(mediaTitles).values({ mediaId: dune.id, title: 'Dune', locale: 'en' });
 
 			const results = await searchMedia(tx, 'soso no furiren');
-			expect(results.map((r) => r.id)).toEqual([frieren.id]);
-			expect(results[0].score).toBe(1);
+			// The database may already hold seed data, so only check the rows inserted here.
+			const ids = results.map((r) => r.id);
+			expect(ids).toContain(frieren.id);
+			expect(ids).not.toContain(dune.id);
+			expect(results.find((r) => r.id === frieren.id)?.score).toBe(1);
 		});
 	});
 });

@@ -91,8 +91,9 @@ export const users = pgTable(
 		id: uuid().primaryKey().defaultRandom(),
 		email: citext().notNull().unique('users_email_key'),
 		username: citext().notNull().unique('users_username_key'),
-		displayName: text(),
-		avatarUrl: text(),
+		emailVerified: boolean().notNull().default(false),
+		displayName: text(), // Better Auth "name"
+		avatarUrl: text(), // Better Auth "image"
 		locale: text().notNull().default('fr'),
 		ratingScale: smallint().notNull().default(10),
 		profileVisibility: visibility().notNull().default('private'),
@@ -105,6 +106,69 @@ export const users = pgTable(
 		check('users_rating_scale_check', sql`${t.ratingScale} IN (5, 10, 100)`)
 	]
 );
+
+// ---------------------------------------------------------------------------
+// Authentication (tables used by Better Auth, see src/lib/server/auth)
+// ---------------------------------------------------------------------------
+export const sessions = pgTable(
+	'sessions',
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		userId: userRef(),
+		token: text().notNull().unique('sessions_token_key'),
+		expiresAt: timestamptz().notNull(),
+		ipAddress: text(),
+		userAgent: text(),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [index('sessions_user_idx').on(t.userId)]
+);
+
+// One row per sign-in method: provider_id 'credential' holds the password hash.
+export const accounts = pgTable(
+	'accounts',
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		userId: userRef(),
+		providerId: text().notNull(),
+		accountId: text().notNull(),
+		accessToken: text(),
+		refreshToken: text(),
+		idToken: text(),
+		accessTokenExpiresAt: timestamptz(),
+		refreshTokenExpiresAt: timestamptz(),
+		scope: text(),
+		password: text(),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [
+		unique('accounts_provider_id_account_id_key').on(t.providerId, t.accountId),
+		index('accounts_user_idx').on(t.userId)
+	]
+);
+
+export const verifications = pgTable(
+	'verifications',
+	{
+		id: uuid().primaryKey().defaultRandom(),
+		identifier: text().notNull(),
+		value: text().notNull(),
+		expiresAt: timestamptz().notNull(),
+		createdAt: createdAt(),
+		updatedAt: updatedAt()
+	},
+	(t) => [index('verifications_identifier_idx').on(t.identifier)]
+);
+
+// Beta access: sign-up (password or OAuth) is only allowed for an invited e-mail.
+export const invites = pgTable('invites', {
+	email: citext().primaryKey(),
+	invitedBy: uuid().references(() => users.id, { onDelete: 'set null' }),
+	createdAt: createdAt(),
+	usedAt: timestamptz()
+});
 
 // ---------------------------------------------------------------------------
 // Catalogue
