@@ -36,6 +36,9 @@ src/hooks.server.ts      session -> locals.user / locals.session, serves /api/au
 src/lib/server/db/       schema.ts (Drizzle), index.ts (createDb), seed.ts, invite.ts
 src/lib/server/auth/     createAuth (Better Auth on the users table, invite check, usernames)
 src/lib/server/app.ts    app-only singletons: db, auth (reads $app/env/private)
+src/lib/server/providers/ TMDB, AniList, Open Library clients (rate limiter, retries in http.ts, cache.ts)
+src/lib/server/catalogue.ts provider per media type, cached search, import/upsert into the catalogue
+src/lib/server/jobs.ts   pg-boss queue names, payload types, requestJob (send and wait for the output)
 src/lib/server/          other server-only code shared by the app and the worker
 src/lib/auth-client.ts   Better Auth browser client; auth-errors.ts maps error codes to French
 src/routes/(app)/        signed-in pages (guard in +layout.server.ts)
@@ -55,6 +58,7 @@ src/worker/index.ts      worker entry point (pg-boss); only the worker calls ext
 - Database changes: edit `schema.ts`, run `pnpm db:generate`, commit the generated migration. Things drizzle-kit cannot express (extensions, functions, triggers) go in a custom migration: `pnpm drizzle-kit generate --custom --name <name>`. Keep `docs/schema.sql` in sync when the schema changes.
 - Drizzle uses `casing: 'snake_case'`: camelCase in TypeScript, snake_case in SQL.
 - Fuzzy search compares `f_unaccent(lower(title))` so queries hit `media_titles_trgm_idx`.
+- Providers: only the worker calls them. The app gets provider results with `requestJob(boss, QUEUES.search, …)`. Responses are cached in `provider_cache` (1 day, purged daily). Clients take `fetch` and `limiter` options so tests use fake responses, never the network. Imports match on the primary external id (`upsertMedia`); the source of truth per type is TMDB (movie, tv), AniList (anime, manga), Open Library (book).
 - Scores are stored out of 100; progress is generic (`progress` = episodes/chapters/pages, `progress_secondary` = seasons/volumes).
 - Images are hot-linked from provider CDNs, never re-hosted.
 - RAM matters (shared small VPS): avoid adding services or heavy dependencies without asking.
