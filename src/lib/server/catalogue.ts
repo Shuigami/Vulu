@@ -10,7 +10,7 @@ import {
 	mediaTitles,
 	seasons
 } from './db/schema';
-import { createAniListClient } from './providers/anilist';
+import { createAniListClient, type AniListClient } from './providers/anilist';
 import { cached, DAY } from './providers/cache';
 import { createOpenLibraryClient } from './providers/openlibrary';
 import { createTmdbClient } from './providers/tmdb';
@@ -23,8 +23,10 @@ import type {
 	SearchResult
 } from './providers/types';
 
-/** Source of truth per media type (docs/v1-spec.md). */
-export type Providers = Record<MediaType, { name: Provider; client: ProviderClient }>;
+/** Source of truth per media type (docs/v1-spec.md), plus the AniList client for list imports. */
+export type Providers = Record<MediaType, { name: Provider; client: ProviderClient }> & {
+	anilist?: AniListClient;
+};
 
 export function createProviders(env: { TMDB_API_KEY?: string }): Providers {
 	const tmdb: ProviderClient = env.TMDB_API_KEY
@@ -41,7 +43,8 @@ export function createProviders(env: { TMDB_API_KEY?: string }): Providers {
 		tv: { name: 'tmdb', client: tmdb },
 		anime: { name: 'anilist', client: anilist },
 		manga: { name: 'anilist', client: anilist },
-		book: { name: 'openlibrary', client: openlibrary }
+		book: { name: 'openlibrary', client: openlibrary },
+		anilist
 	};
 }
 
@@ -261,4 +264,21 @@ export function staleAiringMedia(db: Db, limit = 1000) {
 			)
 		)
 		.limit(limit);
+}
+
+/** A user's TV shows and anime still airing whose episodes were never synced (e.g. after an import). */
+export async function airingWithoutEpisodes(db: Db, userId: string): Promise<number[]> {
+	const rows = await db
+		.select({ id: media.id })
+		.from(libraryEntries)
+		.innerJoin(media, eq(media.id, libraryEntries.mediaId))
+		.where(
+			and(
+				eq(libraryEntries.userId, userId),
+				inArray(media.type, ['tv', 'anime']),
+				inArray(media.status, ['releasing', 'announced']),
+				sql`not exists (select 1 from ${episodes} where ${episodes.mediaId} = ${media.id})`
+			)
+		);
+	return rows.map((r) => r.id);
 }

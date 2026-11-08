@@ -2,6 +2,7 @@
 // Only the worker calls the TMDB, AniList and Open Library APIs.
 import { PgBoss } from 'pg-boss';
 import {
+	airingWithoutEpisodes,
 	createProviders,
 	hasEpisodes,
 	importMedia,
@@ -13,11 +14,16 @@ import { createDb } from '../lib/server/db';
 import {
 	QUEUES,
 	type EpisodesJob,
+	type LibraryImportJob,
 	type ImportJob,
 	type ImportOutput,
 	type SearchJob,
 	type SearchOutput
 } from '../lib/server/jobs';
+import { eq } from 'drizzle-orm';
+import { importJobs } from '../lib/server/db/schema';
+import { runImport } from '../lib/server/imports/run';
+import type { ImportItem } from '../lib/server/imports/types';
 import { purgeExpired } from '../lib/server/providers/cache';
 
 const url = process.env.DATABASE_URL;
@@ -72,6 +78,40 @@ await boss.work(QUEUES.refreshAiring, async () => {
 	console.log(`[worker] refresh queued for ${stale.length} airing media`);
 });
 await boss.schedule(QUEUES.refreshAiring, '0 3 * * *'); // daily, 03:00 UTC
+
+// Library imports: AniList lists are fetched here (the app never calls providers).
+await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
+	const { importId, userId } = job.data;
+	let items: ImportItem[];
+	if (job.data.source === 'anilist') {
+		const { userName } = job.data;
+		const lists = await Promise.all([
+			providers.anilist!.userList(userName, 'anime'),
+			providers.anilist!.userList(userName, 'manga')
+		]);
+		if (lists.every((l) => l === null)) {
+			await db
+				.update(importJobs)
+				.set({ status: 'failed', error: 'anilist_user_not_found', finishedAt: new Date() })
+				.where(eq(importJobs.id, importId));
+			return;
+		}
+		items = lists.flatMap((l) => l ?? []);
+	} else {
+		items = job.data.items;
+	}
+	const stats = await runImport(db, providers, {
+		importId,
+		userId,
+		source: job.data.source,
+		items
+	});
+	console.log(`[worker] library import ${importId} (${job.data.source})`, stats);
+	// Imported airing shows need their episodes now, not at the next daily refresh
+	for (const mediaId of await airingWithoutEpisodes(db, userId)) {
+		await boss.send(QUEUES.syncEpisodes, { mediaId });
+	}
+});
 
 await boss.work(QUEUES.purgeCache, async () => {
 	console.log(`[worker] purged ${await purgeExpired(db)} expired cache entries`);
