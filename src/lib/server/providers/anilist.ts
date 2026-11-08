@@ -123,6 +123,8 @@ function toProviderMedia(m: AniMedia): ProviderMedia {
 export type AniListClient = ProviderClient & {
 	/** Public lists of an AniList user; null when the profile is private or unknown. */
 	userList(userName: string, type: 'anime' | 'manga'): Promise<ImportItem[] | null>;
+	/** AniList media for MyAnimeList ids (50 per request); ids AniList does not know are absent. */
+	byMalIds(ids: number[], type: 'anime' | 'manga'): Promise<Map<number, ProviderMedia>>;
 };
 
 export function createAniListClient(
@@ -184,6 +186,22 @@ export function createAniListClient(
 			const m = data?.Media;
 			if (!m) return null;
 			return toProviderMedia(m);
+		},
+
+		async byMalIds(ids, type) {
+			const found = new Map<number, ProviderMedia>();
+			for (let i = 0; i < ids.length; i += 50) {
+				const data = await query<{ Page: { media: AniMedia[] } }>(
+					`query ($ids: [Int], $type: MediaType) {
+						Page(perPage: 50) { media(idMal_in: $ids, type: $type) { ${DETAIL_FIELDS} } }
+					}`,
+					{ ids: ids.slice(i, i + 50), type: aniType(type) }
+				);
+				for (const m of data?.Page.media ?? []) {
+					if (m.idMal) found.set(m.idMal, toProviderMedia(m));
+				}
+			}
+			return found;
 		},
 
 		async userList(userName, type) {
