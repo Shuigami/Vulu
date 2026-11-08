@@ -54,7 +54,18 @@ src/routes/(app)/        signed-in pages (guard in +layout.server.ts): / (En cou
 src/routes/(auth)/       /login and /signup
 src/worker/index.ts      worker entry point (pg-boss); only the worker calls external APIs
 .github/workflows/ci.yml lint, types, migrations on an empty database, schema drift check, tests
+.github/workflows/release.yml image to ghcr.io/shuigami/vulu on every v* tag
+Dockerfile, docker-compose.yml, Caddyfile  production: caddy, app, worker, postgres, one-shot migrate
+src/lib/server/db/migrate.ts migrations without drizzle-kit (production)
+scripts/backup.sh        nightly pg_dump into restic (host cron)
 ```
+
+## Production
+
+- One image runs the app (`node build`), the worker and `migrate.ts` (`node --import tsx …`, so `tsx` is a runtime dependency). The build validates `src/env.ts`, hence the placeholder values in the Dockerfile; real values are read at runtime.
+- The compose project is `vulu-prod`, not `vulu`, which is the dev database's project.
+- The app sets `ORIGIN`, `BETTER_AUTH_URL` and `DATABASE_URL` from `VULU_DOMAIN` and `POSTGRES_PASSWORD`. `BODY_SIZE_LIMIT` must stay above the 5 MB import cap.
+- Deployment to the VPS is not done yet (no server). See the README.
 
 ## Conventions
 

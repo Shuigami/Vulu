@@ -45,3 +45,47 @@ pnpm test     # tests (nécessite la base migrée)
 ```
 
 La CI GitHub Actions lance les mêmes vérifications et applique les migrations sur une base vierge.
+
+## Production
+
+`docker-compose.yml` lance cinq conteneurs : `caddy` (HTTPS automatique), `app`, `worker`, `postgres`, et `migrate` qui applique les migrations puis s'arrête. L'app et le worker utilisent la même image, construite par `.github/workflows/release.yml` à chaque tag `v*` et publiée sur `ghcr.io/shuigami/vulu`.
+
+### Installer sur le serveur
+
+1. Installer Docker, ouvrir les ports 80 et 443, faire pointer le domaine vers le serveur.
+2. Copier `docker-compose.yml`, `Caddyfile` et `scripts/backup.sh` dans `/srv/vulu`.
+3. Créer `/srv/vulu/.env` à partir de `.env.example` : `VULU_DOMAIN`, `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `TMDB_API_KEY`, etc. (`DATABASE_URL` et `BETTER_AUTH_URL` sont fixés par le compose). Les URL de rappel OAuth deviennent `https://<domaine>/api/auth/callback/google` (ou `github`).
+4. Si le paquet GHCR est privé : `docker login ghcr.io` avec un jeton `read:packages`.
+5. Lancer, puis inviter les premiers comptes :
+
+```bash
+docker compose pull && docker compose up -d
+docker compose exec app node --import tsx src/lib/server/db/invite.ts toi@example.com
+```
+
+Mise à jour : pousser un tag (`git tag v0.2.0 && git push --tags`), attendre l'image, puis `docker compose pull && docker compose up -d` sur le serveur.
+
+Pour essayer la pile en local : `docker build -t ghcr.io/shuigami/vulu:latest .`, puis `docker compose --env-file <fichier avec VULU_DOMAIN=localhost et POSTGRES_PASSWORD> up -d` (Caddy signe alors un certificat local). Le projet Compose s'appelle `vulu-prod` et ne touche pas à la base de développement.
+
+### Sauvegardes
+
+`scripts/backup.sh` envoie un `pg_dump` dans un dépôt [restic](https://restic.net) (Hetzner Storage Box ou stockage objet), puis garde 7 sauvegardes quotidiennes, 4 hebdomadaires et 6 mensuelles. Il faut restic ≥ 0.17 sur le serveur et un fichier `/srv/vulu/.backup.env` :
+
+```bash
+RESTIC_REPOSITORY=sftp:u123456@u123456.your-storagebox.de:vulu
+RESTIC_PASSWORD_FILE=/root/.restic-password
+```
+
+Initialiser le dépôt une fois (`restic init`), puis ajouter au cron de root :
+
+```bash
+30 3 * * * /srv/vulu/scripts/backup.sh >> /var/log/vulu-backup.log 2>&1
+```
+
+Restaurer la dernière sauvegarde (écrase la base) :
+
+```bash
+docker compose stop app worker
+restic dump --tag vulu latest /vulu.dump | docker compose exec -T postgres pg_restore -U vulu -d vulu --clean --if-exists
+docker compose start worker app
+```
