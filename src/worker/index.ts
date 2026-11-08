@@ -22,9 +22,11 @@ import {
 } from '../lib/server/jobs';
 import { eq } from 'drizzle-orm';
 import { importJobs } from '../lib/server/db/schema';
+import { resolveMal } from '../lib/server/imports/mal';
 import { runImport } from '../lib/server/imports/run';
 import type { ImportItem } from '../lib/server/imports/types';
 import { purgeExpired } from '../lib/server/providers/cache';
+import { createTraktClient } from '../lib/server/providers/trakt';
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL is not set');
@@ -33,6 +35,9 @@ if (!process.env.TMDB_API_KEY)
 
 const db = createDb(url);
 const providers = createProviders(process.env);
+const trakt = process.env.TRAKT_CLIENT_ID
+	? createTraktClient({ clientId: process.env.TRAKT_CLIENT_ID })
+	: null;
 const boss = new PgBoss(url);
 boss.on('error', (err) => console.error('[worker] pg-boss error', err));
 
@@ -82,6 +87,12 @@ await boss.schedule(QUEUES.refreshAiring, '0 3 * * *'); // daily, 03:00 UTC
 // Library imports: AniList lists are fetched here (the app never calls providers).
 await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
 	const { importId, userId } = job.data;
+	const fail = (error: string) =>
+		db
+			.update(importJobs)
+			.set({ status: 'failed', error, finishedAt: new Date() })
+			.where(eq(importJobs.id, importId));
+
 	let items: ImportItem[];
 	if (job.data.source === 'anilist') {
 		const { userName } = job.data;
@@ -89,14 +100,15 @@ await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
 			providers.anilist!.userList(userName, 'anime'),
 			providers.anilist!.userList(userName, 'manga')
 		]);
-		if (lists.every((l) => l === null)) {
-			await db
-				.update(importJobs)
-				.set({ status: 'failed', error: 'anilist_user_not_found', finishedAt: new Date() })
-				.where(eq(importJobs.id, importId));
-			return;
-		}
+		if (lists.every((l) => l === null)) return void (await fail('anilist_user_not_found'));
 		items = lists.flatMap((l) => l ?? []);
+	} else if (job.data.source === 'trakt') {
+		if (!trakt) return void (await fail('trakt_not_configured'));
+		const library = await trakt.userLibrary(job.data.userName);
+		if (!library) return void (await fail('trakt_user_not_found'));
+		items = library;
+	} else if (job.data.source === 'mal') {
+		items = await resolveMal(providers.anilist!, job.data.items);
 	} else {
 		items = job.data.items;
 	}

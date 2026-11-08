@@ -8,7 +8,12 @@
 	let { data, form }: PageProps = $props();
 	let sending = $state<string | null>(null);
 
-	const sourceLabel: Record<string, string> = { anilist: 'AniList', goodreads: 'Goodreads' };
+	const sourceLabel: Record<string, string> = {
+		anilist: 'AniList',
+		goodreads: 'Goodreads',
+		mal: 'MyAnimeList',
+		trakt: 'Trakt'
+	};
 	const statusText: Record<string, string> = {
 		pending: 'En attente',
 		running: 'En cours…',
@@ -16,7 +21,9 @@
 		failed: 'Échec'
 	};
 	const errorText: Record<string, string> = {
-		anilist_user_not_found: 'Profil AniList introuvable ou privé.'
+		anilist_user_not_found: 'Profil AniList introuvable ou privé.',
+		trakt_user_not_found: 'Profil Trakt introuvable ou privé.',
+		trakt_not_configured: 'L’import Trakt n’est pas configuré sur ce serveur.'
 	};
 	const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -97,6 +104,61 @@
 		>
 			Importer depuis Goodreads
 		</button>
+	</form>
+
+	<form
+		method="post"
+		action="?/mal"
+		enctype="multipart/form-data"
+		use:enhance={submit('mal')}
+		class="flex flex-col gap-2 rounded border border-gray-200 p-4"
+	>
+		<h2 class="font-medium">MyAnimeList</h2>
+		<p class="text-sm text-gray-600">
+			Sur MyAnimeList : profil, puis Export. Envoie le fichier .xml.gz (anime ou manga, un à la
+			fois).
+		</p>
+		<label class="flex flex-col gap-1 text-sm">
+			Fichier d’export
+			<input name="file" type="file" accept=".xml,.gz,.xml.gz" required class="text-sm" />
+		</label>
+		<button
+			disabled={sending !== null || active}
+			class="mt-auto rounded bg-gray-900 px-3 py-2 text-white disabled:opacity-50"
+		>
+			Importer depuis MyAnimeList
+		</button>
+	</form>
+
+	<form
+		method="post"
+		action="?/trakt"
+		use:enhance={submit('trakt')}
+		class="flex flex-col gap-2 rounded border border-gray-200 p-4"
+	>
+		<h2 class="font-medium">Trakt</h2>
+		<p class="text-sm text-gray-600">
+			Films et séries vus, notes et watchlist de ton profil public.
+		</p>
+		{#if data.traktEnabled}
+			<label class="flex flex-col gap-1 text-sm">
+				Pseudo Trakt
+				<input
+					name="userName"
+					required
+					autocomplete="off"
+					class="rounded border border-gray-300 px-2 py-1.5"
+				/>
+			</label>
+			<button
+				disabled={sending !== null || active}
+				class="mt-auto rounded bg-gray-900 px-3 py-2 text-white disabled:opacity-50"
+			>
+				Importer depuis Trakt
+			</button>
+		{:else}
+			<p class="text-sm text-amber-700">Pas encore disponible sur ce serveur.</p>
+		{/if}
 	</form>
 </div>
 

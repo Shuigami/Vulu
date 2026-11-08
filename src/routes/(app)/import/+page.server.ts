@@ -2,7 +2,9 @@ import { fail } from '@sveltejs/kit';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db, getBoss } from '#lib/server/app.ts';
 import { importJobs } from '#lib/server/db/schema.ts';
+import { TRAKT_CLIENT_ID } from '$app/env/private';
 import { parseGoodreads } from '#lib/server/imports/goodreads.ts';
+import { parseMal, readMalFile, type MalItem } from '#lib/server/imports/mal.ts';
 import type { ImportItem, ImportSource, Unmatched } from '#lib/server/imports/types.ts';
 import { QUEUES, type LibraryImportJob } from '#lib/server/jobs.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -18,6 +20,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(desc(importJobs.createdAt))
 		.limit(10);
 	return {
+		traktEnabled: !!TRAKT_CLIENT_ID,
 		jobs: jobs.map((j) => ({
 			id: j.id,
 			source: j.source,
@@ -34,7 +37,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 async function start(
 	userId: string,
 	source: ImportSource,
-	payload: { userName: string } | { items: ImportItem[] }
+	payload: { userName: string } | { items: ImportItem[] | MalItem[] }
 ) {
 	const running = await db
 		.select({ id: importJobs.id })
@@ -84,5 +87,33 @@ export const actions: Actions = {
 		if (!items.length) return fail(400, { error: 'Aucun livre trouvé dans ce fichier.' });
 		if (items.length > MAX_ROWS) return fail(400, { error: `Trop de lignes (${MAX_ROWS} max).` });
 		return start(locals.user!.id, 'goodreads', { items });
+	},
+
+	mal: async ({ request, locals }) => {
+		const file = (await request.formData()).get('file');
+		if (!(file instanceof File) || file.size === 0) {
+			return fail(400, { error: 'Choisis le fichier exporté depuis MyAnimeList.' });
+		}
+		if (file.size > MAX_FILE_BYTES)
+			return fail(400, { error: 'Fichier trop volumineux (5 Mo max).' });
+		let items;
+		try {
+			items = parseMal(await readMalFile(file));
+		} catch (err) {
+			return fail(400, { error: (err as Error).message });
+		}
+		if (!items.length) return fail(400, { error: 'Aucune œuvre trouvée dans ce fichier.' });
+		if (items.length > MAX_ROWS) return fail(400, { error: `Trop de lignes (${MAX_ROWS} max).` });
+		return start(locals.user!.id, 'mal', { items });
+	},
+
+	trakt: async ({ request, locals }) => {
+		if (!TRAKT_CLIENT_ID) return fail(503, { error: 'L’import Trakt n’est pas configuré.' });
+		const userName = String((await request.formData()).get('userName') ?? '').trim();
+		// Trakt slugs: letters, digits, dashes, underscores and dots
+		if (!/^[A-Za-z0-9._-]{1,50}$/.test(userName)) {
+			return fail(400, { error: 'Pseudo Trakt invalide.' });
+		}
+		return start(locals.user!.id, 'trakt', { userName });
 	}
 };

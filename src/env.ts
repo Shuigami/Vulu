@@ -21,5 +21,7 @@ export const variables = defineEnvVars({
 	GOOGLE_CLIENT_ID: { schema: optional },
 	GOOGLE_CLIENT_SECRET: { schema: optional },
 	GITHUB_CLIENT_ID: { schema: optional },
-	GITHUB_CLIENT_SECRET: { schema: optional }
+	GITHUB_CLIENT_SECRET: { schema: optional },
+	// Only read to show whether Trakt imports are available; the worker uses it
+	TRAKT_CLIENT_ID: { schema: optional }
 });

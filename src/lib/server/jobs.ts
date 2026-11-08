@@ -1,5 +1,6 @@
 // pg-boss queues shared by the app (senders) and the worker (handlers).
 import type { PgBoss } from 'pg-boss';
+import type { MalItem } from './imports/mal';
 import type { ImportItem } from './imports/types';
 import type { MediaType, Provider, SearchResult } from './providers/types';
 
@@ -24,7 +25,10 @@ export type ImportJob = {
 export type EpisodesJob = { mediaId: number };
 /** A user's library import; AniList lists are fetched by the worker, CSV rows come parsed. */
 export type LibraryImportJob = { importId: number; userId: string } & (
-	{ source: 'anilist'; userName: string } | { source: 'goodreads'; items: ImportItem[] }
+	| { source: 'anilist'; userName: string }
+	| { source: 'trakt'; userName: string }
+	| { source: 'goodreads'; items: ImportItem[] }
+	| { source: 'mal'; items: MalItem[] }
 );
 export type ImportOutput = { mediaId: number | null };
 
