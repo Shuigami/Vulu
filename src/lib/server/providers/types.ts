@@ -23,11 +23,34 @@ export type ProviderMedia = {
 	titles: Omit<typeof mediaTitles.$inferInsert, 'id' | 'mediaId'>[];
 };
 
+/** Seasons and episodes of a TV show or anime, for episode tracking and the calendar. */
+export type ProviderEpisodes = {
+	seasons: {
+		number: number; // 0 = specials
+		title: string | null;
+		airDate: string | null;
+		episodeCount: number | null;
+		posterUrl: string | null;
+	}[];
+	episodes: {
+		seasonNumber: number | null; // null for anime (one AniList entry per season)
+		number: number;
+		absoluteNumber: number | null;
+		title: string | null;
+		airDate: Date | null;
+		runtimeMinutes: number | null;
+	}[];
+	/** True when only upcoming episodes are listed (AniList airing schedule). */
+	upcomingOnly: boolean;
+};
+
 export interface ProviderClient {
 	readonly types: readonly MediaType[];
 	search(query: string, type: MediaType): Promise<SearchResult[]>;
 	/** Null when the provider does not know this id. */
 	get(externalId: string, type: MediaType): Promise<ProviderMedia | null>;
+	/** Only for types with episodes (tv, anime). Null when the provider does not know this id. */
+	episodes?(externalId: string, type: MediaType): Promise<ProviderEpisodes | null>;
 }
 
 export const yearOf = (date: string | null | undefined) =>

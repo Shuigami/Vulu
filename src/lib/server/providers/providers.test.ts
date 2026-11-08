@@ -263,3 +263,115 @@ describe('TMDB client', () => {
 		);
 	});
 });
+
+describe('episodes', () => {
+	it('reads TMDB seasons in one appended request, with absolute numbers outside specials', async () => {
+		const { fetch, calls } = fakeFetch([
+			[
+				'append_to_response=season',
+				() =>
+					json({
+						'season/0': {
+							episodes: [
+								{ episode_number: 1, name: 'Spécial', air_date: '2021-12-15', runtime: 10 }
+							]
+						},
+						'season/1': {
+							episodes: [
+								{ episode_number: 1, name: 'Bonjour', air_date: '2022-02-17', runtime: 57 },
+								{ episode_number: 2, name: '', air_date: null, runtime: null }
+							]
+						}
+					})
+			],
+			[
+				'/tv/95396',
+				() =>
+					json({
+						seasons: [
+							{
+								season_number: 1,
+								name: 'Saison 1',
+								air_date: '2022-02-17',
+								episode_count: 2,
+								poster_path: '/s1.jpg'
+							},
+							{
+								season_number: 0,
+								name: 'Épisodes spéciaux',
+								air_date: null,
+								episode_count: 1,
+								poster_path: null
+							}
+						]
+					})
+			]
+		]);
+		const result = await createTmdbClient({ apiKey: 'k', fetch, limiter: noWait }).episodes!(
+			'95396',
+			'tv'
+		);
+
+		expect(new URL(calls[1].url).searchParams.get('append_to_response')).toBe('season/0,season/1');
+		expect(result?.seasons.map((s) => s.number)).toEqual([0, 1]);
+		expect(result?.episodes).toEqual([
+			{
+				seasonNumber: 0,
+				number: 1,
+				absoluteNumber: null,
+				title: 'Spécial',
+				airDate: new Date('2021-12-15T00:00:00Z'),
+				runtimeMinutes: 10
+			},
+			{
+				seasonNumber: 1,
+				number: 1,
+				absoluteNumber: 1,
+				title: 'Bonjour',
+				airDate: new Date('2022-02-17T00:00:00Z'),
+				runtimeMinutes: 57
+			},
+			{
+				seasonNumber: 1,
+				number: 2,
+				absoluteNumber: 2,
+				title: null,
+				airDate: null,
+				runtimeMinutes: null
+			}
+		]);
+		expect(result?.upcomingOnly).toBe(false);
+	});
+
+	it('reads the AniList airing schedule as upcoming episodes', async () => {
+		const { fetch } = fakeFetch([
+			[
+				'anilist',
+				() =>
+					json({
+						data: {
+							Media: {
+								duration: 24,
+								airingSchedule: { nodes: [{ episode: 1181, airingAt: 1798985760 }] }
+							}
+						}
+					})
+			]
+		]);
+		const result = await createAniListClient({ fetch, limiter: noWait }).episodes!('21', 'anime');
+		expect(result).toEqual({
+			upcomingOnly: true,
+			seasons: [],
+			episodes: [
+				{
+					seasonNumber: null,
+					number: 1181,
+					absoluteNumber: 1181,
+					title: null,
+					airDate: new Date(1798985760 * 1000),
+					runtimeMinutes: 24
+				}
+			]
+		});
+	});
+});

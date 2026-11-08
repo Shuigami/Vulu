@@ -5,12 +5,21 @@ import type { MediaType, Provider, SearchResult } from './providers/types';
 export const QUEUES = {
 	search: 'provider-search',
 	importMedia: 'media-import',
+	syncEpisodes: 'media-episodes',
+	refreshAiring: 'airing-refresh',
 	purgeCache: 'cache-purge'
 } as const;
 
 export type SearchJob = { type: MediaType; query: string };
 export type SearchOutput = { results: SearchResult[] };
-export type ImportJob = { type: MediaType; provider: Provider; externalId: string };
+/** `refresh` bypasses the provider cache (daily refresh). */
+export type ImportJob = {
+	type: MediaType;
+	provider: Provider;
+	externalId: string;
+	refresh?: boolean;
+};
+export type EpisodesJob = { mediaId: number };
 export type ImportOutput = { mediaId: number | null };
 
 /**
