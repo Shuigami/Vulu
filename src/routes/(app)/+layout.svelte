@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { authClient } from '#lib/auth-client.ts';
+	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -22,49 +23,76 @@
 	}
 </script>
 
-<header class="border-b border-gray-200">
-	<div class="mx-auto flex max-w-3xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-		<a href={resolve('')} class="font-semibold">Vulu</a>
-		<nav class="flex gap-3 text-sm">
+<header class="border-b border-line">
+	<div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-7 gap-y-3 px-4 py-3.5 sm:px-6">
+		<a
+			href={resolve('')}
+			class="font-display text-[26px] font-extrabold tracking-tight text-ink no-underline"
+			>vulu<span class="text-accent">.</span></a
+		>
+		<nav aria-label="Navigation principale" class="flex flex-wrap gap-1 text-sm">
 			{#each links as link (link.href)}
+				{@const current = page.url.pathname === link.href}
 				<a
 					href={link.href}
-					class="hover:text-gray-900 {page.url.pathname === link.href
-						? 'font-medium text-gray-900'
-						: 'text-gray-600'}"
-					aria-current={page.url.pathname === link.href ? 'page' : undefined}>{link.label}</a
+					class="rounded-[10px] px-3.5 py-2.5 no-underline {current
+						? 'bg-surface-2 font-semibold text-ink'
+						: 'text-muted hover:text-ink'}"
+					aria-current={current ? 'page' : undefined}>{link.label}</a
 				>
 			{/each}
 		</nav>
-		<form action={resolve('search')} method="get" role="search" class="min-w-40 flex-1">
+		<form
+			action={resolve('search')}
+			method="get"
+			role="search"
+			class="flex h-11 min-w-0 flex-[1_1_240px] items-center gap-2.5 rounded-xl border border-line bg-surface px-3.5 focus-within:border-accent"
+		>
+			<svg
+				aria-hidden="true"
+				class="shrink-0 text-muted"
+				width="18"
+				height="18"
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+				stroke-linecap="round"
+				><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg
+			>
 			<input
 				type="search"
 				name="q"
 				value={page.url.pathname === resolve('search') ? page.url.searchParams.get('q') : ''}
-				placeholder="Rechercher un film, une série, un livre…"
+				placeholder="Film, série, anime, manga, livre…"
 				aria-label="Rechercher"
-				class="w-full rounded border border-gray-300 px-3 py-1.5 text-sm"
+				class="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
 			/>
 		</form>
 		<div class="flex items-center gap-3 text-sm">
-			<span>{data.user.displayName || data.user.username}</span>
-			<button type="button" class="text-gray-600 underline hover:text-gray-900" onclick={signOut}>
+			<ThemeToggle />
+			<span class="font-semibold">{data.user.displayName || data.user.username}</span>
+			<button
+				type="button"
+				class="cursor-pointer text-muted underline hover:text-ink"
+				onclick={signOut}
+			>
 				Se déconnecter
 			</button>
 		</div>
 	</div>
 </header>
 
-<main class="mx-auto max-w-3xl p-4">
+<main class="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
 	{@render children()}
 </main>
 
-<footer class="mx-auto max-w-3xl px-4 py-8 text-xs text-gray-500">
+<footer class="mx-auto max-w-6xl border-t border-line px-4 pt-8 pb-12 text-xs text-muted sm:px-6">
 	<p>
 		Données et images :
-		<a href="https://www.themoviedb.org" class="underline" rel="external">TMDB</a>,
-		<a href="https://anilist.co" class="underline" rel="external">AniList</a> et
-		<a href="https://openlibrary.org" class="underline" rel="external">Open Library</a>.
+		<a href="https://www.themoviedb.org" rel="external">TMDB</a>,
+		<a href="https://anilist.co" rel="external">AniList</a> et
+		<a href="https://openlibrary.org" rel="external">Open Library</a>. Ce produit utilise l’API TMDB
+		mais n’est ni approuvé ni certifié par TMDB.
 	</p>
-	<p>Ce produit utilise l’API TMDB mais n’est ni approuvé ni certifié par TMDB.</p>
 </footer>

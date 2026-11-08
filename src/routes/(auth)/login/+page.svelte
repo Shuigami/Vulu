@@ -38,41 +38,23 @@
 
 <svelte:head><title>Connexion · Vulu</title></svelte:head>
 
-<h1 class="mb-4 text-xl font-semibold">Connexion</h1>
+<h1 class="font-display text-[40px] font-extrabold tracking-tight">Connexion</h1>
 
-<form class="flex flex-col gap-3" onsubmit={submit}>
-	<label class="flex flex-col gap-1 text-sm">
+<form class="flex flex-col gap-3.5" onsubmit={submit}>
+	<label class="flex flex-col gap-1.5 text-sm font-medium">
 		E-mail
-		<input
-			name="email"
-			type="email"
-			autocomplete="email"
-			required
-			class="rounded border px-3 py-2"
-		/>
+		<input name="email" type="email" autocomplete="email" required class="field" />
 	</label>
-	<label class="flex flex-col gap-1 text-sm">
+	<label class="flex flex-col gap-1.5 text-sm font-medium">
 		Mot de passe
-		<input
-			name="password"
-			type="password"
-			autocomplete="current-password"
-			required
-			class="rounded border px-3 py-2"
-		/>
+		<input name="password" type="password" autocomplete="current-password" required class="field" />
 	</label>
-	{#if error}<p role="alert" class="text-sm text-red-600">{error}</p>{/if}
-	<button
-		type="submit"
-		disabled={pending}
-		class="rounded bg-gray-900 px-3 py-2 text-white disabled:opacity-50"
-	>
-		Se connecter
-	</button>
+	{#if error}<p role="alert" class="text-sm text-danger">{error}</p>{/if}
+	<button type="submit" disabled={pending} class="mt-1 btn-accent"> Se connecter </button>
 </form>
 
 <SocialButtons providers={data.socialProviders} {redirectTo} />
 
-<p class="mt-6 text-center text-sm">
-	Pas encore de compte ? <a href={resolve('signup')} class="underline">S’inscrire</a>
+<p class="text-center text-sm text-muted">
+	Pas encore de compte ? <a href={resolve('signup')} class="font-semibold">S’inscrire</a>
 </p>

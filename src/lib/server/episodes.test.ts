@@ -24,6 +24,8 @@ describe('calendar helpers', () => {
 		expect(describeAirDate(new Date('2026-11-12T00:00:00Z'))).toEqual({
 			dayKey: '2026-11-12',
 			day: 'jeudi 12 novembre',
+			weekday: 'jeu.',
+			dayNumber: '12',
 			time: null
 		});
 		expect(describeAirDate(new Date('2026-11-12T15:30:00Z')).time).toBe('16:30');

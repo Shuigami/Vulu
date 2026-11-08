@@ -17,12 +17,14 @@
 </script>
 
 {#if providers.length > 0}
-	<div class="mt-6 flex flex-col gap-2">
-		<p class="text-center text-sm text-gray-500">ou</p>
+	<div class="flex flex-col gap-2.5">
+		<p class="flex items-center gap-3 text-[13px] text-muted">
+			<span class="h-px flex-1 bg-line"></span>ou<span class="h-px flex-1 bg-line"></span>
+		</p>
 		{#each providers as provider (provider)}
 			<button
 				type="button"
-				class="rounded border border-gray-300 px-3 py-2 hover:bg-gray-50"
+				class="btn border border-line text-ink hover:border-muted"
 				onclick={() => signIn(provider)}
 			>
 				Continuer avec {labels[provider]}

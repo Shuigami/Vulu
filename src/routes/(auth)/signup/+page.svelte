@@ -35,21 +35,15 @@
 
 <svelte:head><title>Inscription · Vulu</title></svelte:head>
 
-<h1 class="mb-1 text-xl font-semibold">Inscription</h1>
-<p class="mb-4 text-sm text-gray-600">Vulu est en bêta : l’inscription demande une invitation.</p>
+<h1 class="font-display text-[40px] font-extrabold tracking-tight">Inscription</h1>
+<p class="-mt-4 text-muted">Vulu est en bêta : l’inscription demande une invitation.</p>
 
-<form class="flex flex-col gap-3" onsubmit={submit}>
-	<label class="flex flex-col gap-1 text-sm">
+<form class="flex flex-col gap-3.5" onsubmit={submit}>
+	<label class="flex flex-col gap-1.5 text-sm font-medium">
 		E-mail invité
-		<input
-			name="email"
-			type="email"
-			autocomplete="email"
-			required
-			class="rounded border px-3 py-2"
-		/>
+		<input name="email" type="email" autocomplete="email" required class="field" />
 	</label>
-	<label class="flex flex-col gap-1 text-sm">
+	<label class="flex flex-col gap-1.5 text-sm font-medium">
 		Pseudo
 		<input
 			name="username"
@@ -59,14 +53,14 @@
 			maxlength="30"
 			pattern="[a-zA-Z0-9_]+"
 			title="Lettres, chiffres ou tiret bas (_)"
-			class="rounded border px-3 py-2"
+			class="field"
 		/>
 	</label>
-	<label class="flex flex-col gap-1 text-sm">
+	<label class="flex flex-col gap-1.5 text-sm font-medium">
 		Nom affiché (facultatif)
-		<input name="displayName" autocomplete="name" class="rounded border px-3 py-2" />
+		<input name="displayName" autocomplete="name" class="field" />
 	</label>
-	<label class="flex flex-col gap-1 text-sm">
+	<label class="flex flex-col gap-1.5 text-sm font-medium">
 		Mot de passe (8 caractères minimum)
 		<input
 			name="password"
@@ -74,21 +68,15 @@
 			autocomplete="new-password"
 			required
 			minlength="8"
-			class="rounded border px-3 py-2"
+			class="field"
 		/>
 	</label>
-	{#if error}<p role="alert" class="text-sm text-red-600">{error}</p>{/if}
-	<button
-		type="submit"
-		disabled={pending}
-		class="rounded bg-gray-900 px-3 py-2 text-white disabled:opacity-50"
-	>
-		Créer mon compte
-	</button>
+	{#if error}<p role="alert" class="text-sm text-danger">{error}</p>{/if}
+	<button type="submit" disabled={pending} class="mt-1 btn-accent"> Créer mon compte </button>
 </form>
 
 <SocialButtons providers={data.socialProviders} redirectTo="/" />
 
-<p class="mt-6 text-center text-sm">
-	Déjà inscrit ? <a href={resolve('login')} class="underline">Se connecter</a>
+<p class="text-center text-sm text-muted">
+	Déjà inscrit ? <a href={resolve('login')} class="font-semibold">Se connecter</a>
 </p>

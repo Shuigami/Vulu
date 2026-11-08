@@ -1,1 +1,130 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/instrument-sans';
+
+/* "Ambre" palette. data-theme comes from the `theme` cookie (hooks.server.ts);
+   without it, the system preference decides. */
+:root {
+	color-scheme: light;
+	--c-bg: #f7f4ee;
+	--c-surface: #ffffff;
+	--c-surface-2: #efeae2;
+	--c-line: #e2dcd2;
+	--c-ink: #1c1a1f;
+	--c-muted: #6a6470;
+	--c-accent: #f0b44c;
+	--c-on-accent: #1a1407;
+	--c-accent-ink: #8a5a00;
+	--c-danger: #b42318;
+	--c-success: #1f7a5c;
+	--c-movie: #2f5fb3;
+	--c-tv: #1f7a5c;
+	--c-anime: #b2366e;
+	--c-manga: #6b48b8;
+	--c-book: #a2512a;
+}
+
+[data-theme='dark'] {
+	color-scheme: dark;
+	--c-bg: #121114;
+	--c-surface: #1b1a1f;
+	--c-surface-2: #25232a;
+	--c-line: #2f2c35;
+	--c-ink: #f2efe9;
+	--c-muted: #a9a3b0;
+	--c-accent-ink: #f0b44c;
+	--c-danger: #ff8f8f;
+	--c-success: #7fd4b5;
+	--c-movie: #8db4ff;
+	--c-tv: #7fd4b5;
+	--c-anime: #f59ac0;
+	--c-manga: #c9a7ff;
+	--c-book: #e8a37a;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme='light']) {
+		color-scheme: dark;
+		--c-bg: #121114;
+		--c-surface: #1b1a1f;
+		--c-surface-2: #25232a;
+		--c-line: #2f2c35;
+		--c-ink: #f2efe9;
+		--c-muted: #a9a3b0;
+		--c-accent-ink: #f0b44c;
+		--c-danger: #ff8f8f;
+		--c-success: #7fd4b5;
+		--c-movie: #8db4ff;
+		--c-tv: #7fd4b5;
+		--c-anime: #f59ac0;
+		--c-manga: #c9a7ff;
+		--c-book: #e8a37a;
+	}
+}
+
+@theme inline {
+	--font-sans: 'Instrument Sans Variable', system-ui, sans-serif;
+	--font-display: 'Bricolage Grotesque Variable', system-ui, sans-serif;
+	--color-bg: var(--c-bg);
+	--color-surface: var(--c-surface);
+	--color-surface-2: var(--c-surface-2);
+	--color-line: var(--c-line);
+	--color-ink: var(--c-ink);
+	--color-muted: var(--c-muted);
+	--color-accent: var(--c-accent);
+	--color-on-accent: var(--c-on-accent);
+	--color-accent-ink: var(--c-accent-ink);
+	--color-danger: var(--c-danger);
+	--color-success: var(--c-success);
+	--color-movie: var(--c-movie);
+	--color-tv: var(--c-tv);
+	--color-anime: var(--c-anime);
+	--color-manga: var(--c-manga);
+	--color-book: var(--c-book);
+}
+
+@layer base {
+	body {
+		@apply bg-bg font-sans text-[15px] leading-normal text-ink antialiased;
+	}
+	a {
+		@apply text-accent-ink;
+	}
+	:focus-visible {
+		@apply outline-2 outline-offset-2 outline-accent;
+	}
+}
+
+@utility btn {
+	@apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 font-semibold no-underline disabled:cursor-default disabled:opacity-50;
+}
+@utility btn-accent {
+	@apply btn bg-accent text-on-accent;
+}
+@utility btn-ink {
+	@apply btn bg-ink text-bg;
+}
+@utility btn-ghost {
+	@apply btn border border-line bg-surface-2 text-ink hover:border-muted;
+}
+@utility field {
+	@apply min-h-11 rounded-xl border border-line bg-surface px-3 text-ink placeholder:text-muted;
+}
+@utility card {
+	@apply rounded-2xl border border-line bg-surface;
+}
+@utility chip {
+	@apply inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line px-4 text-sm font-semibold text-ink no-underline hover:border-muted;
+}
+@utility chip-on {
+	@apply chip border-ink bg-ink text-bg hover:border-ink;
+}
+@utility eyebrow {
+	@apply text-[13px] font-semibold tracking-widest text-muted uppercase;
+}
+@utility h1 {
+	@apply font-display text-[40px] leading-none font-extrabold tracking-tight sm:text-[56px];
+}
+@utility h2 {
+	@apply font-display text-[22px] font-bold;
+}

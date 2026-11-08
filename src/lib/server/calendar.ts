@@ -73,6 +73,8 @@ const dayFormat = new Intl.DateTimeFormat('fr-FR', {
 	month: 'long'
 });
 const dayKeyFormat = new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE });
+const weekdayFormat = new Intl.DateTimeFormat('fr-FR', { timeZone: TIMEZONE, weekday: 'short' });
+const dayNumberFormat = new Intl.DateTimeFormat('fr-FR', { timeZone: TIMEZONE, day: 'numeric' });
 const timeFormat = new Intl.DateTimeFormat('fr-FR', {
 	timeZone: TIMEZONE,
 	hour: '2-digit',
@@ -87,6 +89,8 @@ export function describeAirDate(d: Date) {
 	return {
 		dayKey: dayKeyFormat.format(d),
 		day: dayFormat.format(d),
+		weekday: weekdayFormat.format(d),
+		dayNumber: dayNumberFormat.format(d),
 		time: hasTime(d) ? timeFormat.format(d) : null
 	};
 }
@@ -97,3 +101,45 @@ export function episodeLabel(e: { seasonNumber: number | null; number: number })
 	if (e.seasonNumber === 0) return `Spécial ${e.number}`;
 	return `S${e.seasonNumber}E${e.number}`;
 }
+
+/** "2026-11" for the current month in TIMEZONE. */
+export const currentMonth = (now = new Date()) => dayKeyFormat.format(now).slice(0, 7);
+
+/** "2026-11" moved by `delta` months. */
+export function shiftMonth(month: string, delta: number) {
+	const [y, m] = month.split('-').map(Number);
+	return new Date(Date.UTC(y, m - 1 + delta, 1)).toISOString().slice(0, 7);
+}
+
+/** Local midnights (TIMEZONE) bounding the month, as instants. */
+export function monthRange(month: string) {
+	const [y, m] = month.split('-').map(Number);
+	// Noon UTC is the same calendar day in Paris, so startOfToday gives its local midnight.
+	return {
+		from: startOfToday(new Date(Date.UTC(y, m - 1, 1, 12))),
+		to: startOfToday(new Date(Date.UTC(y, m, 1, 12)))
+	};
+}
+
+/** Weeks of the month, Monday first, padded with the neighbouring months' days. */
+export function monthGrid(month: string) {
+	const [y, m] = month.split('-').map(Number);
+	const lead = (new Date(Date.UTC(y, m - 1, 1)).getUTCDay() + 6) % 7;
+	const days = new Date(Date.UTC(y, m, 0)).getUTCDate();
+	return Array.from({ length: Math.ceil((lead + days) / 7) * 7 }, (_, i) => {
+		const d = new Date(Date.UTC(y, m - 1, 1 + i - lead, 12));
+		return {
+			key: d.toISOString().slice(0, 10),
+			day: d.getUTCDate(),
+			inMonth: i >= lead && i < lead + days,
+			label: dayFormat.format(d)
+		};
+	});
+}
+
+const monthFormat = new Intl.DateTimeFormat('fr-FR', {
+	timeZone: 'UTC',
+	month: 'long',
+	year: 'numeric'
+});
+export const monthLabel = (month: string) => monthFormat.format(new Date(`${month}-15T12:00:00Z`));
