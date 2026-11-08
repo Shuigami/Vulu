@@ -3,9 +3,8 @@
 	let {
 		src,
 		title,
-		size = 'sm'
-	}: { src: string | null; title: string; size?: 'sm' | 'lg' } = $props();
-	const box = $derived(size === 'lg' ? 'w-40 h-60' : 'w-12 h-18');
+		class: cls = 'w-12 rounded-lg'
+	}: { src: string | null; title: string; class?: string } = $props();
 </script>
 
 {#if src}
@@ -14,13 +13,13 @@
 		alt=""
 		loading="lazy"
 		referrerpolicy="no-referrer"
-		class="{box} shrink-0 rounded bg-gray-100 object-cover"
+		class="{cls} aspect-[2/3] shrink-0 bg-surface-2 object-cover"
 	/>
 {:else}
 	<div
-		class="{box} flex shrink-0 items-center justify-center rounded bg-gray-100 p-1 text-center text-[10px] text-gray-400"
+		class="{cls} flex aspect-[2/3] shrink-0 items-end overflow-hidden bg-surface-2 p-1.5 font-display text-[11px] leading-tight font-bold text-muted"
 		aria-hidden="true"
 	>
-		{title.slice(0, 30)}
+		{title.slice(0, 40)}
 	</div>
 {/if}
