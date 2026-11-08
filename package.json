@@ -16,8 +16,12 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
-		"test:unit": "vitest",
-		"test": "npm run test:unit -- --run"
+		"test": "vitest --run",
+		"worker:dev": "tsx watch --env-file-if-exists=.env src/worker/index.ts",
+		"db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
+		"db:generate": "drizzle-kit generate",
+		"db:migrate": "drizzle-kit migrate",
+		"db:seed": "tsx --env-file-if-exists=.env src/lib/server/db/seed.ts"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
@@ -48,5 +52,8 @@
 		"drizzle-orm": "^0.45.4",
 		"pg": "^8.23.1",
 		"pg-boss": "^12.38.1"
+	},
+	"engines": {
+		"node": ">=24"
 	}
 }
