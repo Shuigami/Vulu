@@ -43,7 +43,6 @@
 		"svelte": "^5.57.2",
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.0",
-		"tsx": "^4.23.15",
 		"typescript": "^6.0.3",
 		"typescript-eslint": "^8.60.1",
 		"vite": "^8.3.0",
@@ -53,7 +52,8 @@
 		"better-auth": "^1.7.18",
 		"drizzle-orm": "^0.45.4",
 		"pg": "^8.23.1",
-		"pg-boss": "^12.38.1"
+		"pg-boss": "^12.38.1",
+		"tsx": "^4.23.15"
 	},
 	"engines": {
 		"node": ">=24"
