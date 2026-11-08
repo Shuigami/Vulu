@@ -14,6 +14,7 @@ import { createDb } from '../lib/server/db';
 import {
 	QUEUES,
 	type EpisodesJob,
+	type JellyfinJob,
 	type LibraryImportJob,
 	type ImportJob,
 	type ImportOutput,
@@ -27,6 +28,7 @@ import { runImport } from '../lib/server/imports/run';
 import type { ImportItem } from '../lib/server/imports/types';
 import { purgeExpired } from '../lib/server/providers/cache';
 import { createTraktClient } from '../lib/server/providers/trakt';
+import { eventLabel, recordEvent, scrobble } from '../lib/server/scrobble';
 
 const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL is not set');
@@ -123,6 +125,18 @@ await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
 	for (const mediaId of await airingWithoutEpisodes(db, userId)) {
 		await boss.send(QUEUES.syncEpisodes, { mediaId });
 	}
+});
+
+// Jellyfin "watched" events, queued by /hooks/jellyfin/[token]
+await boss.work<JellyfinJob>(QUEUES.jellyfin, async ([job]) => {
+	const { integrationId, userId, event } = job.data;
+	const result = await scrobble(db, providers, userId, event);
+	await recordEvent(db, integrationId, {
+		at: new Date().toISOString(),
+		label: eventLabel(event),
+		result
+	});
+	console.log(`[worker] jellyfin ${eventLabel(event)} -> ${result}`);
 });
 
 await boss.work(QUEUES.purgeCache, async () => {
