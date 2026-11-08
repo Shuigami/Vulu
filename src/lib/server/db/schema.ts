@@ -152,7 +152,9 @@ export const mediaExternalIds = pgTable(
 	(t) => [
 		primaryKey({ name: 'media_external_ids_pkey', columns: [t.provider, t.externalId] }),
 		index('media_external_ids_media_idx').on(t.mediaId),
-		uniqueIndex('media_one_primary_source').on(t.mediaId).where(sql`${t.isPrimary}`)
+		uniqueIndex('media_one_primary_source')
+			.on(t.mediaId)
+			.where(sql`${t.isPrimary}`)
 	]
 );
 
