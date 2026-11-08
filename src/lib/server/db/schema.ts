@@ -431,3 +431,16 @@ export const importJobs = pgTable(
 		index('import_jobs_user_idx').on(t.userId, t.createdAt.desc().nullsFirst())
 	]
 );
+
+// ---------------------------------------------------------------------------
+// Provider API cache (TMDB, AniList, Open Library), filled by the worker
+// ---------------------------------------------------------------------------
+export const providerCache = pgTable(
+	'provider_cache',
+	{
+		key: text().primaryKey(), // e.g. 'anilist:media:154587'
+		value: jsonb().notNull(),
+		expiresAt: timestamptz().notNull()
+	},
+	(t) => [index('provider_cache_expires_idx').on(t.expiresAt)]
+);

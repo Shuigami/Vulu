@@ -83,7 +83,7 @@ const catalogue: {
 			totalUnits: 896,
 			extra: { authors: ['Frank Herbert'] }
 		},
-		ids: [['openlibrary', 'OL893415W']],
+		ids: [['openlibrary', 'OL893414W']],
 		titles: [['Dune', 'en']]
 	}
 ];

@@ -287,6 +287,16 @@ CREATE TABLE import_jobs (
 CREATE INDEX import_jobs_user_idx ON import_jobs (user_id, created_at DESC);
 
 -- ---------------------------------------------------------------------------
+-- Cache des réponses des fournisseurs (rempli par le worker, purgé chaque jour)
+-- ---------------------------------------------------------------------------
+CREATE TABLE provider_cache (
+  key         text PRIMARY KEY,          -- ex. 'anilist:media:154587'
+  value       jsonb NOT NULL,
+  expires_at  timestamptz NOT NULL
+);
+CREATE INDEX provider_cache_expires_idx ON provider_cache (expires_at);
+
+-- ---------------------------------------------------------------------------
 -- Maintien de updated_at
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION touch_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$
