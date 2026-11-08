@@ -1,0 +1,77 @@
+﻿# Production: caddy (HTTPS) -> app, worker, postgres. Settings come from .env (see .env.example).
+# Not "vulu": that is the dev database's project name (docker-compose.dev.yml), which must not be touched
+name: vulu-prod
+
+x-vulu: &vulu
+  image: ${VULU_IMAGE:-ghcr.io/shuigami/vulu:latest}
+  build: .
+  env_file: .env
+  restart: unless-stopped
+
+x-database-url: &database-url
+  DATABASE_URL: postgres://vulu:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/vulu
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: vulu
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: vulu
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U vulu -d vulu']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Runs once before the app and the worker start
+  migrate:
+    <<: *vulu
+    restart: 'no'
+    command: ['node', '--import', 'tsx', 'src/lib/server/db/migrate.ts']
+    environment: *database-url
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  worker:
+    <<: *vulu
+    command: ['node', '--import', 'tsx', 'src/worker/index.ts']
+    environment: *database-url
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
+  app:
+    <<: *vulu
+    environment:
+      <<: *database-url
+      ORIGIN: https://${VULU_DOMAIN:?set VULU_DOMAIN in .env}
+      BETTER_AUTH_URL: https://${VULU_DOMAIN}
+      # Import files are capped at 5 MB by the app
+      BODY_SIZE_LIMIT: 6M
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      worker: { condition: service_started }
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    environment:
+      VULU_DOMAIN: ${VULU_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
