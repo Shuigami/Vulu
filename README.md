@@ -1,54 +1,44 @@
-# sv
+# Vulu
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+Suivi de visionnage et de lecture : films, séries, anime, mangas et livres dans une seule bibliothèque.
 
-## Creating a project
+Spécification et schéma de données : [`docs/`](docs/).
 
-If you're seeing this, you've probably already done this step. Congrats!
+## Prérequis
 
-```sh
-# create a new project
-npx sv create my-app
+- Node.js 24 ou plus
+- pnpm (`corepack enable pnpm` ou `npm i -g pnpm`)
+- Docker (pour PostgreSQL)
+
+## Installation en local
+
+```bash
+pnpm install
+cp .env.example .env      # puis remplir les clés si besoin
+pnpm db:up                # PostgreSQL 16 dans Docker, port 5432
+pnpm db:migrate           # crée les tables
+pnpm db:seed              # données de démonstration (facultatif)
 ```
 
-To recreate this project with the same configuration:
+Puis, dans deux terminaux :
 
-```sh
-# recreate this project
-pnpm dlx sv@1.3.0 create --template minimal --types ts --add prettier eslint vitest="usages:unit" tailwindcss="plugins:none" sveltekit-adapter="adapter:node" --install pnpm .
+```bash
+pnpm dev                  # application sur http://localhost:5173
+pnpm worker:dev           # worker pg-boss (tâches de fond)
 ```
 
-## Adding features
+Les données PostgreSQL sont conservées dans le volume Docker `vulu_pgdata`. Pour repartir d'une base vide :
 
-Add features to your project with `sv add`:
-
-```sh
-npx sv add
+```bash
+docker compose -f docker-compose.dev.yml down -v
 ```
 
-For example, to add Tailwind CSS:
+## Vérifications
 
-```sh
-npx sv add tailwindcss
+```bash
+pnpm lint     # Prettier + ESLint
+pnpm check    # types
+pnpm test     # tests (nécessite la base migrée)
 ```
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
-
-```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
+La CI GitHub Actions lance les mêmes vérifications et applique les migrations sur une base vierge.
