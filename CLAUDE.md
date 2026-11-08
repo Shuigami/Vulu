@@ -43,9 +43,10 @@ src/lib/server/          other server-only code shared by the app and the worker
 src/lib/auth-client.ts   Better Auth browser client; auth-errors.ts maps error codes to French
 src/lib/server/library.ts library entries: add, update (applyChange rules + activity_events), list
 src/lib/server/search.ts local fuzzy search, then providers through the worker
+src/lib/server/calendar.ts upcoming episodes, Paris-time formatting (server-side)
 src/lib/labels.ts        French labels for enums, score scale conversions (shared client/server)
 src/routes/(app)/        signed-in pages (guard in +layout.server.ts): / (En cours, +1),
-                         /search, /media/[id], /library
+                         /search, /media/[id], /library, /calendar
 src/routes/(auth)/       /login and /signup
 src/worker/index.ts      worker entry point (pg-boss); only the worker calls external APIs
 .github/workflows/ci.yml lint, types, migrations on an empty database, schema drift check, tests
@@ -65,6 +66,8 @@ src/worker/index.ts      worker entry point (pg-boss); only the worker calls ext
 - Providers: only the worker calls them. The app gets provider results with `requestJob(boss, QUEUES.search, …)`. Responses are cached in `provider_cache` (1 day, purged daily). Clients take `fetch` and `limiter` options so tests use fake responses, never the network. Imports match on the primary external id (`upsertMedia`); the source of truth per type is TMDB (movie, tv), AniList (anime, manga), Open Library (book).
 - Library changes go through `updateEntry`, which applies the automatic rules (`applyChange`: progress caps, status follows progress, dates) and writes `activity_events` in the same transaction. Never update `library_entries` directly.
 - Search: local results first; providers are queried (all types in parallel) only below `LOCAL_ENOUGH` results, and streamed to the page. Adult media are hidden. TMDB drops Japanese animated series (AniList owns anime).
+- Episodes: after a TV/anime import the worker queues `media-episodes` (TMDB: all seasons; AniList: upcoming schedule only, future episodes that leave it are deleted). `airing-refresh` (daily 03:00 UTC) re-imports airing media followed by someone, bypassing the cache. TMDB air dates are stored at 00:00 UTC and shown without a time.
+- Dates are formatted on the server in `Europe/Paris` (`calendar.ts`), so pages do not depend on the browser timezone.
 - Scores are stored out of 100; progress is generic (`progress` = episodes/chapters/pages, `progress_secondary` = seasons/volumes).
 - Images are hot-linked from provider CDNs, never re-hosted.
 - RAM matters (shared small VPS): avoid adding services or heavy dependencies without asking.

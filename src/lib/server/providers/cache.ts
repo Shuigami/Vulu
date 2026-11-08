@@ -4,18 +4,24 @@ import { providerCache } from '../db/schema';
 
 export const DAY = 24 * 60 * 60;
 
-/** Returns the cached value for `key`, or computes, stores and returns it. Null results are not cached. */
+/**
+ * Returns the cached value for `key`, or computes, stores and returns it. Null results are not cached.
+ * Values go through JSON: Dates come back as strings. `refresh` skips the read (scheduled refreshes).
+ */
 export async function cached<T>(
 	db: Db,
 	key: string,
 	ttlSeconds: number,
-	compute: () => Promise<T | null>
+	compute: () => Promise<T | null>,
+	opts: { refresh?: boolean } = {}
 ): Promise<T | null> {
-	const [hit] = await db
-		.select({ value: providerCache.value })
-		.from(providerCache)
-		.where(and(eq(providerCache.key, key), gt(providerCache.expiresAt, new Date())));
-	if (hit) return hit.value as T;
+	if (!opts.refresh) {
+		const [hit] = await db
+			.select({ value: providerCache.value })
+			.from(providerCache)
+			.where(and(eq(providerCache.key, key), gt(providerCache.expiresAt, new Date())));
+		if (hit) return hit.value as T;
+	}
 
 	const value = await compute();
 	if (value === null) return null;

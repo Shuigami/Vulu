@@ -1,10 +1,18 @@
 // Worker entry point: runs pg-boss jobs with the same code as the SvelteKit app.
 // Only the worker calls the TMDB, AniList and Open Library APIs.
 import { PgBoss } from 'pg-boss';
-import { createProviders, importMedia, searchProvider } from '../lib/server/catalogue';
+import {
+	createProviders,
+	hasEpisodes,
+	importMedia,
+	searchProvider,
+	staleAiringMedia,
+	syncEpisodes
+} from '../lib/server/catalogue';
 import { createDb } from '../lib/server/db';
 import {
 	QUEUES,
+	type EpisodesJob,
 	type ImportJob,
 	type ImportOutput,
 	type SearchJob,
@@ -35,12 +43,35 @@ await boss.work<ImportJob, ImportOutput>(
 	QUEUES.importMedia,
 	{ localConcurrency: 3 },
 	async ([job]) => {
-		const { type, externalId } = job.data;
-		const mediaId = await importMedia(db, providers, type, externalId);
+		const { type, externalId, refresh } = job.data;
+		const mediaId = await importMedia(db, providers, type, externalId, { refresh });
 		console.log(`[worker] import ${type} ${externalId} -> media ${mediaId}`);
+		// Episodes come in a separate job so adding a show stays fast for the user
+		if (mediaId && hasEpisodes(type)) await boss.send(QUEUES.syncEpisodes, { mediaId });
 		return { mediaId };
 	}
 );
+
+await boss.work<EpisodesJob>(QUEUES.syncEpisodes, { localConcurrency: 2 }, async ([job]) => {
+	const count = await syncEpisodes(db, providers, job.data.mediaId);
+	console.log(`[worker] episodes media ${job.data.mediaId} -> ${count}`);
+});
+
+// Daily: re-import airing media that users follow (status, totals), which re-syncs episodes.
+await boss.work(QUEUES.refreshAiring, async () => {
+	const stale = await staleAiringMedia(db);
+	for (const m of stale) {
+		const job: ImportJob = {
+			type: m.type,
+			provider: m.provider,
+			externalId: m.externalId,
+			refresh: true
+		};
+		await boss.send(QUEUES.importMedia, job);
+	}
+	console.log(`[worker] refresh queued for ${stale.length} airing media`);
+});
+await boss.schedule(QUEUES.refreshAiring, '0 3 * * *'); // daily, 03:00 UTC
 
 await boss.work(QUEUES.purgeCache, async () => {
 	console.log(`[worker] purged ${await purgeExpired(db)} expired cache entries`);

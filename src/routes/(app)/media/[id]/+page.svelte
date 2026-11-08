@@ -42,6 +42,14 @@
 				? ` · ${m.totalUnits} ${unit}`
 				: ''}{m.runtimeMinutes ? ` · ${m.runtimeMinutes} min` : ''}
 		</p>
+		{#if data.upcoming}
+			<p class="mt-2 text-sm">
+				Prochain épisode : <strong>{data.upcoming.episode}</strong>, {data.upcoming.day}{data
+					.upcoming.time
+					? ` à ${data.upcoming.time}`
+					: ''}
+			</p>
+		{/if}
 		{#if m.overview}<p class="mt-4 whitespace-pre-line">{m.overview}</p>{/if}
 		{#if sourceUrl}
 			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external link -->

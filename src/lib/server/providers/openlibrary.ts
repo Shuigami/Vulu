@@ -84,8 +84,7 @@ export function createOpenLibraryClient(
 					extra: {
 						authors: doc?.author_name ?? [],
 						subjects: (work.subjects ?? []).slice(0, 20)
-					},
-					lastSyncedAt: new Date()
+					}
 				},
 				externalIds: [{ provider: 'openlibrary', externalId: realId }],
 				titles: uniqueTitles([{ title: work.title, locale: null }])

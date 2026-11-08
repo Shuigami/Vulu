@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { db } from '#lib/server/app.ts';
+import { describeAirDate, episodeLabel, nextEpisode, startOfToday } from '#lib/server/calendar.ts';
 import { libraryEntries, media, mediaExternalIds } from '#lib/server/db/schema.ts';
 import { addToLibrary, removeEntry, updateEntry, type EntryPatch } from '#lib/server/library.ts';
 import { fromScale, isEntryStatus } from '#lib/labels.ts';
@@ -24,7 +25,12 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		.select({ provider: mediaExternalIds.provider, externalId: mediaExternalIds.externalId })
 		.from(mediaExternalIds)
 		.where(eq(mediaExternalIds.mediaId, id));
-	return { media: m, entry: entry ?? null, externalIds };
+	const next = await nextEpisode(db, id, startOfToday());
+	const upcoming = next && {
+		episode: episodeLabel(next),
+		...describeAirDate(next.airDate!)
+	};
+	return { media: m, entry: entry ?? null, externalIds, upcoming };
 };
 
 /** Validates the library form; returns the fields or an error message (French, shown in the UI). */

@@ -134,8 +134,7 @@ export function createAniListClient(
 						format: m.format,
 						genres: m.genres ?? [],
 						...(isAnime && { studios: m.studios?.nodes.map((s) => s.name) ?? [] })
-					},
-					lastSyncedAt: new Date()
+					}
 				},
 				externalIds: [
 					{ provider: 'anilist', externalId: String(m.id) },
@@ -149,6 +148,36 @@ export function createAniListClient(
 				])
 			};
 			return result;
+		},
+
+		// AniList only knows air dates through its schedule: list the upcoming episodes.
+		async episodes(id, type) {
+			if (type !== 'anime') return null;
+			const data = await query<{
+				Media: {
+					duration: number | null;
+					airingSchedule: { nodes: { episode: number; airingAt: number }[] };
+				} | null;
+			}>(
+				`query ($id: Int) { Media(id: $id, type: ANIME) {
+					duration airingSchedule(notYetAired: true, perPage: 50) { nodes { episode airingAt } }
+				} }`,
+				{ id: Number(id) }
+			);
+			const m = data?.Media;
+			if (!m) return null;
+			return {
+				upcomingOnly: true,
+				seasons: [],
+				episodes: m.airingSchedule.nodes.map((n) => ({
+					seasonNumber: null,
+					number: n.episode,
+					absoluteNumber: n.episode,
+					title: null,
+					airDate: new Date(n.airingAt * 1000),
+					runtimeMinutes: m.duration
+				}))
+			};
 		}
 	};
 }

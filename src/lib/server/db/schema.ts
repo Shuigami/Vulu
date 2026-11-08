@@ -281,6 +281,10 @@ export const episodes = pgTable(
 	},
 	(t) => [
 		unique('episodes_season_id_number_key').on(t.seasonId, t.number),
+		// Anime episodes have no season: keep them unique per media too (NULLs never collide in UNIQUE)
+		uniqueIndex('episodes_media_id_number_no_season_key')
+			.on(t.mediaId, t.number)
+			.where(sql`${t.seasonId} IS NULL`),
 		index('episodes_media_idx').on(t.mediaId, t.absoluteNumber),
 		index('episodes_calendar_idx').on(t.airDate)
 	]

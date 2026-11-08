@@ -7,6 +7,7 @@ import {
 	yearOf,
 	type MediaType,
 	type ProviderClient,
+	type ProviderEpisodes,
 	type ProviderMedia,
 	type SearchResult
 } from './types';
@@ -28,6 +29,21 @@ type SearchItem = {
 	adult?: boolean;
 	genre_ids?: number[];
 	origin_country?: string[]; // tv
+};
+type SeasonSummary = {
+	season_number: number;
+	name: string | null;
+	air_date: string | null;
+	episode_count: number | null;
+	poster_path: string | null;
+};
+type SeasonDetail = {
+	episodes?: {
+		episode_number: number;
+		name: string | null;
+		air_date: string | null;
+		runtime: number | null;
+	}[];
 };
 type Details = SearchItem & {
 	overview: string | null;
@@ -145,8 +161,7 @@ export function createTmdbClient(opts: {
 					extra: {
 						genres: d.genres?.map((g) => g.name) ?? [],
 						originalLanguage: d.original_language ?? null
-					},
-					lastSyncedAt: new Date()
+					}
 				},
 				externalIds: [
 					{ provider: 'tmdb', externalId: String(d.id) },
@@ -160,6 +175,50 @@ export function createTmdbClient(opts: {
 						.filter((a) => ['FR', 'US', 'GB', 'JP'].includes(a.iso_3166_1))
 						.map((a) => ({ title: a.title, locale: null }))
 				])
+			};
+		},
+
+		async episodes(id, type) {
+			if (type !== 'tv') return null;
+			const show = await get<{ seasons?: SeasonSummary[] }>(`/tv/${encodeURIComponent(id)}`, {});
+			if (!show) return null;
+			const summaries = (show.seasons ?? []).sort((a, b) => a.season_number - b.season_number);
+
+			// TMDB appends up to 20 sub-requests to one call: fetch seasons 20 at a time
+			const details: Record<string, SeasonDetail | undefined> = {};
+			for (let i = 0; i < summaries.length; i += 20) {
+				const chunk = summaries.slice(i, i + 20).map((s) => `season/${s.season_number}`);
+				Object.assign(
+					details,
+					await get(`/tv/${encodeURIComponent(id)}`, { append_to_response: chunk.join(',') })
+				);
+			}
+
+			let absolute = 0;
+			const episodes: ProviderEpisodes['episodes'] = [];
+			for (const s of summaries) {
+				for (const e of details[`season/${s.season_number}`]?.episodes ?? []) {
+					episodes.push({
+						seasonNumber: s.season_number,
+						number: e.episode_number,
+						// Specials (season 0) stay out of the absolute numbering
+						absoluteNumber: s.season_number > 0 ? ++absolute : null,
+						title: e.name || null,
+						airDate: e.air_date ? new Date(`${e.air_date}T00:00:00Z`) : null,
+						runtimeMinutes: e.runtime ?? null
+					});
+				}
+			}
+			return {
+				upcomingOnly: false,
+				seasons: summaries.map((s) => ({
+					number: s.season_number,
+					title: s.name || null,
+					airDate: s.air_date || null,
+					episodeCount: s.episode_count ?? null,
+					posterUrl: image(s.poster_path, 'w342')
+				})),
+				episodes
 			};
 		}
 	};
