@@ -62,7 +62,9 @@
 				</div>
 				<p class="mt-1 text-xs text-gray-500">
 					Garde cette URL secrète : elle suffit pour modifier ta bibliothèque. Si Jellyfin tourne
-					sur une autre machine, remplace « localhost » par l’adresse de ce serveur.
+					sur une autre machine ou dans Docker, remplace « localhost » par l’adresse réseau de ce
+					serveur (par exemple 192.168.1.x) : dans un conteneur, « localhost » désigne le conteneur
+					lui-même.
 				</p>
 			</li>
 			<li>
