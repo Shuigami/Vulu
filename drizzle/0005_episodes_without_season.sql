@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "episodes_media_id_number_no_season_key" ON "episodes" USING btree ("media_id","number") WHERE "episodes"."season_id" IS NULL;

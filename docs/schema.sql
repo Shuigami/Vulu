@@ -181,6 +181,8 @@ CREATE TABLE episodes (
 );
 CREATE INDEX episodes_media_idx    ON episodes (media_id, absolute_number);
 CREATE INDEX episodes_calendar_idx ON episodes (air_date);
+-- Épisodes d'anime sans saison : uniques par œuvre (deux NULL ne se gênent pas dans UNIQUE)
+CREATE UNIQUE INDEX episodes_media_id_number_no_season_key ON episodes (media_id, number) WHERE season_id IS NULL;
 
 -- ---------------------------------------------------------------------------
 -- Bibliothèque de l'utilisateur
