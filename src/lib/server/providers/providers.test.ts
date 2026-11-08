@@ -228,6 +228,32 @@ describe('TMDB client', () => {
 		expect(result?.titles.map((t) => t.title)).toEqual(['Severance', 'Dissociés']);
 	});
 
+	it('leaves Japanese animated series to AniList', async () => {
+		const { fetch } = fakeFetch([
+			[
+				'/search/tv',
+				() =>
+					json({
+						results: [
+							{
+								id: 1,
+								name: 'Frieren',
+								poster_path: null,
+								genre_ids: [16, 10759],
+								origin_country: ['JP']
+							},
+							{ id: 2, name: 'Arcane', poster_path: null, genre_ids: [16], origin_country: ['US'] }
+						]
+					})
+			]
+		]);
+		const results = await createTmdbClient({ apiKey: 'k', fetch, limiter: noWait }).search(
+			'x',
+			'tv'
+		);
+		expect(results.map((r) => r.title)).toEqual(['Arcane']);
+	});
+
 	it('sends a v4 token as a bearer header', async () => {
 		const { fetch, calls } = fakeFetch([['/search/movie', () => json({ results: [] })]]);
 		await createTmdbClient({ apiKey: 'eyJtoken', fetch, limiter: noWait }).search('dune', 'movie');

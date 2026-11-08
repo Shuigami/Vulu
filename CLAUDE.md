@@ -41,7 +41,11 @@ src/lib/server/catalogue.ts provider per media type, cached search, import/upser
 src/lib/server/jobs.ts   pg-boss queue names, payload types, requestJob (send and wait for the output)
 src/lib/server/          other server-only code shared by the app and the worker
 src/lib/auth-client.ts   Better Auth browser client; auth-errors.ts maps error codes to French
-src/routes/(app)/        signed-in pages (guard in +layout.server.ts)
+src/lib/server/library.ts library entries: add, update (applyChange rules + activity_events), list
+src/lib/server/search.ts local fuzzy search, then providers through the worker
+src/lib/labels.ts        French labels for enums, score scale conversions (shared client/server)
+src/routes/(app)/        signed-in pages (guard in +layout.server.ts): / (En cours, +1),
+                         /search, /media/[id], /library
 src/routes/(auth)/       /login and /signup
 src/worker/index.ts      worker entry point (pg-boss); only the worker calls external APIs
 .github/workflows/ci.yml lint, types, migrations on an empty database, schema drift check, tests
@@ -59,6 +63,8 @@ src/worker/index.ts      worker entry point (pg-boss); only the worker calls ext
 - Drizzle uses `casing: 'snake_case'`: camelCase in TypeScript, snake_case in SQL.
 - Fuzzy search compares `f_unaccent(lower(title))` so queries hit `media_titles_trgm_idx`.
 - Providers: only the worker calls them. The app gets provider results with `requestJob(boss, QUEUES.search, …)`. Responses are cached in `provider_cache` (1 day, purged daily). Clients take `fetch` and `limiter` options so tests use fake responses, never the network. Imports match on the primary external id (`upsertMedia`); the source of truth per type is TMDB (movie, tv), AniList (anime, manga), Open Library (book).
+- Library changes go through `updateEntry`, which applies the automatic rules (`applyChange`: progress caps, status follows progress, dates) and writes `activity_events` in the same transaction. Never update `library_entries` directly.
+- Search: local results first; providers are queried (all types in parallel) only below `LOCAL_ENOUGH` results, and streamed to the page. Adult media are hidden. TMDB drops Japanese animated series (AniList owns anime).
 - Scores are stored out of 100; progress is generic (`progress` = episodes/chapters/pages, `progress_secondary` = seasons/volumes).
 - Images are hot-linked from provider CDNs, never re-hosted.
 - RAM matters (shared small VPS): avoid adding services or heavy dependencies without asking.
