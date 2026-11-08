@@ -10,7 +10,8 @@
 	const links = [
 		{ href: resolve(''), label: 'En cours' },
 		{ href: resolve('library'), label: 'Bibliothèque' },
-		{ href: resolve('calendar'), label: 'Calendrier' }
+		{ href: resolve('calendar'), label: 'Calendrier' },
+		{ href: resolve('import'), label: 'Importer' }
 	];
 
 	async function signOut() {
