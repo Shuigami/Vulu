@@ -25,16 +25,22 @@ boss.on('error', (err) => console.error('[worker] pg-boss error', err));
 await boss.start();
 for (const name of Object.values(QUEUES)) await boss.createQueue(name);
 
-await boss.work<SearchJob, SearchOutput>(QUEUES.search, async ([job]) => ({
+// A search on "all types" sends one job per type: run them side by side, the per-provider
+// rate limiters still keep each API within its quota.
+await boss.work<SearchJob, SearchOutput>(QUEUES.search, { localConcurrency: 5 }, async ([job]) => ({
 	results: await searchProvider(db, providers, job.data.type, job.data.query)
 }));
 
-await boss.work<ImportJob, ImportOutput>(QUEUES.importMedia, async ([job]) => {
-	const { type, externalId } = job.data;
-	const mediaId = await importMedia(db, providers, type, externalId);
-	console.log(`[worker] import ${type} ${externalId} -> media ${mediaId}`);
-	return { mediaId };
-});
+await boss.work<ImportJob, ImportOutput>(
+	QUEUES.importMedia,
+	{ localConcurrency: 3 },
+	async ([job]) => {
+		const { type, externalId } = job.data;
+		const mediaId = await importMedia(db, providers, type, externalId);
+		console.log(`[worker] import ${type} ${externalId} -> media ${mediaId}`);
+		return { mediaId };
+	}
+);
 
 await boss.work(QUEUES.purgeCache, async () => {
 	console.log(`[worker] purged ${await purgeExpired(db)} expired cache entries`);

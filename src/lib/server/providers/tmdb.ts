@@ -26,6 +26,8 @@ type SearchItem = {
 	first_air_date?: string;
 	poster_path: string | null;
 	adult?: boolean;
+	genre_ids?: number[];
+	origin_country?: string[]; // tv
 };
 type Details = SearchItem & {
 	overview: string | null;
@@ -56,6 +58,11 @@ const STATUS: Record<string, ProviderMedia['media']['status']> = {
 	'Post Production': 'announced',
 	Pilot: 'announced'
 };
+
+const ANIMATION_GENRE = 16;
+/** Japanese animated series: AniList is the source of truth for anime (docs/v1-spec.md). */
+const isAnime = (r: SearchItem) =>
+	!!r.origin_country?.includes('JP') && !!r.genre_ids?.includes(ANIMATION_GENRE);
 
 export function createTmdbClient(opts: {
 	apiKey: string;
@@ -93,16 +100,18 @@ export function createTmdbClient(opts: {
 				query: q,
 				include_adult: 'false'
 			});
-			return (res?.results ?? []).map((r): SearchResult => ({
-				provider: 'tmdb',
-				externalId: String(r.id),
-				type,
-				title: r.title ?? r.name ?? '?',
-				originalTitle: r.original_title ?? r.original_name ?? null,
-				year: yearOf(r.release_date ?? r.first_air_date),
-				posterUrl: image(r.poster_path, 'w342'),
-				isAdult: r.adult ?? false
-			}));
+			return (res?.results ?? [])
+				.filter((r) => !isAnime(r))
+				.map((r): SearchResult => ({
+					provider: 'tmdb',
+					externalId: String(r.id),
+					type,
+					title: r.title ?? r.name ?? '?',
+					originalTitle: r.original_title ?? r.original_name ?? null,
+					year: yearOf(r.release_date ?? r.first_air_date),
+					posterUrl: image(r.poster_path, 'w342'),
+					isAdult: r.adult ?? false
+				}));
 		},
 
 		async get(id, type) {

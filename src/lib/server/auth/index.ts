@@ -35,7 +35,11 @@ export function createAuth(db: Db, config: AuthConfig) {
 		user: {
 			modelName: 'users',
 			fields: { name: 'displayName', image: 'avatarUrl' },
-			additionalFields: { username: { type: 'string', required: false, input: true } }
+			additionalFields: {
+				username: { type: 'string', required: false, input: true },
+				// Read-only here: exposed in the session to display scores in the user's scale
+				ratingScale: { type: 'number', required: false, input: false }
+			}
 		},
 		session: { modelName: 'sessions' },
 		account: { modelName: 'accounts' },

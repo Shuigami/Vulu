@@ -9,6 +9,7 @@ import {
 	GOOGLE_CLIENT_ID,
 	GOOGLE_CLIENT_SECRET
 } from '$app/env/private';
+import { PgBoss } from 'pg-boss';
 import { createAuth } from './auth';
 import { createDb } from './db';
 
@@ -28,3 +29,24 @@ export const auth = createAuth(db, {
 export const socialProviders = (['google', 'github'] as const).filter(
 	(p) => p in auth.options.socialProviders
 );
+
+// The app only sends jobs: maintenance, scheduling and pg-boss migrations belong to the worker.
+const boss = new PgBoss({
+	connectionString: DATABASE_URL,
+	max: 2,
+	supervise: false,
+	schedule: false,
+	migrate: false
+});
+boss.on('error', (err) => console.error('[app] pg-boss error', err));
+let started: Promise<unknown> | undefined;
+
+/** Started on first use, so the app boots even when the job tables do not exist yet. */
+export async function getBoss(): Promise<PgBoss> {
+	started ??= boss.start().catch((err) => {
+		started = undefined; // retry on next call
+		throw err;
+	});
+	await started;
+	return boss;
+}
