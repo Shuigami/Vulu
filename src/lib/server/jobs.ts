@@ -1,6 +1,7 @@
 // pg-boss queues shared by the app (senders) and the worker (handlers).
 import type { PgBoss } from 'pg-boss';
 import type { MalItem } from './imports/mal';
+import type { JellyfinEvent } from './jellyfin';
 import type { ImportItem } from './imports/types';
 import type { MediaType, Provider, SearchResult } from './providers/types';
 
@@ -10,6 +11,7 @@ export const QUEUES = {
 	syncEpisodes: 'media-episodes',
 	refreshAiring: 'airing-refresh',
 	libraryImport: 'library-import',
+	jellyfin: 'jellyfin-event',
 	purgeCache: 'cache-purge'
 } as const;
 
@@ -30,6 +32,7 @@ export type LibraryImportJob = { importId: number; userId: string } & (
 	| { source: 'goodreads'; items: ImportItem[] }
 	| { source: 'mal'; items: MalItem[] }
 );
+export type JellyfinJob = { integrationId: number; userId: string; event: JellyfinEvent };
 export type ImportOutput = { mediaId: number | null };
 
 /**

@@ -1,5 +1,5 @@
 // Library entries: current state in library_entries, history in activity_events (docs/v1-spec.md).
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, like, sql } from 'drizzle-orm';
 import type { MediaType } from '../labels';
 import type { Db } from './db';
 import { activityEvents, libraryEntries, media } from './db/schema';
@@ -97,15 +97,43 @@ export async function addToLibrary(db: Db, userId: string, mediaId: number): Pro
 	return existing.id;
 }
 
-/** Updates one of the user's entries; returns false if it is not theirs. */
+export type UpdateOptions = {
+	today?: string;
+	/** Who made the change (journal "source"); manual by default. */
+	source?: (typeof activityEvents.$inferInsert)['source'];
+	/**
+	 * Makes the change idempotent: its events are keyed `${dedupKey}:${kind}`, and a change whose
+	 * key was already journaled is skipped (webhooks are often delivered twice).
+	 */
+	dedupKey?: string;
+};
+
+/**
+ * Updates one of the user's entries. Returns false if it is not theirs, 'duplicate' when the
+ * dedup key was already applied, true otherwise.
+ */
 export async function updateEntry(
 	db: Db,
 	userId: string,
 	entryId: number,
 	patch: EntryPatch | ((current: Entry) => EntryPatch),
-	today = new Date().toISOString().slice(0, 10)
-): Promise<boolean> {
+	opts: UpdateOptions = {}
+): Promise<boolean | 'duplicate'> {
+	const today = opts.today ?? new Date().toISOString().slice(0, 10);
 	return db.transaction(async (tx) => {
+		if (opts.dedupKey) {
+			const [seen] = await tx
+				.select({ id: activityEvents.id })
+				.from(activityEvents)
+				.where(
+					and(
+						eq(activityEvents.userId, userId),
+						like(activityEvents.dedupKey, `${opts.dedupKey}:%`)
+					)
+				)
+				.limit(1);
+			if (seen) return 'duplicate';
+		}
 		const [row] = await tx
 			.select({
 				entry: libraryEntries,
@@ -138,7 +166,16 @@ export async function updateEntry(
 			})
 			.where(eq(libraryEntries.id, entryId));
 		if (events.length) {
-			await tx.insert(activityEvents).values(events.map((e) => ({ ...e, userId, mediaId })));
+			// A concurrent delivery of the same webhook fails here on the unique dedup key
+			await tx.insert(activityEvents).values(
+				events.map((e) => ({
+					...e,
+					userId,
+					mediaId,
+					source: opts.source ?? 'manual',
+					dedupKey: opts.dedupKey && `${opts.dedupKey}:${e.kind}`
+				}))
+			);
 		}
 		return true;
 	});
