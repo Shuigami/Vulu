@@ -44,9 +44,10 @@ src/lib/auth-client.ts   Better Auth browser client; auth-errors.ts maps error c
 src/lib/server/library.ts library entries: add, update (applyChange rules + activity_events), list
 src/lib/server/search.ts local fuzzy search, then providers through the worker
 src/lib/server/calendar.ts upcoming episodes, Paris-time formatting (server-side)
+src/lib/server/imports/  library imports: Goodreads CSV parser, runImport (match, add, journal)
 src/lib/labels.ts        French labels for enums, score scale conversions (shared client/server)
 src/routes/(app)/        signed-in pages (guard in +layout.server.ts): / (En cours, +1),
-                         /search, /media/[id], /library, /calendar
+                         /search, /media/[id], /library, /calendar, /import
 src/routes/(auth)/       /login and /signup
 src/worker/index.ts      worker entry point (pg-boss); only the worker calls external APIs
 .github/workflows/ci.yml lint, types, migrations on an empty database, schema drift check, tests
@@ -67,6 +68,7 @@ src/worker/index.ts      worker entry point (pg-boss); only the worker calls ext
 - Library changes go through `updateEntry`, which applies the automatic rules (`applyChange`: progress caps, status follows progress, dates) and writes `activity_events` in the same transaction. Never update `library_entries` directly.
 - Search: local results first; providers are queried (all types in parallel) only below `LOCAL_ENOUGH` results, and streamed to the page. Adult media are hidden. TMDB drops Japanese animated series (AniList owns anime).
 - Episodes: after a TV/anime import the worker queues `media-episodes` (TMDB: all seasons; AniList: upcoming schedule only, future episodes that leave it are deleted). `airing-refresh` (daily 03:00 UTC) re-imports airing media followed by someone, bypassing the cache. TMDB air dates are stored at 00:00 UTC and shown without a time.
+- Imports (`library-import` job): AniList by public username (the worker fetches the lists, media come embedded, no per-title call); Goodreads CSV parsed in the app, books matched on Open Library by ISBN then title/author (1 request per book). Existing library entries are never changed; journal events use dedup keys `import:<source>:<mediaId>:<kind>` so a replay adds nothing. Unmatched rows are stored in `import_jobs.unmatched`. One running import per user.
 - Dates are formatted on the server in `Europe/Paris` (`calendar.ts`), so pages do not depend on the browser timezone.
 - Scores are stored out of 100; progress is generic (`progress` = episodes/chapters/pages, `progress_secondary` = seasons/volumes).
 - Images are hot-linked from provider CDNs, never re-hosted.

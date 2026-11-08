@@ -1,5 +1,6 @@
 // AniList GraphQL API (anime, manga). Public queries need no key.
 // https://docs.anilist.co — rate limit ~90 requests/minute.
+import type { ImportItem } from '../imports/types';
 import { createRateLimiter, fetchJson, ProviderError, type Fetch, type RateLimiter } from './http';
 import {
 	plainText,
@@ -41,6 +42,33 @@ const FIELDS = `id idMal type format status title { romaji english native } syno
 const DETAIL_FIELDS = `${FIELDS} description(asHtml: false) endDate { year month day }
   episodes duration chapters volumes bannerImage genres studios(isMain: true) { nodes { name } }`;
 
+type ListCollection = {
+	hasNextChunk: boolean;
+	lists: {
+		isCustomList: boolean;
+		entries: {
+			status: keyof typeof LIST_STATUS;
+			score: number | null;
+			progress: number | null;
+			progressVolumes: number | null;
+			repeat: number | null;
+			notes: string | null;
+			startedAt: FuzzyDate;
+			completedAt: FuzzyDate;
+			media: AniMedia;
+		}[];
+	}[];
+};
+
+const LIST_STATUS = {
+	CURRENT: 'in_progress',
+	REPEATING: 'in_progress',
+	PLANNING: 'planned',
+	COMPLETED: 'completed',
+	PAUSED: 'paused',
+	DROPPED: 'dropped'
+} as const;
+
 const STATUS = {
 	FINISHED: 'finished',
 	RELEASING: 'releasing',
@@ -56,9 +84,50 @@ const toDate = (d: FuzzyDate) =>
 
 const displayTitle = (m: AniMedia) => m.title.english ?? m.title.romaji ?? m.title.native ?? '?';
 
+function toProviderMedia(m: AniMedia): ProviderMedia {
+	const isAnime = m.type === 'ANIME';
+	return {
+		media: {
+			type: isAnime ? 'anime' : 'manga',
+			title: displayTitle(m),
+			originalTitle: m.title.native,
+			overview: plainText(m.description),
+			status: m.status ? STATUS[m.status] : null,
+			startDate: toDate(m.startDate),
+			endDate: toDate(m.endDate),
+			posterUrl: m.coverImage?.extraLarge ?? m.coverImage?.large ?? null,
+			backdropUrl: m.bannerImage,
+			runtimeMinutes: isAnime ? m.duration : null,
+			totalUnits: isAnime ? m.episodes : m.chapters,
+			totalUnitsSecondary: isAnime ? null : m.volumes,
+			isAdult: m.isAdult,
+			extra: {
+				format: m.format,
+				genres: m.genres ?? [],
+				...(isAnime && { studios: m.studios?.nodes.map((s) => s.name) ?? [] })
+			}
+		},
+		externalIds: [
+			{ provider: 'anilist', externalId: String(m.id) },
+			...(m.idMal ? [{ provider: 'mal' as const, externalId: String(m.idMal) }] : [])
+		],
+		titles: uniqueTitles([
+			{ title: m.title.english, locale: 'en' },
+			{ title: m.title.romaji, locale: 'ja-Latn' },
+			{ title: m.title.native, locale: 'ja' },
+			...(m.synonyms ?? []).map((title) => ({ title, locale: null }))
+		])
+	};
+}
+
+export type AniListClient = ProviderClient & {
+	/** Public lists of an AniList user; null when the profile is private or unknown. */
+	userList(userName: string, type: 'anime' | 'manga'): Promise<ImportItem[] | null>;
+};
+
 export function createAniListClient(
 	opts: { fetch?: Fetch; limiter?: RateLimiter } = {}
-): ProviderClient {
+): AniListClient {
 	const fetch = opts.fetch ?? globalThis.fetch;
 	const limiter = opts.limiter ?? createRateLimiter(85);
 
@@ -114,40 +183,50 @@ export function createAniListClient(
 			);
 			const m = data?.Media;
 			if (!m) return null;
-			const isAnime = m.type === 'ANIME';
-			const result: ProviderMedia = {
-				media: {
-					type: isAnime ? 'anime' : 'manga',
-					title: displayTitle(m),
-					originalTitle: m.title.native,
-					overview: plainText(m.description),
-					status: m.status ? STATUS[m.status] : null,
-					startDate: toDate(m.startDate),
-					endDate: toDate(m.endDate),
-					posterUrl: m.coverImage?.extraLarge ?? m.coverImage?.large ?? null,
-					backdropUrl: m.bannerImage,
-					runtimeMinutes: isAnime ? m.duration : null,
-					totalUnits: isAnime ? m.episodes : m.chapters,
-					totalUnitsSecondary: isAnime ? null : m.volumes,
-					isAdult: m.isAdult,
-					extra: {
-						format: m.format,
-						genres: m.genres ?? [],
-						...(isAnime && { studios: m.studios?.nodes.map((s) => s.name) ?? [] })
+			return toProviderMedia(m);
+		},
+
+		async userList(userName, type) {
+			const items: ImportItem[] = [];
+			for (let chunk = 1; ; chunk++) {
+				const data = await query<{ MediaListCollection: ListCollection | null }>(
+					`query ($user: String, $type: MediaType, $chunk: Int) {
+						MediaListCollection(userName: $user, type: $type, chunk: $chunk, perChunk: 500) {
+							hasNextChunk
+							lists { isCustomList entries {
+								status score(format: POINT_100) progress progressVolumes repeat notes
+								startedAt { year month day } completedAt { year month day }
+								media { ${DETAIL_FIELDS} }
+							} }
+						}
+					}`,
+					{ user: userName, type: aniType(type), chunk }
+				);
+				const collection = data?.MediaListCollection;
+				if (!collection) return chunk === 1 ? null : items;
+				// Custom lists repeat entries already in the status lists
+				for (const list of collection.lists.filter((l) => !l.isCustomList)) {
+					for (const e of list.entries) {
+						items.push({
+							label: displayTitle(e.media),
+							type,
+							media: toProviderMedia(e.media),
+							entry: {
+								status: LIST_STATUS[e.status],
+								progress: e.progress ?? 0,
+								progressSecondary: e.progressVolumes ?? 0,
+								score: e.score ? Math.round(e.score) : null, // 0 means "not rated"
+								startedOn: toDate(e.startedAt),
+								completedOn: toDate(e.completedAt),
+								repeatCount: e.repeat ?? 0,
+								review: null,
+								notes: e.notes || null
+							}
+						});
 					}
-				},
-				externalIds: [
-					{ provider: 'anilist', externalId: String(m.id) },
-					...(m.idMal ? [{ provider: 'mal' as const, externalId: String(m.idMal) }] : [])
-				],
-				titles: uniqueTitles([
-					{ title: m.title.english, locale: 'en' },
-					{ title: m.title.romaji, locale: 'ja-Latn' },
-					{ title: m.title.native, locale: 'ja' },
-					...(m.synonyms ?? []).map((title) => ({ title, locale: null }))
-				])
-			};
-			return result;
+				}
+				if (!collection.hasNextChunk) return items;
+			}
 		},
 
 		// AniList only knows air dates through its schedule: list the upcoming episodes.

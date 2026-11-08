@@ -1,4 +1,5 @@
 import type { media, mediaExternalIds, mediaTitles } from '../db/schema';
+import type { BookLookup } from '../imports/types';
 
 export type MediaType = (typeof media.$inferInsert)['type'];
 export type Provider = (typeof mediaExternalIds.$inferInsert)['provider'];
@@ -51,6 +52,8 @@ export interface ProviderClient {
 	get(externalId: string, type: MediaType): Promise<ProviderMedia | null>;
 	/** Only for types with episodes (tv, anime). Null when the provider does not know this id. */
 	episodes?(externalId: string, type: MediaType): Promise<ProviderEpisodes | null>;
+	/** Books only: finds a book from an import row (ISBN first, then title and author). */
+	lookup?(book: BookLookup): Promise<ProviderMedia | null>;
 }
 
 export const yearOf = (date: string | null | undefined) =>
