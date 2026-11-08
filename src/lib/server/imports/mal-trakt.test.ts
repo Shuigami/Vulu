@@ -129,16 +129,16 @@ describe('Trakt', () => {
 			'/watched/movies': [
 				{ plays: 2, last_watched_at: '2024-05-01T20:00:00.000Z', movie: work('Seen', 11) }
 			],
+			// As served today: no seasons, plays include rewatches
 			'/watched/shows': [
-				{
-					plays: 5,
-					last_watched_at: null,
-					show: work('Show', 20),
-					seasons: [
-						{ number: 0, episodes: [{ number: 1 }] },
-						{ number: 1, episodes: [{ number: 1 }, { number: 2 }] }
-					]
-				}
+				{ plays: 5, last_watched_at: null, show: work('Show', 20) },
+				{ plays: 3, last_watched_at: null, show: work('No history', 21) }
+			],
+			'/history/episodes': [
+				{ episode: { season: 1, number: 1 }, show: work('Show', 20) },
+				{ episode: { season: 1, number: 1 }, show: work('Show', 20) }, // rewatch
+				{ episode: { season: 1, number: 2 }, show: work('Show', 20) },
+				{ episode: { season: 0, number: 1 }, show: work('Show', 20) } // special
 			],
 			'/ratings/movies': [
 				{ rating: 8, movie: work('Rated only', 12) },
@@ -149,7 +149,8 @@ describe('Trakt', () => {
 		const headers: Record<string, string>[] = [];
 		const fetch: Fetch = async (url, init) => {
 			headers.push(init?.headers as Record<string, string>);
-			const path = Object.keys(routes).find((p) => String(url).endsWith(p))!;
+			const { pathname } = new URL(String(url));
+			const path = Object.keys(routes).find((p) => pathname.endsWith(p))!;
 			return json(routes[path]);
 		};
 		const items = await createTraktClient({ clientId: 'cid', fetch, limiter: noWait }).userLibrary(
@@ -165,9 +166,28 @@ describe('Trakt', () => {
 			entry: { status: 'completed', completedOn: '2024-05-01', repeatCount: 1, score: 70 }
 		});
 		expect(byLabel['Show (2020)'].entry).toMatchObject({ status: 'in_progress', progress: 2 });
+		expect(byLabel['No history (2020)'].entry.progress).toBe(3); // falls back to plays
 		expect(byLabel['Rated only (2020)'].entry).toMatchObject({ status: 'completed', score: 80 });
 		expect(byLabel['No id (2020)'].ref).toBeUndefined();
-		expect(items).toHaveLength(5);
+		expect(items).toHaveLength(6);
+	});
+
+	it('reads every page of a list', async () => {
+		const movie = (n: number) => ({ plays: 1, last_watched_at: null, movie: work(`M${n}`, n) });
+		const pages: string[] = [];
+		const fetch: Fetch = async (url) => {
+			const u = new URL(String(url));
+			if (!u.pathname.endsWith('/watched/movies')) return json([]);
+			const page = Number(u.searchParams.get('page'));
+			pages.push(`${page}/${u.searchParams.get('limit')}`);
+			const size = page === 1 ? 250 : 3;
+			return json(Array.from({ length: size }, (_, i) => movie(page * 1000 + i)));
+		};
+		const items = await createTraktClient({ clientId: 'c', fetch, limiter: noWait }).userLibrary(
+			'me'
+		);
+		expect(pages).toEqual(['1/250', '2/250']);
+		expect(items).toHaveLength(253);
 	});
 
 	it('returns null for a private or unknown profile', async () => {

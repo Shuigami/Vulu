@@ -49,13 +49,15 @@ export async function saveImportedEntry(
 			})
 			.from(media)
 			.where(eq(media.id, mediaId));
+		// Sources can overshoot (rewatches counted as plays): never above the known total
+		const progress = m.total ? Math.min(imported.progress, m.total) : imported.progress;
 		// A finished work whose every unit was seen is completed, even if the source says otherwise
 		const done =
 			imported.status === 'in_progress' &&
 			!!m.total &&
-			imported.progress >= m.total &&
+			progress >= m.total &&
 			(m.status === 'finished' || m.status === 'cancelled');
-		const e = done ? { ...imported, status: 'completed' as const } : imported;
+		const e = { ...imported, progress, ...(done && { status: 'completed' as const }) };
 
 		const [created] = await tx
 			.insert(libraryEntries)
