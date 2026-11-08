@@ -9,7 +9,8 @@
 
 	const links = [
 		{ href: resolve(''), label: 'En cours' },
-		{ href: resolve('library'), label: 'Bibliothèque' }
+		{ href: resolve('library'), label: 'Bibliothèque' },
+		{ href: resolve('calendar'), label: 'Calendrier' }
 	];
 
 	async function signOut() {
