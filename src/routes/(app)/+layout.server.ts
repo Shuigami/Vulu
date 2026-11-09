@@ -6,7 +6,8 @@ export const load: LayoutServerLoad = ({ locals, url }) => {
 	if (!locals.user) redirect(303, `/login?redirectTo=${encodeURIComponent(url.pathname)}`);
 	return {
 		user: {
-			username: locals.user.username,
+			// Always set: the sign-up hook picks one (src/lib/server/auth)
+			username: locals.user.username!,
 			displayName: locals.user.name,
 			ratingScale: locals.user.ratingScale ?? 10
 		}

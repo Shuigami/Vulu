@@ -5,6 +5,7 @@ import { libraryEntries } from '#lib/server/db/schema.ts';
 import { QUEUES, requestJob, type ImportOutput } from '#lib/server/jobs.ts';
 import { addToLibrary } from '#lib/server/library.ts';
 import { LOCAL_ENOUGH, searchMedia, searchProviders } from '#lib/server/search.ts';
+import { searchUsers } from '#lib/server/social.ts';
 import { isMediaType } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -14,9 +15,12 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const q = url.searchParams.get('q')?.trim().slice(0, 200) ?? '';
 	const typeParam = url.searchParams.get('type');
 	const type = isMediaType(typeParam) ? typeParam : undefined;
-	if (!q) return { q, type, local: [], inLibrary: [], remote: null };
+	if (!q) return { q, type, members: [], local: [], inLibrary: [], remote: null };
 
-	const local = await searchMedia(db, q, { type });
+	const [local, members] = await Promise.all([
+		searchMedia(db, q, { type }),
+		type ? [] : searchUsers(db, q)
+	]);
 	const inLibrary = local.length
 		? (
 				await db
@@ -45,7 +49,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 						return { results: [], failed: true };
 					});
 
-	return { q, type, local, inLibrary, remote };
+	return { q, type, members, local, inLibrary, remote };
 };
 
 export const actions: Actions = {

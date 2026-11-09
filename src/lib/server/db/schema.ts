@@ -96,7 +96,7 @@ export const users = pgTable(
 		avatarUrl: text(), // Better Auth "image"
 		locale: text().notNull().default('fr'),
 		ratingScale: smallint().notNull().default(10),
-		profileVisibility: visibility().notNull().default('private'),
+		profileVisibility: visibility().notNull().default('public'),
 		plan: text().notNull().default('free'),
 		createdAt: createdAt(),
 		updatedAt: updatedAt()
@@ -354,6 +354,23 @@ export const activityEvents = pgTable(
 	(t) => [
 		unique('activity_events_user_id_dedup_key_key').on(t.userId, t.dedupKey),
 		index('activity_user_time_idx').on(t.userId, t.occurredAt.desc().nullsFirst())
+	]
+);
+
+// ---------------------------------------------------------------------------
+// Social
+// ---------------------------------------------------------------------------
+export const follows = pgTable(
+	'follows',
+	{
+		followerId: userRef(),
+		followeeId: userRef(),
+		createdAt: createdAt()
+	},
+	(t) => [
+		primaryKey({ name: 'follows_pkey', columns: [t.followerId, t.followeeId] }),
+		check('follows_not_self', sql`${t.followerId} <> ${t.followeeId}`),
+		index('follows_followee_idx').on(t.followeeId)
 	]
 );
 

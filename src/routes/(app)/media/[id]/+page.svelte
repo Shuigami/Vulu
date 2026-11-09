@@ -222,6 +222,15 @@
 					/>
 					Favori
 				</label>
+				<label class="flex min-h-11 items-center gap-2.5 text-sm">
+					<input
+						name="isPrivate"
+						type="checkbox"
+						checked={entry.isPrivate}
+						class="size-4 accent-accent"
+					/>
+					Masquer de mon profil
+				</label>
 				<div class="flex flex-wrap items-center gap-3">
 					<button class="btn-ink">Enregistrer</button>
 					{#if form?.error}<p role="alert" class="text-sm text-danger">{form.error}</p>{/if}

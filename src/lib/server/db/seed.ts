@@ -1,8 +1,9 @@
 // Development seed: one user, one media of each type, a few library entries.
 // Idempotent: does nothing if the demo user already exists.
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { createDb } from '.';
-import { libraryEntries, media, mediaExternalIds, mediaTitles, users } from './schema';
+import { addToLibrary, updateEntry, type EntryPatch } from '../library';
+import { follows, libraryEntries, media, mediaExternalIds, mediaTitles, users } from './schema';
 
 type Provider = (typeof mediaExternalIds.$inferInsert)['provider'];
 
@@ -92,6 +93,51 @@ const url = process.env.DATABASE_URL;
 if (!url) throw new Error('DATABASE_URL is not set');
 const db = createDb(url);
 
+/** Two members with some activity, following and followed by demo. Checked on its own so
+ * databases seeded before the social features get it too. */
+async function seedSocial() {
+	if ((await db.$count(users, eq(users.username, 'alice'))) > 0) return;
+	const [demo] = await db.select({ id: users.id }).from(users).where(eq(users.username, 'demo'));
+	const byId = async (provider: Provider, externalId: string) =>
+		(
+			await db
+				.select({ id: mediaExternalIds.mediaId })
+				.from(mediaExternalIds)
+				.where(
+					and(eq(mediaExternalIds.provider, provider), eq(mediaExternalIds.externalId, externalId))
+				)
+		)[0].id;
+	const [chihiro, severance, frieren, dune] = await Promise.all([
+		byId('tmdb', '129'),
+		byId('tmdb', '95396'),
+		byId('anilist', '154587'),
+		byId('openlibrary', 'OL893414W')
+	]);
+	const [alice, bruno] = await db
+		.insert(users)
+		.values([
+			{ email: 'alice@vulu.local', username: 'alice', displayName: 'Alice' },
+			{ email: 'bruno@vulu.local', username: 'bruno', displayName: 'Bruno' }
+		])
+		.returning({ id: users.id });
+	await db.insert(follows).values([
+		{ followerId: demo.id, followeeId: alice.id },
+		{ followerId: demo.id, followeeId: bruno.id },
+		{ followerId: alice.id, followeeId: demo.id }
+	]);
+	const log = async (userId: string, mediaId: number, patch: EntryPatch) =>
+		updateEntry(db, userId, await addToLibrary(db, userId, mediaId), patch);
+	await log(alice.id, chihiro, {
+		status: 'completed',
+		score: 90,
+		review: 'Toujours aussi beau, vingt ans après.'
+	});
+	await log(alice.id, frieren, { status: 'completed', score: 100, isFavorite: true });
+	await log(bruno.id, severance, { progress: 3 });
+	await log(bruno.id, dune, { status: 'completed', score: 70 });
+	console.log('Seeded 2 members (alice, bruno) with activity.');
+}
+
 try {
 	const existing = await db.$count(users, eq(users.username, 'demo'));
 	if (existing > 0) {
@@ -148,6 +194,7 @@ try {
 		});
 		console.log(`Seeded 1 user, ${catalogue.length} media, 4 library entries.`);
 	}
+	await seedSocial();
 } finally {
 	await db.$client.end();
 }

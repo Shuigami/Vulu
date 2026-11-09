@@ -9,7 +9,8 @@
 	let { data, children }: LayoutProps = $props();
 
 	const links = [
-		{ href: resolve(''), label: 'En cours' },
+		{ href: resolve(''), label: 'Accueil' },
+		{ href: resolve('activity'), label: 'Activité' },
 		{ href: resolve('library'), label: 'Bibliothèque' },
 		{ href: resolve('calendar'), label: 'Calendrier' },
 		{ href: resolve('import'), label: 'Importer' },
@@ -71,7 +72,11 @@
 		</form>
 		<div class="flex items-center gap-3 text-sm">
 			<ThemeToggle />
-			<span class="font-semibold">{data.user.displayName || data.user.username}</span>
+			<a
+				href={resolve('/(app)/u/[username]', { username: data.user.username })}
+				class="font-semibold text-ink no-underline hover:underline"
+				>{data.user.displayName || data.user.username}</a
+			>
 			<button
 				type="button"
 				class="cursor-pointer text-muted underline hover:text-ink"

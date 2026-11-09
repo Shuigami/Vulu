@@ -19,6 +19,7 @@ export type EntryPatch = Partial<
 		| 'notes'
 		| 'review'
 		| 'isFavorite'
+		| 'isPrivate'
 	>
 >;
 
@@ -150,7 +151,7 @@ export async function updateEntry(
 		const p = typeof patch === 'function' ? patch(row.entry) : patch;
 		const { next, events } = applyChange(row.entry, p, row, today);
 		const { status, progress, progressSecondary, score, startedOn, completedOn } = next;
-		const { notes, review, isFavorite, mediaId } = next;
+		const { notes, review, isFavorite, isPrivate, mediaId } = next;
 		await tx
 			.update(libraryEntries)
 			.set({
@@ -162,7 +163,8 @@ export async function updateEntry(
 				completedOn,
 				notes,
 				review,
-				isFavorite
+				isFavorite,
+				isPrivate
 			})
 			.where(eq(libraryEntries.id, entryId));
 		if (events.length) {

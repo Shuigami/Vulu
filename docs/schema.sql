@@ -37,7 +37,7 @@ CREATE TABLE users (
   avatar_url    text,
   locale        text NOT NULL DEFAULT 'fr',
   rating_scale  smallint NOT NULL DEFAULT 10 CHECK (rating_scale IN (5, 10, 100)),
-  profile_visibility visibility NOT NULL DEFAULT 'private',
+  profile_visibility visibility NOT NULL DEFAULT 'public',
   plan          text NOT NULL DEFAULT 'free',          -- prêt pour le freemium
   created_at    timestamptz NOT NULL DEFAULT now(),
   updated_at    timestamptz NOT NULL DEFAULT now(),
@@ -233,6 +233,18 @@ CREATE TABLE activity_events (
   UNIQUE (user_id, dedup_key)
 );
 CREATE INDEX activity_user_time_idx ON activity_events (user_id, occurred_at DESC);
+
+-- ---------------------------------------------------------------------------
+-- Social : abonnements (sans validation ; un profil 'private' n'est visible que de son auteur)
+-- ---------------------------------------------------------------------------
+CREATE TABLE follows (
+  follower_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  followee_id uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (follower_id, followee_id),
+  CONSTRAINT follows_not_self CHECK (follower_id <> followee_id)
+);
+CREATE INDEX follows_followee_idx ON follows (followee_id);
 
 -- ---------------------------------------------------------------------------
 -- Listes personnalisées
