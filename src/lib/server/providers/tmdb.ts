@@ -80,6 +80,20 @@ const ANIMATION_GENRE = 16;
 const isAnime = (r: SearchItem) =>
 	!!r.origin_country?.includes('JP') && !!r.genre_ids?.includes(ANIMATION_GENRE);
 
+const toResults = (items: SearchItem[] | undefined, type: MediaType) =>
+	(items ?? [])
+		.filter((r) => !isAnime(r))
+		.map((r): SearchResult => ({
+			provider: 'tmdb',
+			externalId: String(r.id),
+			type,
+			title: r.title ?? r.name ?? '?',
+			originalTitle: r.original_title ?? r.original_name ?? null,
+			year: yearOf(r.release_date ?? r.first_air_date),
+			posterUrl: image(r.poster_path, 'w342'),
+			isAdult: r.adult ?? false
+		}));
+
 export function createTmdbClient(opts: {
 	apiKey: string;
 	fetch?: Fetch;
@@ -116,18 +130,21 @@ export function createTmdbClient(opts: {
 				query: q,
 				include_adult: 'false'
 			});
-			return (res?.results ?? [])
-				.filter((r) => !isAnime(r))
-				.map((r): SearchResult => ({
-					provider: 'tmdb',
-					externalId: String(r.id),
-					type,
-					title: r.title ?? r.name ?? '?',
-					originalTitle: r.original_title ?? r.original_name ?? null,
-					year: yearOf(r.release_date ?? r.first_air_date),
-					posterUrl: image(r.poster_path, 'w342'),
-					isAdult: r.adult ?? false
-				}));
+			return toResults(res?.results, type);
+		},
+
+		async trending(type) {
+			const res = await get<{ results: SearchItem[] }>(`/trending/${kind(type)}/week`, {});
+			return toResults(res?.results, type);
+		},
+
+		async recommendations(id, type) {
+			const k = kind(type);
+			const res = await get<{ results: SearchItem[] }>(
+				`/${k}/${encodeURIComponent(id)}/recommendations`,
+				{}
+			);
+			return toResults(res?.results, type);
 		},
 
 		async get(id, type) {

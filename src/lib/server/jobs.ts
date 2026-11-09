@@ -12,11 +12,14 @@ export const QUEUES = {
 	refreshAiring: 'airing-refresh',
 	libraryImport: 'library-import',
 	jellyfin: 'jellyfin-event',
-	purgeCache: 'cache-purge'
+	purgeCache: 'cache-purge',
+	discover: 'provider-discover'
 } as const;
 
 export type SearchJob = { type: MediaType; query: string };
 export type SearchOutput = { results: SearchResult[] };
+/** Trending works of `type`, or recommendations for the work `externalId`. */
+export type DiscoverJob = { type: MediaType; externalId?: string };
 /** `refresh` bypasses the provider cache (daily refresh). */
 export type ImportJob = {
 	type: MediaType;

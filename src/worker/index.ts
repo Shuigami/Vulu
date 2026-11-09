@@ -4,6 +4,7 @@ import { PgBoss } from 'pg-boss';
 import {
 	airingWithoutEpisodes,
 	createProviders,
+	discoverProvider,
 	hasEpisodes,
 	importMedia,
 	searchProvider,
@@ -13,6 +14,7 @@ import {
 import { createDb } from '../lib/server/db';
 import {
 	QUEUES,
+	type DiscoverJob,
 	type EpisodesJob,
 	type JellyfinJob,
 	type LibraryImportJob,
@@ -51,6 +53,14 @@ for (const name of Object.values(QUEUES)) await boss.createQueue(name);
 await boss.work<SearchJob, SearchOutput>(QUEUES.search, { localConcurrency: 5 }, async ([job]) => ({
 	results: await searchProvider(db, providers, job.data.type, job.data.query)
 }));
+
+await boss.work<DiscoverJob, SearchOutput>(
+	QUEUES.discover,
+	{ localConcurrency: 5 },
+	async ([job]) => ({
+		results: await discoverProvider(db, providers, job.data.type, job.data.externalId)
+	})
+);
 
 await boss.work<ImportJob, ImportOutput>(
 	QUEUES.importMedia,
