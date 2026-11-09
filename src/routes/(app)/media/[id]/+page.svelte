@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { resolve } from '$app/paths';
+	import Avatar from '#lib/components/Avatar.svelte';
 	import Poster from '#lib/components/Poster.svelte';
+	import RatingHistogram from '#lib/components/RatingHistogram.svelte';
 	import Progress from '#lib/components/Progress.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import {
@@ -249,6 +252,72 @@
 					>Retirer de ma bibliothèque</button
 				>
 			</form>
+		{/if}
+	</section>
+
+	<section aria-labelledby="members-title" class="flex basis-full flex-col gap-8">
+		<h2 id="members-title" class="h2">Chez les membres</h2>
+		<div class="flex flex-wrap gap-8">
+			<div class="flex flex-[1_1_280px] flex-col gap-3">
+				<h3 class="eyebrow">Notes</h3>
+				{#if data.ratings.count}
+					<RatingHistogram {...data.ratings} {scale} />
+				{:else}
+					<p class="text-sm text-muted">Pas encore de note.</p>
+				{/if}
+			</div>
+			{#if data.followed.length}
+				<div class="flex flex-[2_1_340px] flex-col gap-3">
+					<h3 class="eyebrow">Tes abonnements</h3>
+					<ul class="flex flex-wrap gap-2">
+						{#each data.followed as f (f.id)}
+							{@const name = f.displayName || f.username}
+							<li>
+								<a
+									href={resolve('/(app)/u/[username]', { username: f.username })}
+									class="flex items-center gap-2 card rounded-full py-1 pr-3.5 pl-1 text-sm text-ink no-underline hover:border-muted"
+									title="{name} · {statusLabel[f.status]}"
+								>
+									<Avatar src={f.avatarUrl} {name} class="size-7 text-xs" />
+									<span class="font-semibold">{name}</span>
+									<span class="text-muted"
+										>{f.score !== null
+											? `★ ${toScale(f.score, scale)}`
+											: statusLabel[f.status]}</span
+									>
+								</a>
+							</li>
+						{/each}
+					</ul>
+				</div>
+			{/if}
+		</div>
+
+		{#if data.reviews.length}
+			<div class="flex flex-col gap-3">
+				<h3 class="eyebrow">Critiques</h3>
+				<ul class="flex flex-col divide-y divide-line">
+					{#each data.reviews as r (r.id)}
+						{@const name = r.displayName || r.username}
+						<li class="flex gap-3.5 py-4">
+							<Avatar src={r.avatarUrl} {name} />
+							<div class="min-w-0 flex-1">
+								<p class="text-sm">
+									<a
+										href={resolve('/(app)/u/[username]', { username: r.username })}
+										class="font-semibold text-ink no-underline hover:underline">{name}</a
+									>
+									{#if r.score !== null}<span class="text-accent-ink"
+											>★ {toScale(r.score, scale)}/{scale}</span
+										>{/if}
+									<span class="text-muted">· {r.when}</span>
+								</p>
+								<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
+							</div>
+						</li>
+					{/each}
+				</ul>
+			</div>
 		{/if}
 	</section>
 </div>

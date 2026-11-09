@@ -1,9 +1,16 @@
 import { error, fail } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
 import { db } from '#lib/server/app.ts';
-import { describeAirDate, episodeLabel, nextEpisode, startOfToday } from '#lib/server/calendar.ts';
+import {
+	describeAirDate,
+	episodeLabel,
+	nextEpisode,
+	startOfToday,
+	timeAgo
+} from '#lib/server/calendar.ts';
 import { libraryEntries, media, mediaExternalIds } from '#lib/server/db/schema.ts';
 import { addToLibrary, removeEntry, updateEntry, type EntryPatch } from '#lib/server/library.ts';
+import { mediaEntries, ratingSummary } from '#lib/server/social.ts';
 import { fromScale, isEntryStatus } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -30,7 +37,21 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		episode: episodeLabel(next),
 		...describeAirDate(next.airDate!)
 	};
-	return { media: m, entry: entry ?? null, externalIds, upcoming };
+	const viewerId = locals.user!.id;
+	const [ratings, followed, reviews] = await Promise.all([
+		ratingSummary(db, id, viewerId),
+		mediaEntries(db, id, viewerId, { followedOnly: true, limit: 24 }),
+		mediaEntries(db, id, viewerId, { reviewsOnly: true })
+	]);
+	return {
+		media: m,
+		entry: entry ?? null,
+		externalIds,
+		upcoming,
+		ratings,
+		followed,
+		reviews: reviews.map(({ updatedAt, ...r }) => ({ ...r, when: timeAgo(updatedAt) }))
+	};
 };
 
 /** Validates the library form; returns the fields or an error message (French, shown in the UI). */
