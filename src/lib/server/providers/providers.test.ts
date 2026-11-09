@@ -375,3 +375,85 @@ describe('episodes', () => {
 		});
 	});
 });
+
+describe('trending and recommendations', () => {
+	it('TMDB: trending and recommendations without Japanese animation', async () => {
+		const items = [
+			{ id: 1, name: 'Severance', first_air_date: '2022-02-18', poster_path: '/s.jpg' },
+			{ id: 2, name: 'Frieren', origin_country: ['JP'], genre_ids: [16], poster_path: null }
+		];
+		const { fetch, calls } = fakeFetch([['api.themoviedb.org', () => json({ results: items })]]);
+		const tmdb = createTmdbClient({ apiKey: 'k', fetch, limiter: noWait });
+		const trending = await tmdb.trending!('tv');
+		expect(trending).toEqual([
+			{
+				provider: 'tmdb',
+				externalId: '1',
+				type: 'tv',
+				title: 'Severance',
+				originalTitle: null,
+				year: 2022,
+				posterUrl: 'https://image.tmdb.org/t/p/w342/s.jpg',
+				isAdult: false
+			}
+		]);
+		expect(await tmdb.recommendations!('95396', 'tv')).toHaveLength(1);
+		expect(calls.map((c) => new URL(c.url).pathname)).toEqual([
+			'/3/trending/tv/week',
+			'/3/tv/95396/recommendations'
+		]);
+	});
+
+	it('AniList: recommendations skip removed media', async () => {
+		const m = {
+			id: 5114,
+			type: 'ANIME',
+			title: { romaji: 'Hagane', english: 'Fullmetal Alchemist', native: null },
+			startDate: { year: 2009 },
+			coverImage: { large: 'https://img/fma.jpg' },
+			isAdult: false
+		};
+		const { fetch } = fakeFetch([
+			[
+				'anilist',
+				() =>
+					json({
+						data: {
+							Media: {
+								recommendations: {
+									nodes: [{ mediaRecommendation: null }, { mediaRecommendation: m }]
+								}
+							}
+						}
+					})
+			]
+		]);
+		const client = createAniListClient({ fetch, limiter: noWait });
+		expect(await client.recommendations!('154587', 'anime')).toMatchObject([
+			{ provider: 'anilist', externalId: '5114', type: 'anime', title: 'Fullmetal Alchemist' }
+		]);
+	});
+
+	it('Open Library: weekly trending works', async () => {
+		const { fetch } = fakeFetch([
+			[
+				'/trending/weekly.json',
+				() =>
+					json({
+						works: [
+							{ key: '/works/OL893414W', title: 'Dune', first_publish_year: 1965, cover_i: 7 }
+						]
+					})
+			]
+		]);
+		const client = createOpenLibraryClient({ fetch, limiter: noWait });
+		expect(await client.trending!('book')).toMatchObject([
+			{
+				externalId: 'OL893414W',
+				title: 'Dune',
+				year: 1965,
+				posterUrl: expect.stringContaining('7-M')
+			}
+		]);
+	});
+});

@@ -84,6 +84,17 @@ const toDate = (d: FuzzyDate) =>
 
 const displayTitle = (m: AniMedia) => m.title.english ?? m.title.romaji ?? m.title.native ?? '?';
 
+const toSearchResult = (m: AniMedia): SearchResult => ({
+	provider: 'anilist',
+	externalId: String(m.id),
+	type: m.type === 'ANIME' ? 'anime' : 'manga',
+	title: displayTitle(m),
+	originalTitle: m.title.native,
+	year: yearOf(toDate(m.startDate)),
+	posterUrl: m.coverImage?.large ?? null,
+	isAdult: m.isAdult
+});
+
 function toProviderMedia(m: AniMedia): ProviderMedia {
 	const isAnime = m.type === 'ANIME';
 	return {
@@ -166,16 +177,34 @@ export function createAniListClient(
 				}`,
 				{ q, type: aniType(type) }
 			);
-			return (data?.Page.media ?? []).map((m): SearchResult => ({
-				provider: 'anilist',
-				externalId: String(m.id),
-				type,
-				title: displayTitle(m),
-				originalTitle: m.title.native,
-				year: yearOf(toDate(m.startDate)),
-				posterUrl: m.coverImage?.large ?? null,
-				isAdult: m.isAdult
-			}));
+			return (data?.Page.media ?? []).map(toSearchResult);
+		},
+
+		async trending(type) {
+			const data = await query<{ Page: { media: AniMedia[] } }>(
+				`query ($type: MediaType) {
+					Page(perPage: 20) { media(type: $type, sort: TRENDING_DESC, isAdult: false) { ${FIELDS} } }
+				}`,
+				{ type: aniType(type) }
+			);
+			return (data?.Page.media ?? []).map(toSearchResult);
+		},
+
+		async recommendations(id, type) {
+			const data = await query<{
+				Media: { recommendations: { nodes: { mediaRecommendation: AniMedia | null }[] } };
+			}>(
+				`query ($id: Int, $type: MediaType) {
+					Media(id: $id, type: $type) {
+						recommendations(sort: RATING_DESC, perPage: 15) { nodes { mediaRecommendation { ${FIELDS} } } }
+					}
+				}`,
+				{ id: Number(id), type: aniType(type) }
+			);
+			return (data?.Media.recommendations.nodes ?? [])
+				.map((n) => n.mediaRecommendation)
+				.filter((m): m is AniMedia => !!m)
+				.map(toSearchResult);
 		},
 
 		async get(id, type) {

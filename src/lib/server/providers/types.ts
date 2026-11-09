@@ -52,6 +52,10 @@ export interface ProviderClient {
 	get(externalId: string, type: MediaType): Promise<ProviderMedia | null>;
 	/** Only for types with episodes (tv, anime). Null when the provider does not know this id. */
 	episodes?(externalId: string, type: MediaType): Promise<ProviderEpisodes | null>;
+	/** What is popular this week. */
+	trending?(type: MediaType): Promise<SearchResult[]>;
+	/** Works the provider's users liked along with this one. */
+	recommendations?(externalId: string, type: MediaType): Promise<SearchResult[]>;
 	/** Books only: finds a book from an import row (ISBN first, then title and author). */
 	lookup?(book: BookLookup): Promise<ProviderMedia | null>;
 }
