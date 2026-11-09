@@ -71,7 +71,8 @@ function parseEntryForm(form: FormData, ratingScale: number): EntryPatch | strin
 		completedOn,
 		notes: text('notes'),
 		review: text('review'),
-		isFavorite: form.get('isFavorite') === 'on'
+		isFavorite: form.get('isFavorite') === 'on',
+		isPrivate: form.get('isPrivate') === 'on'
 	};
 }
 

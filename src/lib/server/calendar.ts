@@ -143,3 +143,21 @@ const monthFormat = new Intl.DateTimeFormat('fr-FR', {
 	year: 'numeric'
 });
 export const monthLabel = (month: string) => monthFormat.format(new Date(`${month}-15T12:00:00Z`));
+
+const shortDateFormat = new Intl.DateTimeFormat('fr-FR', {
+	timeZone: TIMEZONE,
+	day: 'numeric',
+	month: 'short'
+});
+
+/** "à l’instant", "il y a 3 h", "hier", "il y a 4 j", then "12 nov." (activity feeds). */
+export function timeAgo(d: Date, now = new Date()) {
+	const minutes = Math.floor((now.getTime() - d.getTime()) / 60_000);
+	if (minutes < 1) return 'à l’instant';
+	if (minutes < 60) return `il y a ${minutes} min`;
+	if (minutes < 24 * 60) return `il y a ${Math.floor(minutes / 60)} h`;
+	const days = Math.round((startOfToday(now).getTime() - startOfToday(d).getTime()) / 86_400_000);
+	if (days <= 1) return 'hier';
+	if (days < 7) return `il y a ${days} j`;
+	return shortDateFormat.format(d);
+}

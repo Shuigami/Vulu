@@ -43,6 +43,13 @@
       "when": 1794159372671,
       "tag": "0005_episodes_without_season",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794250631382,
+      "tag": "0006_social_follows",
+      "breakpoints": true
     }
   ]
 }

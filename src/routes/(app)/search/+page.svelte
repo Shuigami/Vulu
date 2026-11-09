@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
+	import Avatar from '#lib/components/Avatar.svelte';
 	import Poster from '#lib/components/Poster.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, typePlural } from '#lib/labels.ts';
@@ -46,6 +47,26 @@
 		</div>
 
 		{#if form?.importError}<p role="alert" class="text-sm text-danger">{form.importError}</p>{/if}
+
+		{#if data.members.length}
+			<section aria-labelledby="members" class="flex flex-col gap-2">
+				<h2 id="members" class="eyebrow">Membres</h2>
+				<ul class="flex flex-wrap gap-2">
+					{#each data.members as u (u.id)}
+						<li>
+							<a
+								href={resolve('/(app)/u/[username]', { username: u.username })}
+								class="flex items-center gap-2.5 card rounded-full py-1.5 pr-4 pl-1.5 text-sm text-ink no-underline hover:border-muted"
+							>
+								<Avatar src={u.avatarUrl} name={u.displayName || u.username} class="size-8" />
+								<span class="font-semibold">{u.displayName || u.username}</span>
+								<span class="text-muted">@{u.username}</span>
+							</a>
+						</li>
+					{/each}
+				</ul>
+			</section>
+		{/if}
 
 		{#if data.local.length}
 			<section aria-labelledby="local" class="flex flex-col gap-2">

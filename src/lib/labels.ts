@@ -54,3 +54,11 @@ export const isEntryStatus = (v: unknown): v is EntryStatus =>
 export const toScale = (score: number, scale: number) => Math.round((score * scale) / 10) / 10;
 export const fromScale = (value: number, scale: number) =>
 	Math.min(100, Math.max(0, Math.round((value * 100) / scale)));
+
+/** Feed verb for the events of one change: "a terminé", "a commencé", "a noté". */
+export function activityVerb(kinds: string[], type: MediaType) {
+	const read = type === 'manga' || type === 'book';
+	if (kinds.includes('completed')) return read ? 'a lu' : 'a vu';
+	if (kinds.includes('started')) return read ? 'a commencé à lire' : 'a commencé';
+	return 'a noté';
+}
