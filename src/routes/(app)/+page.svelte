@@ -163,7 +163,7 @@
 	{#await data.discoveries}
 		<section aria-labelledby="discover" class="flex flex-col gap-5">
 			<h2 id="discover" class="h2">Découvertes pour toi</h2>
-			<ShelfSkeleton label="Chargement des découvertes" />
+			<ShelfSkeleton label="Chargement des découvertes" noteLines={2} />
 		</section>
 	{:then discoveries}
 		{#if discoveries?.length}
