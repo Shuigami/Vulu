@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import ActivityFeed from '#lib/components/ActivityFeed.svelte';
 	import Avatar from '#lib/components/Avatar.svelte';
+	import ListCard from '#lib/components/ListCard.svelte';
 	import Poster from '#lib/components/Poster.svelte';
 	import { toScale, typePlural } from '#lib/labels.ts';
 	import type { PageProps } from './$types';
@@ -77,6 +78,17 @@
 								>{/if}
 						</a>
 					</li>
+				{/each}
+			</ul>
+		</section>
+	{/if}
+
+	{#if data.lists.length}
+		<section aria-labelledby="lists" class="flex flex-col gap-5">
+			<h2 id="lists" class="h2">Listes</h2>
+			<ul class="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-x-5 gap-y-6">
+				{#each data.lists as list (list.id)}
+					<li><ListCard {list} /></li>
 				{/each}
 			</ul>
 		</section>

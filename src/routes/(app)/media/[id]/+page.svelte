@@ -576,6 +576,49 @@
 				</section>
 			{/if}
 
+			<section aria-labelledby="lists-title" class="flex flex-col gap-3.5">
+				<h2 id="lists-title" class="h2">Mes listes</h2>
+				<div class="flex flex-col gap-1 card p-2">
+					{#each data.lists as l (l.id)}
+						<form method="post" action="?/toggleList" use:enhance>
+							<input type="hidden" name="listId" value={l.id} />
+							<input type="hidden" name="has" value={String(l.has)} />
+							<button
+								role="checkbox"
+								aria-checked={l.has}
+								class="flex min-h-11 w-full cursor-pointer items-center gap-2.5 rounded-lg px-2 text-left text-sm hover:bg-surface-2"
+							>
+								<span
+									class="grid size-4.5 shrink-0 place-items-center rounded border text-[11px] font-bold {l.has
+										? 'border-accent bg-accent text-on-accent'
+										: 'border-line'}"
+									aria-hidden="true">{l.has ? '✓' : ''}</span
+								>{l.name}
+							</button>
+						</form>
+					{/each}
+					<form
+						method="post"
+						action="?/newList"
+						use:enhance
+						class="flex gap-2 p-1 {data.lists.length ? 'border-t border-line pt-2' : ''}"
+					>
+						<input
+							name="name"
+							required
+							maxlength="80"
+							placeholder="Nouvelle liste"
+							aria-label="Nom de la nouvelle liste"
+							class="field min-h-10 min-w-0 flex-1 text-sm"
+						/>
+						<button class="btn-ghost text-sm">Créer</button>
+					</form>
+					{#if form?.listError}<p role="alert" class="px-2 pb-1 text-sm text-danger">
+							{form.listError}
+						</p>{/if}
+				</div>
+			</section>
+
 			<section aria-labelledby="info-title" class="flex flex-col gap-3.5">
 				<h2 id="info-title" class="h2">Fiche</h2>
 				<dl class="card px-4.5 py-1">
