@@ -47,20 +47,6 @@
 		</div>
 	</section>
 
-	{#await data.discoveries}
-		<section aria-labelledby="discover" class="flex flex-col gap-5">
-			<h2 id="discover" class="h2">Découvertes pour toi</h2>
-			<ShelfSkeleton label="Chargement des découvertes" noteLines={2} />
-		</section>
-	{:then discoveries}
-		{#if discoveries?.length}
-			<section aria-labelledby="discover" class="flex flex-col gap-5">
-				<h2 id="discover" class="h2">Découvertes pour toi</h2>
-				<MediaShelf items={shelf(discoveries)} label="Découvertes pour toi" />
-			</section>
-		{/if}
-	{/await}
-
 	<section aria-labelledby="trending" class="flex flex-col gap-5">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<h2 id="trending" class="h2">Tendances de la semaine</h2>
@@ -88,6 +74,20 @@
 			{/if}
 		{/await}
 	</section>
+
+	{#await data.discoveries}
+		<section aria-labelledby="discover" class="flex flex-col gap-5">
+			<h2 id="discover" class="h2">Découvertes pour toi</h2>
+			<ShelfSkeleton label="Chargement des découvertes" noteLines={2} />
+		</section>
+	{:then discoveries}
+		{#if discoveries?.length}
+			<section aria-labelledby="discover" class="flex flex-col gap-5">
+				<h2 id="discover" class="h2">Découvertes pour toi</h2>
+				<MediaShelf items={shelf(discoveries)} label="Découvertes pour toi" />
+			</section>
+		{/if}
+	{/await}
 
 	{#if data.popular.length}
 		<section aria-labelledby="popular" class="flex flex-col gap-5">
