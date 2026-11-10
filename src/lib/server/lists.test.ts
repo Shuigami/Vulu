@@ -81,6 +81,8 @@ describe('lists in the database', () => {
 
 		const list = await getList(db, id, owner);
 		expect(list?.items.map((i) => i.mediaId)).toEqual([b, a]);
+		expect((await getList(db, id, owner, 'title'))?.items.map((i) => i.mediaId)).toEqual([a, b]);
+		expect((await getList(db, id, owner, 'recent'))?.items.map((i) => i.mediaId)).toEqual([a, b]);
 		expect(list?.isOwner).toBe(true);
 		expect(await listsForMedia(db, owner, a)).toMatchObject([{ id, has: true }]);
 

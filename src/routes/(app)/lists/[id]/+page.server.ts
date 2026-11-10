@@ -6,6 +6,8 @@ import {
 	addToList,
 	deleteList,
 	getList,
+	LIST_SORTS,
+	type ListSort,
 	parseListInput,
 	removeFromList,
 	updateList
@@ -20,12 +22,14 @@ const parseId = (raw: string) => {
 };
 
 export const load: PageServerLoad = async ({ params, url, locals }) => {
-	const list = await getList(db, parseId(params.id), locals.user!.id);
+	const o = url.searchParams.get('sort');
+	const sort = LIST_SORTS.includes(o as ListSort) ? (o as ListSort) : 'position';
+	const list = await getList(db, parseId(params.id), locals.user!.id, sort);
 	if (!list) error(404, 'Liste introuvable');
 	// Owner only: search the catalogue to add works without leaving the list
 	const q = (list.isOwner && url.searchParams.get('q')?.trim().slice(0, 100)) || '';
 	const results = q ? await searchMedia(db, q, { limit: 12 }) : [];
-	return { list, q, results };
+	return { list, q, sort, results };
 };
 
 export const actions: Actions = {

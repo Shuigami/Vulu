@@ -2,13 +2,21 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
-	import { typeLabel } from '#lib/labels.ts';
+	import { toScale, typeLabel } from '#lib/labels.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
 	const list = $derived(data.list);
 	let editing = $state(false);
 	let confirmDelete = $state(false);
+	const sorts = [
+		{ value: 'position', label: 'Ordre de la liste' },
+		{ value: 'recent', label: 'Ajout récent' },
+		{ value: 'title', label: 'Titre' },
+		{ value: 'year', label: 'Date de sortie' },
+		{ value: 'score', label: 'Ma note' }
+	];
+	const scale = $derived(data.user.ratingScale);
 	const inListIds = $derived(new Set(list.items.map((i) => i.mediaId)));
 </script>
 
@@ -114,6 +122,7 @@
 				data-sveltekit-keepfocus
 				data-sveltekit-noscroll
 			>
+				{#if data.sort !== 'position'}<input type="hidden" name="sort" value={data.sort} />{/if}
 				<input
 					type="search"
 					name="q"
@@ -142,7 +151,7 @@
 								{:else}
 									<form
 										method="post"
-										action="?q={encodeURIComponent(data.q)}&/add"
+										action="?q={encodeURIComponent(data.q)}&sort={data.sort}&/add"
 										use:enhance={() =>
 											({ update }) =>
 												update({ reset: false })}
@@ -166,6 +175,25 @@
 		</section>
 	{/if}
 
+	{#if list.items.length > 1}
+		<form method="get" class="-mb-4 flex justify-end" data-sveltekit-noscroll>
+			{#if data.q}<input type="hidden" name="q" value={data.q} />{/if}
+			<label class="flex items-center gap-2 text-sm text-muted">
+				Trier par
+				<select
+					name="sort"
+					class="h-10 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus:border-accent"
+					onchange={(e) => e.currentTarget.form?.requestSubmit()}
+				>
+					{#each sorts as o (o.value)}
+						<option value={o.value} selected={data.sort === o.value}>{o.label}</option>
+					{/each}
+				</select>
+			</label>
+			<noscript><button class="ml-2 btn-ghost">Trier</button></noscript>
+		</form>
+	{/if}
+
 	{#if list.items.length}
 		<ol class="grid [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] gap-x-5 gap-y-7">
 			{#each list.items as item (item.mediaId)}
@@ -180,7 +208,13 @@
 						<div>
 							<p class="leading-snug font-semibold group-hover:underline">{item.title}</p>
 							<p class="mt-0.5 text-[13px] text-muted">
-								{typeLabel[item.type]}{item.year ? ` · ${item.year}` : ''}
+								{[
+									typeLabel[item.type],
+									item.year,
+									item.score !== null && `★ ${toScale(item.score, scale)}`
+								]
+									.filter(Boolean)
+									.join(' · ')}
 							</p>
 						</div>
 					</a>

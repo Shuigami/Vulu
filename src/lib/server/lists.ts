@@ -2,7 +2,7 @@
 // public and its owner's profile is not private. Every change checks ownership.
 import { and, asc, desc, eq, max, ne, or, sql } from 'drizzle-orm';
 import type { Db } from './db';
-import { listItems, lists, media, users } from './db/schema';
+import { libraryEntries, listItems, lists, media, users } from './db/schema';
 
 export const LIST_NAME_MAX = 80;
 export const LIST_DESCRIPTION_MAX = 500;
@@ -109,8 +109,27 @@ export async function listsOf(db: Db, ownerId: string, viewerId: string) {
 		.orderBy(desc(lists.updatedAt), desc(lists.id));
 }
 
-/** One list with its owner and works in order, or null when missing or hidden from the viewer. */
-export async function getList(db: Db, listId: number, viewerId: string) {
+export const LIST_SORTS = ['position', 'recent', 'title', 'year', 'score'] as const;
+export type ListSort = (typeof LIST_SORTS)[number];
+
+const itemOrder = {
+	position: [sql`${listItems.position}`],
+	recent: [sql`${listItems.position} desc`],
+	title: [sql`lower(${media.title})`],
+	year: [sql`${media.startDate} desc nulls last`],
+	score: [sql`${libraryEntries.score} desc nulls last`]
+} satisfies Record<ListSort, unknown[]>;
+
+/**
+ * One list with its owner and works, or null when missing or hidden from the viewer.
+ * `score` is the viewer's own score, so a list never reveals its owner's private entries.
+ */
+export async function getList(
+	db: Db,
+	listId: number,
+	viewerId: string,
+	sort: ListSort = 'position'
+) {
 	const [list] = await db
 		.select({
 			id: lists.id,
@@ -131,12 +150,17 @@ export async function getList(db: Db, listId: number, viewerId: string) {
 			type: media.type,
 			title: media.title,
 			posterUrl: media.posterUrl,
-			year: sql<number | null>`extract(year from ${media.startDate})::int`
+			year: sql<number | null>`extract(year from ${media.startDate})::int`,
+			score: libraryEntries.score
 		})
 		.from(listItems)
 		.innerJoin(media, eq(media.id, listItems.mediaId))
+		.leftJoin(
+			libraryEntries,
+			and(eq(libraryEntries.mediaId, media.id), eq(libraryEntries.userId, viewerId))
+		)
 		.where(eq(listItems.listId, listId))
-		.orderBy(asc(listItems.position));
+		.orderBy(...itemOrder[sort], asc(listItems.position));
 	return { ...list, isOwner: list.ownerId === viewerId, items };
 }
 
