@@ -21,7 +21,6 @@
 		"db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
-		"db:seed": "tsx --env-file-if-exists=.env src/lib/server/db/seed.ts",
 		"invite": "tsx --env-file-if-exists=.env src/lib/server/db/invite.ts"
 	},
 	"devDependencies": {

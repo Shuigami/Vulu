@@ -17,7 +17,6 @@ pnpm install
 cp .env.example .env      # puis remplir les clés si besoin
 pnpm db:up                # PostgreSQL 16 dans Docker, port 5432
 pnpm db:migrate           # crée les tables
-pnpm db:seed              # données de démonstration (facultatif)
 pnpm invite toi@exemple.fr # l'inscription est sur invitation pendant la bêta
 ```
 
