@@ -209,19 +209,46 @@
 			<a href={resolve('calendar')} class="text-sm font-semibold">Tout le calendrier →</a>
 		</div>
 		{#if data.week.length}
-			<ul class="grid [grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))] gap-3">
+			<ul class="grid [grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))] gap-4">
 				{#each data.week as w (w.key)}
-					<li class="flex items-center gap-3.5 rounded-2xl border border-line px-3.5 py-3">
-						<div class="w-13 shrink-0 border-r border-line pr-3 text-center">
-							<p class="text-xs tracking-wider text-muted uppercase">{w.weekday}</p>
-							<p class="font-display text-2xl leading-tight font-bold">{w.dayNumber}</p>
-						</div>
-						<div class="min-w-0">
+					<!-- Whole card opens the work, like the resume cards -->
+					<li class="group relative flex gap-4 card p-3.5 tile-frame">
+						<Poster src={w.posterUrl} title={w.mediaTitle} class="w-16 rounded-[10px]" />
+						<div class="flex min-w-0 flex-1 flex-col gap-1">
+							<div class="flex items-baseline justify-between gap-2">
+								<p class="text-[13px] font-semibold text-accent-ink first-letter:uppercase">
+									{w.weekday}
+									{w.dayNumber}{w.time ? ` · ${w.time}` : ''}
+								</p>
+								<span
+									class="shrink-0 rounded-md bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted"
+									>{w.countdown}</span
+								>
+							</div>
 							<a
 								href={resolve('/(app)/media/[id]', { id: String(w.mediaId) })}
-								class="font-semibold text-ink no-underline hover:underline">{w.mediaTitle}</a
+								class="line-clamp-2 leading-tight font-semibold text-ink no-underline group-hover:underline after:absolute after:inset-0 after:rounded-2xl"
+								>{w.mediaTitle}</a
 							>
-							<p class="text-[13px] text-muted">{w.episode}{w.time ? ` · ${w.time}` : ''}</p>
+							<div class="mt-auto flex flex-col gap-1.5 pt-1">
+								{#if w.totalUnits}
+									<Progress
+										value={w.progress}
+										max={w.totalUnits}
+										release={w.release}
+										label="Progression de {w.mediaTitle}"
+									/>
+								{/if}
+								<p class="flex justify-between gap-2 text-[13px] text-muted">
+									<span class="truncate"
+										>{w.episode}{w.count > 1 ? ` · ${w.count} épisodes` : ''}</span
+									>
+									{#if w.totalUnits}<span class="shrink-0 tabular-nums"
+											><strong class="font-semibold text-ink">{w.progress}</strong> / {w.totalUnits}
+											vus</span
+										>{/if}
+								</p>
+							</div>
 						</div>
 					</li>
 				{/each}
