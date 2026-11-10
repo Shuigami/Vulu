@@ -47,6 +47,62 @@
 		</div>
 	</section>
 
+	{#await data.discoveries}
+		<section aria-labelledby="discover" class="flex flex-col gap-5">
+			<h2 id="discover" class="h2">Découvertes pour toi</h2>
+			<ShelfSkeleton label="Chargement des découvertes" noteLines={2} />
+		</section>
+	{:then discoveries}
+		{#if discoveries?.length}
+			<section aria-labelledby="discover" class="flex flex-col gap-5">
+				<h2 id="discover" class="h2">Découvertes pour toi</h2>
+				<MediaShelf items={shelf(discoveries)} label="Découvertes pour toi" />
+			</section>
+		{/if}
+	{/await}
+
+	<section aria-labelledby="trending" class="flex flex-col gap-5">
+		<div class="flex flex-wrap items-center justify-between gap-4">
+			<h2 id="trending" class="h2">Tendances de la semaine</h2>
+			<div class="flex flex-wrap gap-2" role="group" aria-label="Type de tendances">
+				{#each MEDIA_TYPES as t (t)}
+					<button
+						type="button"
+						class={trendType === t ? 'chip-on' : 'chip'}
+						aria-pressed={trendType === t}
+						onclick={() => (trendType = t)}>{typePlural[t]}</button
+					>
+				{/each}
+			</div>
+		</div>
+		{#await data.trending}
+			<ShelfSkeleton label="Chargement des tendances" />
+		{:then trending}
+			{#if trending?.[trendType].length}
+				<MediaShelf
+					items={shelf(trending[trendType])}
+					label="Tendances : {typePlural[trendType]}"
+				/>
+			{:else}
+				<p class="text-muted">Tendances indisponibles pour le moment.</p>
+			{/if}
+		{/await}
+	</section>
+
+	{#if data.popular.length}
+		<section aria-labelledby="popular" class="flex flex-col gap-5">
+			<h2 id="popular" class="h2">Populaire sur Vulu</h2>
+			<MediaShelf
+				items={data.popular.map((p) => ({
+					...p,
+					key: String(p.mediaId),
+					note: `${p.members} membre${p.members > 1 ? 's' : ''} cette semaine`
+				}))}
+				label="Populaire sur Vulu"
+			/>
+		</section>
+	{/if}
+
 	<section aria-labelledby="resume" class="flex flex-col gap-5">
 		<h2 id="resume" class="h2">Reprendre</h2>
 		{#if data.entries.length}
@@ -117,6 +173,21 @@
 		{/if}
 	</section>
 
+	<section aria-labelledby="friends" class="flex flex-col gap-3">
+		<div class="flex items-baseline justify-between gap-4">
+			<h2 id="friends" class="h2">Tes abonnements</h2>
+			<a href={resolve('activity')} class="text-sm font-semibold">Toute l’activité →</a>
+		</div>
+		{#if data.friends.length}
+			<ActivityFeed items={data.friends} {scale} />
+		{:else}
+			<p class="text-muted">
+				Pas encore d’activité. Cherche des membres depuis la barre de recherche et abonne-toi pour
+				voir ce qu’ils regardent et lisent.
+			</p>
+		{/if}
+	</section>
+
 	<section aria-labelledby="week" class="flex flex-col gap-5">
 		<div class="flex items-baseline justify-between gap-4">
 			<h2 id="week" class="h2">Cette semaine</h2>
@@ -144,75 +215,4 @@
 			<p class="text-muted">Aucun épisode prévu dans les 7 prochains jours.</p>
 		{/if}
 	</section>
-
-	<section aria-labelledby="friends" class="flex flex-col gap-3">
-		<div class="flex items-baseline justify-between gap-4">
-			<h2 id="friends" class="h2">Tes abonnements</h2>
-			<a href={resolve('activity')} class="text-sm font-semibold">Toute l’activité →</a>
-		</div>
-		{#if data.friends.length}
-			<ActivityFeed items={data.friends} {scale} />
-		{:else}
-			<p class="text-muted">
-				Pas encore d’activité. Cherche des membres depuis la barre de recherche et abonne-toi pour
-				voir ce qu’ils regardent et lisent.
-			</p>
-		{/if}
-	</section>
-
-	{#await data.discoveries}
-		<section aria-labelledby="discover" class="flex flex-col gap-5">
-			<h2 id="discover" class="h2">Découvertes pour toi</h2>
-			<ShelfSkeleton label="Chargement des découvertes" noteLines={2} />
-		</section>
-	{:then discoveries}
-		{#if discoveries?.length}
-			<section aria-labelledby="discover" class="flex flex-col gap-5">
-				<h2 id="discover" class="h2">Découvertes pour toi</h2>
-				<MediaShelf items={shelf(discoveries)} label="Découvertes pour toi" />
-			</section>
-		{/if}
-	{/await}
-
-	<section aria-labelledby="trending" class="flex flex-col gap-5">
-		<div class="flex flex-wrap items-center justify-between gap-4">
-			<h2 id="trending" class="h2">Tendances de la semaine</h2>
-			<div class="flex flex-wrap gap-2" role="group" aria-label="Type de tendances">
-				{#each MEDIA_TYPES as t (t)}
-					<button
-						type="button"
-						class={trendType === t ? 'chip-on' : 'chip'}
-						aria-pressed={trendType === t}
-						onclick={() => (trendType = t)}>{typePlural[t]}</button
-					>
-				{/each}
-			</div>
-		</div>
-		{#await data.trending}
-			<ShelfSkeleton label="Chargement des tendances" />
-		{:then trending}
-			{#if trending?.[trendType].length}
-				<MediaShelf
-					items={shelf(trending[trendType])}
-					label="Tendances : {typePlural[trendType]}"
-				/>
-			{:else}
-				<p class="text-muted">Tendances indisponibles pour le moment.</p>
-			{/if}
-		{/await}
-	</section>
-
-	{#if data.popular.length}
-		<section aria-labelledby="popular" class="flex flex-col gap-5">
-			<h2 id="popular" class="h2">Populaire sur Vulu</h2>
-			<MediaShelf
-				items={data.popular.map((p) => ({
-					...p,
-					key: String(p.mediaId),
-					note: `${p.members} membre${p.members > 1 ? 's' : ''} cette semaine`
-				}))}
-				label="Populaire sur Vulu"
-			/>
-		</section>
-	{/if}
 </div>
