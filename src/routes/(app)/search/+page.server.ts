@@ -52,6 +52,34 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	return { q, type, members, local, inLibrary, remote };
 };
 
+/** Imports the provider result posted in `form`; returns its catalogue id or a failure. */
+async function importResult(form: FormData) {
+	const type = form.get('type');
+	const provider = form.get('provider');
+	const externalId = String(form.get('externalId') ?? '');
+	if (
+		!isMediaType(type) ||
+		!PROVIDERS.includes(provider as (typeof PROVIDERS)[number]) ||
+		!/^[\w-]{1,64}$/.test(externalId)
+	) {
+		error(400, 'Œuvre invalide');
+	}
+
+	let mediaId: number | null;
+	try {
+		const boss = await getBoss();
+		({ mediaId } = await requestJob<ImportOutput>(
+			boss,
+			QUEUES.importMedia,
+			{ type, provider, externalId },
+			20_000
+		));
+	} catch {
+		return fail(503, { importError: 'L’ajout a échoué, réessaie dans un instant.' });
+	}
+	return mediaId ?? fail(404, { importError: 'Cette œuvre est introuvable chez le fournisseur.' });
+}
+
 export const actions: Actions = {
 	/** Adds a media already in the catalogue. */
 	add: async ({ request, locals }) => {
@@ -63,33 +91,16 @@ export const actions: Actions = {
 
 	/** Imports a provider result into the catalogue through the worker, then adds it. */
 	import: async ({ request, locals }) => {
-		const form = await request.formData();
-		const type = form.get('type');
-		const provider = form.get('provider');
-		const externalId = String(form.get('externalId') ?? '');
-		if (
-			!isMediaType(type) ||
-			!PROVIDERS.includes(provider as (typeof PROVIDERS)[number]) ||
-			!/^[\w-]{1,64}$/.test(externalId)
-		) {
-			error(400, 'Œuvre invalide');
-		}
-
-		let mediaId: number | null;
-		try {
-			const boss = await getBoss();
-			({ mediaId } = await requestJob<ImportOutput>(
-				boss,
-				QUEUES.importMedia,
-				{ type, provider, externalId },
-				20_000
-			));
-		} catch {
-			return fail(503, { importError: 'L’ajout a échoué, réessaie dans un instant.' });
-		}
-		if (!mediaId)
-			return fail(404, { importError: 'Cette œuvre est introuvable chez le fournisseur.' });
+		const mediaId = await importResult(await request.formData());
+		if (typeof mediaId !== 'number') return mediaId;
 		await addToLibrary(db, locals.user!.id, mediaId);
+		redirect(303, `/media/${mediaId}`);
+	},
+
+	/** Same import, without adding: opens the media page (home page suggestions). */
+	open: async ({ request }) => {
+		const mediaId = await importResult(await request.formData());
+		if (typeof mediaId !== 'number') return mediaId;
 		redirect(303, `/media/${mediaId}`);
 	}
 };

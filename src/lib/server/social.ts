@@ -233,3 +233,63 @@ export const feedView = (items: FeedItem[], now = new Date()) =>
 		score: i.score,
 		when: timeAgo(i.occurredAt, now)
 	}));
+
+/** Members' ratings of a media: count, average (/100) and 10 buckets (0-9, …, 90-100). */
+export async function ratingSummary(db: Db, mediaId: number, viewerId: string) {
+	const rows = await db
+		.select({
+			bucket: sql<number>`least(${libraryEntries.score} / 10, 9)::int`,
+			count: sql<number>`count(*)::int`,
+			sum: sql<number>`sum(${libraryEntries.score})::int`
+		})
+		.from(libraryEntries)
+		.innerJoin(users, eq(users.id, libraryEntries.userId))
+		.where(
+			and(
+				eq(libraryEntries.mediaId, mediaId),
+				sql`${libraryEntries.score} IS NOT NULL`,
+				visibleTo(viewerId)
+			)
+		)
+		.groupBy(sql`1`);
+	const buckets = Array<number>(10).fill(0);
+	for (const r of rows) buckets[r.bucket] = r.count;
+	const count = rows.reduce((n, r) => n + r.count, 0);
+	const average = count ? rows.reduce((n, r) => n + r.sum, 0) / count : null;
+	return { count, average, buckets };
+}
+
+/**
+ * Other members' entries on a media that `viewerId` can see: followed members first, then the
+ * most recent. `reviewsOnly` keeps entries with a written review.
+ */
+export function mediaEntries(
+	db: Db,
+	mediaId: number,
+	viewerId: string,
+	opts: { reviewsOnly?: boolean; followedOnly?: boolean; limit?: number } = {}
+) {
+	const followed = sql<boolean>`exists (select 1 from ${follows} where ${follows.followerId} = ${viewerId} and ${follows.followeeId} = ${users.id})`;
+	return db
+		.select({
+			...publicUser,
+			status: libraryEntries.status,
+			score: libraryEntries.score,
+			review: libraryEntries.review,
+			updatedAt: libraryEntries.updatedAt,
+			followed
+		})
+		.from(libraryEntries)
+		.innerJoin(users, eq(users.id, libraryEntries.userId))
+		.where(
+			and(
+				eq(libraryEntries.mediaId, mediaId),
+				ne(libraryEntries.userId, viewerId),
+				visibleTo(viewerId),
+				opts.reviewsOnly ? sql`btrim(coalesce(${libraryEntries.review}, '')) <> ''` : undefined,
+				opts.followedOnly ? followed : undefined
+			)
+		)
+		.orderBy(desc(followed), desc(libraryEntries.updatedAt))
+		.limit(opts.limit ?? 20);
+}

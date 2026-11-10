@@ -5,7 +5,16 @@ import { timeAgo } from './calendar';
 import { createDb } from './db';
 import { activityEvents, media, users } from './db/schema';
 import { addToLibrary, updateEntry } from './library';
-import { feed, follow, followList, profileByUsername, searchUsers, unfollow } from './social';
+import {
+	feed,
+	follow,
+	followList,
+	mediaEntries,
+	profileByUsername,
+	ratingSummary,
+	searchUsers,
+	unfollow
+} from './social';
 
 describe('timeAgo', () => {
 	const now = new Date('2026-11-09T15:00:00Z');
@@ -123,5 +132,29 @@ describe('follows and feed', () => {
 		await user('zoe', 'private');
 		expect((await searchUsers(db, `soc_${run}_z`)).map((u) => u.username)).toEqual([zed.username]);
 		expect(await searchUsers(db, '%')).not.toContainEqual(expect.objectContaining({ id: zed.id }));
+	});
+
+	it('summarises visible ratings and lists reviews, followed members first', async () => {
+		const [me, a, b, c] = [await user('me4'), await user('ra'), await user('rb'), await user('rc')];
+		const film = await movie('R');
+		await watch(me.id, film, { score: 40 });
+		await watch(a.id, film, { score: 100, review: 'Chef-d’œuvre.' });
+		await watch(b.id, film, { score: 0, review: '  ' });
+		await watch(c.id, film, { score: 85, review: 'Très bien.', isPrivate: true });
+		await follow(db, me.id, b.username);
+
+		const summary = await ratingSummary(db, film, me.id);
+		expect(summary.count).toBe(3);
+		expect(summary.average).toBeCloseTo(140 / 3);
+		expect(summary.buckets).toEqual([1, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+
+		const others = await mediaEntries(db, film, me.id);
+		expect(others.map((e) => [e.username, e.followed])).toEqual([
+			[b.username, true],
+			[a.username, false]
+		]);
+		const reviews = await mediaEntries(db, film, me.id, { reviewsOnly: true });
+		expect(reviews.map((e) => e.review)).toEqual(['Chef-d’œuvre.']);
+		expect(await mediaEntries(db, film, me.id, { followedOnly: true })).toHaveLength(1);
 	});
 });

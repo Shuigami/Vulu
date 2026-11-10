@@ -28,6 +28,16 @@ type Work = {
 
 const SEARCH_FIELDS = 'key,title,author_name,first_publish_year,cover_i,number_of_pages_median';
 const workId = (key: string) => key.replace('/works/', '');
+const toResult = (d: SearchDoc): SearchResult => ({
+	provider: 'openlibrary',
+	externalId: workId(d.key),
+	type: 'book',
+	title: d.title,
+	originalTitle: null,
+	year: d.first_publish_year ?? null,
+	posterUrl: cover(d.cover_i, 'M'),
+	isAdult: false
+});
 
 export function createOpenLibraryClient(
 	opts: { fetch?: Fetch; limiter?: RateLimiter } = {}
@@ -76,16 +86,12 @@ export function createOpenLibraryClient(
 		},
 
 		async search(q) {
-			return (await searchDocs(q, 20)).map((d): SearchResult => ({
-				provider: 'openlibrary',
-				externalId: workId(d.key),
-				type: 'book',
-				title: d.title,
-				originalTitle: null,
-				year: d.first_publish_year ?? null,
-				posterUrl: cover(d.cover_i, 'M'),
-				isAdult: false
-			}));
+			return (await searchDocs(q, 20)).map(toResult);
+		},
+
+		async trending() {
+			const res = await get<{ works: SearchDoc[] }>('/trending/weekly.json?limit=20');
+			return (res?.works ?? []).map(toResult);
 		},
 
 		async get(id) {

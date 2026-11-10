@@ -44,13 +44,16 @@ src/lib/auth-client.ts   Better Auth browser client; auth-errors.ts maps error c
 src/lib/server/library.ts library entries: add, update (applyChange rules + activity_events), list
 src/lib/server/search.ts local fuzzy search, then providers through the worker
 src/lib/server/calendar.ts upcoming episodes, Paris-time formatting (server-side)
+src/lib/server/social.ts follows, profiles, activity feed, community ratings (visibility rule)
+src/lib/server/discover.ts home page: provider trending and recommendations, popular on Vulu
 src/lib/server/imports/  library imports: Goodreads CSV parser, runImport (match, add, journal)
 src/lib/server/jellyfin.ts webhook payload parsing and the template to paste in Jellyfin
 src/lib/server/scrobble.ts watched events -> library progress (worker side)
 src/routes/hooks/        webhooks, no session: /hooks/jellyfin/[token]
 src/lib/labels.ts        French labels for enums, score scale conversions (shared client/server)
-src/routes/(app)/        signed-in pages (guard in +layout.server.ts): / (En cours, +1),
-                         /search, /media/[id], /library, /calendar, /import, /integrations
+src/routes/(app)/        signed-in pages (guard in +layout.server.ts): / (Accueil, +1),
+                         /search, /media/[id], /library, /calendar, /import, /integrations,
+                         /activity, /u/[username], /settings
 src/routes/(auth)/       /login and /signup
 src/worker/index.ts      worker entry point (pg-boss); only the worker calls external APIs
 .github/workflows/ci.yml lint, types, migrations on an empty database, schema drift check, tests
@@ -84,6 +87,8 @@ scripts/backup.sh        nightly pg_dump into restic (host cron)
 - Episodes: after a TV/anime import the worker queues `media-episodes` (TMDB: all seasons; AniList: upcoming schedule only, future episodes that leave it are deleted). `airing-refresh` (daily 03:00 UTC) re-imports airing media followed by someone, bypassing the cache. TMDB air dates are stored at 00:00 UTC and shown without a time.
 - Imports (`library-import` job): AniList by public username (the worker fetches the lists, media come embedded, no per-title call); Goodreads CSV parsed in the app, books matched on Open Library by ISBN then title/author (1 request per book); MyAnimeList XML (.xml or .xml.gz, parsed in the app, capped at 50 MB decompressed) matched through AniList by MAL id, 50 per request; Trakt by public username (`TRAKT_CLIENT_ID`), TMDB ids imported from TMDB. A finished work whose every unit was seen is imported as completed. Existing library entries are never changed; journal events use dedup keys `import:<source>:<mediaId>:<kind>` so a replay adds nothing. Unmatched rows are stored in `import_jobs.unmatched`. One running import per user.
 - Jellyfin: plugin "Webhook", Generic destination, with the template from `jellyfin.ts` (every value a quoted string). The endpoint checks the token, keeps finished plays (`PlayedToCompletion`, or 90 % of runtime) and "marked as played", queues `jellyfin-event` and answers 202. Episodes carry no series provider id: the worker matches `SeriesName` in the user's library, then the catalogue (similarity ≥ 0.9), then providers (exact title). Progress only moves forward; `updateEntry(..., { source, dedupKey })` makes deliveries idempotent per item and day. The last 20 events are kept in `integrations.settings.recent`.
+- Social: follows need no approval. Profiles are public by default; a `private` profile and entries with `is_private` are only visible to their owner (`visibleTo` in `social.ts`, use it in every query that shows someone else's data). Feeds show `started`, `completed` and `rated` events, never `source = 'import'`.
+- Home page discovery: trending and recommendations go through the `provider-discover` job (cached 1 day) and are streamed; provider suggestions not yet in the catalogue are opened with `search?/open` (import without adding).
 - Dates are formatted on the server in `Europe/Paris` (`calendar.ts`), so pages do not depend on the browser timezone.
 - Scores are stored out of 100; progress is generic (`progress` = episodes/chapters/pages, `progress_secondary` = seasons/volumes).
 - Images are hot-linked from provider CDNs, never re-hosted.

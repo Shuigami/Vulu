@@ -62,6 +62,22 @@ export async function searchProvider(
 	return (await cached(db, `${name}:search:${type}:${q}`, DAY, () => client.search(q, type))) ?? [];
 }
 
+/** Trending works of a type, or recommendations for one work with `externalId` (cached a day). */
+export async function discoverProvider(
+	db: Db,
+	providers: Providers,
+	type: MediaType,
+	externalId?: string
+): Promise<SearchResult[]> {
+	const { name, client } = providers[type];
+	const compute = externalId
+		? client.recommendations && (() => client.recommendations!(externalId, type))
+		: client.trending && (() => client.trending!(type));
+	if (!compute) return [];
+	const key = externalId ? `${name}:recs:${type}:${externalId}` : `${name}:trending:${type}`;
+	return (await cached(db, key, DAY, compute)) ?? [];
+}
+
 /**
  * Fetches a media from its provider and stores it; returns its id, or null if the provider
  * does not know it. `refresh` bypasses the cache (daily refresh of airing media).
