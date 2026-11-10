@@ -129,6 +129,26 @@ describe('library entries in the database', () => {
 		expect(events.map((e) => e.kind)).toContain('completed');
 	});
 
+	it('searches titles without accents, sorts and pages', async () => {
+		const { userId, mediaId } = await fixture();
+		const [other] = await db
+			.insert(media)
+			.values({ type: 'movie', title: `Sōsō ${run}` })
+			.returning({ id: media.id });
+		created.media.push(other.id);
+		await addToLibrary(db, userId, mediaId);
+		await addToLibrary(db, userId, other.id);
+
+		const found = await listEntries(db, userId, { q: `soso ${run}` });
+		expect(found.map((e) => e.mediaId)).toEqual([other.id]);
+		expect(await listEntries(db, userId, { q: '100%' })).toEqual([]);
+
+		const byTitle = await listEntries(db, userId, { sort: 'title' });
+		expect(byTitle.map((e) => e.mediaId)).toEqual([mediaId, other.id]);
+		const page2 = await listEntries(db, userId, { sort: 'title', limit: 1, offset: 1 });
+		expect(page2).toMatchObject([{ mediaId: other.id, total: 2 }]);
+	});
+
 	it("refuses to update another user's entry", async () => {
 		const owner = await fixture();
 		const other = await fixture();
