@@ -119,15 +119,14 @@
 				{#each data.entries as e (e.id)}
 					{@const unit = unitLabel[e.type]}
 					{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
-					<li class="flex gap-4 card p-3.5">
-						<a {href} tabindex="-1" aria-hidden="true">
-							<Poster src={e.posterUrl} title={e.title} class="w-21 rounded-[10px]" />
-						</a>
+					<!-- The whole card opens the work (the title link covers it), except the +1 button -->
+					<li class="group relative flex gap-4 card p-3.5 tile-frame">
+						<Poster src={e.posterUrl} title={e.title} class="w-21 rounded-[10px]" />
 						<div class="flex min-w-0 flex-1 flex-col gap-1.5">
 							<div><TypeTag type={e.type} /></div>
 							<a
 								{href}
-								class="text-[17px] leading-tight font-semibold text-ink no-underline hover:underline"
+								class="text-[17px] leading-tight font-semibold text-ink no-underline group-hover:underline after:absolute after:inset-0 after:rounded-2xl"
 								>{e.title}</a
 							>
 							<p class="text-[13px] text-muted">
@@ -151,6 +150,7 @@
 										</p>
 									</div>
 									<form
+										class="relative z-10"
 										method="post"
 										action="?/increment"
 										use:enhance={() => {
