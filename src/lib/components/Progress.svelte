@@ -11,5 +11,8 @@
 	aria-valuemax={max ?? undefined}
 	class="h-1.5 overflow-hidden rounded-full bg-line"
 >
-	<div class="h-full rounded-full bg-accent" style:width="{pct}%"></div>
+	<div
+		class="h-full rounded-full bg-accent motion-safe:transition-[width] motion-safe:duration-300"
+		style:width="{pct}%"
+	></div>
 </div>

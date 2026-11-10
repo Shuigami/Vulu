@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { flip } from 'svelte/animate';
+	import type { TransitionConfig } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import ActivityFeed from '#lib/components/ActivityFeed.svelte';
@@ -12,6 +14,19 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	// The count swells and settles when it changes (not on first render: intros are off)
+	const pop: (node: Element) => TransitionConfig = () =>
+		matchMedia('(prefers-reduced-motion: reduce)').matches
+			? { duration: 0 }
+			: {
+					duration: 320,
+					css: (t: number) => `transform: scale(${1 + 0.45 * Math.sin(Math.PI * t)})`
+				};
+	// After +1 the work moves to the front of "Reprendre" (most recent first): the cards glide there
+	const glide = (node: Element, move: { from: DOMRect; to: DOMRect }) =>
+		flip(node, move, {
+			duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 450
+		});
 	let pending = $state<number | null>(null);
 	const singular = { épisodes: 'épisode', chapitres: 'chapitre', pages: 'page' } as Record<
 		string,
@@ -110,15 +125,14 @@
 				{#each data.entries as e (e.id)}
 					{@const unit = unitLabel[e.type]}
 					{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
-					<li class="flex gap-4 card p-3.5">
-						<a {href} tabindex="-1" aria-hidden="true">
-							<Poster src={e.posterUrl} title={e.title} class="w-21 rounded-[10px]" />
-						</a>
+					<!-- The whole card opens the work (the title link covers it), except the +1 button -->
+					<li animate:glide class="group relative flex gap-4 card p-3.5 tile-frame">
+						<Poster src={e.posterUrl} title={e.title} class="w-21 rounded-[10px]" />
 						<div class="flex min-w-0 flex-1 flex-col gap-1.5">
 							<div><TypeTag type={e.type} /></div>
 							<a
 								{href}
-								class="text-[17px] leading-tight font-semibold text-ink no-underline hover:underline"
+								class="text-[17px] leading-tight font-semibold text-ink no-underline group-hover:underline after:absolute after:inset-0 after:rounded-2xl"
 								>{e.title}</a
 							>
 							<p class="text-[13px] text-muted">
@@ -135,13 +149,14 @@
 											/>
 										{/if}
 										<p class="text-[13px] text-muted tabular-nums">
-											<strong class="font-semibold text-ink">{e.progress}</strong>{e.totalUnits
-												? ` / ${e.totalUnits}`
-												: ''}
+											{#key e.progress}<strong in:pop class="inline-block font-semibold text-ink"
+													>{e.progress}</strong
+												>{/key}{e.totalUnits ? ` / ${e.totalUnits}` : ''}
 											{unit}
 										</p>
 									</div>
 									<form
+										class="relative z-10"
 										method="post"
 										action="?/increment"
 										use:enhance={() => {

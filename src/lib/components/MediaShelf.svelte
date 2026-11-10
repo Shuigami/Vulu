@@ -21,7 +21,7 @@
 </script>
 
 <ul
-	class="-mx-1 flex snap-x [scrollbar-width:thin] gap-3.5 overflow-x-auto px-1 pb-2"
+	class="-mx-1 -mt-1 flex snap-x [scrollbar-width:thin] gap-3.5 overflow-x-auto px-1 pt-1 pb-2"
 	aria-label={label}
 >
 	{#each items as i (i.key)}
@@ -31,11 +31,7 @@
 					href={resolve('/(app)/media/[id]', { id: String(i.mediaId) })}
 					class="group flex flex-col gap-2 text-ink no-underline"
 				>
-					<Poster
-						src={i.posterUrl}
-						title={i.title}
-						class="w-full rounded-[10px] transition group-hover:opacity-85"
-					/>
+					<Poster src={i.posterUrl} title={i.title} class="w-full rounded-[10px] tile-frame" />
 					<span class={caption}>
 						<span class="line-clamp-2 font-semibold group-hover:underline">{i.title}</span>
 						{#if i.note}<span class="line-clamp-2 text-muted">{i.note}</span>{/if}
@@ -57,11 +53,7 @@
 					<input type="hidden" name="provider" value={i.provider} />
 					<input type="hidden" name="externalId" value={i.externalId} />
 					<button class="group flex w-full cursor-pointer flex-col gap-2 text-ink">
-						<Poster
-							src={i.posterUrl}
-							title={i.title}
-							class="w-full rounded-[10px] transition group-hover:opacity-85"
-						/>
+						<Poster src={i.posterUrl} title={i.title} class="w-full rounded-[10px] tile-frame" />
 						<span class={caption}>
 							<span class="line-clamp-2 font-semibold group-hover:underline">{i.title}</span>
 							{#if i.note}<span class="line-clamp-2 text-muted">{i.note}</span>{/if}

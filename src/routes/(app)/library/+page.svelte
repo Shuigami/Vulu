@@ -74,12 +74,8 @@
 						href={resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
 						class="group flex flex-col gap-2.5 text-ink no-underline"
 					>
-						<div class="relative overflow-hidden rounded-xl">
-							<Poster
-								src={e.posterUrl}
-								title={e.title}
-								class="w-full transition group-hover:opacity-85"
-							/>
+						<div class="relative overflow-hidden rounded-xl tile-frame">
+							<Poster src={e.posterUrl} title={e.title} class="w-full" />
 							<span
 								class="absolute top-2.5 left-2.5 rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold text-white"
 								>{statusLabel[e.status]}</span

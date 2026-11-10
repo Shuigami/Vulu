@@ -68,9 +68,9 @@
 					<li>
 						<a
 							href={resolve('/(app)/media/[id]', { id: String(f.mediaId) })}
-							class="flex flex-col gap-1.5 text-sm text-ink no-underline hover:underline"
+							class="group flex flex-col gap-1.5 text-sm text-ink no-underline hover:underline"
 						>
-							<Poster src={f.posterUrl} title={f.title} class="w-full rounded-[10px]" />
+							<Poster src={f.posterUrl} title={f.title} class="w-full rounded-[10px] tile-frame" />
 							<span class="leading-tight font-semibold">{f.title}</span>
 							{#if f.score !== null}<span class="text-[13px] text-muted"
 									>★ {toScale(f.score, scale)}/{scale}</span
