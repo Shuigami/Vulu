@@ -29,6 +29,14 @@ export const statusLabel: Record<EntryStatus, string> = {
 	dropped: 'Abandonné'
 };
 
+export const releaseStatusLabel: Record<string, string> = {
+	announced: 'Annoncé',
+	releasing: 'En cours de sortie',
+	finished: 'Sortie terminée',
+	cancelled: 'Annulé',
+	hiatus: 'En pause'
+};
+
 /** Plural label of the progress unit, or null when the type has none (movies). */
 export const unitLabel: Record<MediaType, string | null> = {
 	movie: null,

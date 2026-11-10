@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import Avatar from '#lib/components/Avatar.svelte';
@@ -8,9 +9,11 @@
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import {
 		ENTRY_STATUSES,
+		releaseStatusLabel,
 		secondaryUnitLabel,
 		statusLabel,
 		toScale,
+		typeLabel,
 		unitLabel
 	} from '#lib/labels.ts';
 	import type { PageProps } from './$types';
@@ -23,6 +26,10 @@
 	const unit = $derived(unitLabel[m.type]);
 	const secondary = $derived(secondaryUnitLabel[m.type]);
 	const year = $derived(m.startDate?.slice(0, 4));
+	const extra = $derived(
+		m.extra as { genres?: string[]; studios?: string[]; authors?: string[]; format?: string }
+	);
+	const makers = $derived((m.type === 'book' ? extra.authors : extra.studios) ?? []);
 	const sourceUrl = $derived.by(() => {
 		const id = data.externalIds[0];
 		if (!id) return null;
@@ -31,243 +38,568 @@
 		if (id.provider === 'openlibrary') return `https://openlibrary.org/works/${id.externalId}`;
 		return null;
 	});
-	const field = 'field w-full';
-	const label = 'flex flex-col gap-1.5 text-[13px] text-muted';
+	const sourceName = $derived(
+		{ tmdb: 'TMDB', anilist: 'AniList', openlibrary: 'Open Library' }[
+			data.externalIds[0]?.provider as string
+		]
+	);
+	const capitalize = (s: string) => s[0].toUpperCase() + s.slice(1);
+	// Release dates are plain YYYY-MM-DD, read in UTC so server and browser agree
+	const monthYear = new Intl.DateTimeFormat('fr-FR', {
+		month: 'short',
+		year: 'numeric',
+		timeZone: 'UTC'
+	});
+	const releaseDates = $derived.by(() => {
+		if (!m.startDate) return null;
+		const start = monthYear.format(new Date(m.startDate));
+		return m.endDate && m.endDate !== m.startDate
+			? `${start} → ${monthYear.format(new Date(m.endDate))}`
+			: start;
+	});
+	const facts = $derived(
+		[
+			['Format', extra.format?.replaceAll('_', ' ') ?? typeLabel[m.type]],
+			[m.type === 'book' ? 'Auteur' : 'Studio', makers.join(', ')],
+			[m.type === 'tv' || m.type === 'anime' ? 'Diffusion' : 'Sortie', releaseDates],
+			[
+				unit && capitalize(unit),
+				m.totalUnits && `${m.totalUnits}${m.runtimeMinutes ? ` × ${m.runtimeMinutes} min` : ''}`
+			],
+			[m.type === 'movie' && 'Durée', m.runtimeMinutes && `${m.runtimeMinutes} min`],
+			[secondary && capitalize(secondary), m.totalUnitsSecondary],
+			['Titre original', m.originalTitle !== m.title && m.originalTitle]
+		].filter(([k, v]) => k && v) as [string, string | number][]
+	);
+
+	const duration = (min: number) =>
+		min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
+	const singular = (u: string) => u.replace(/s$/, '');
+	const sourceLabel: Record<string, string | null> = {
+		manual: null,
+		jellyfin: 'via Jellyfin',
+		plex: 'via Plex',
+		import: 'import',
+		api: 'API'
+	};
+	function journalLabel(e: (typeof data.journal)[number]) {
+		const n = e.amount ?? 0;
+		if (['episode', 'chapter', 'pages'].includes(e.kind) && unit)
+			return `+${n} ${n > 1 ? unit : singular(unit)}`;
+		if (e.kind === 'volume') return `+${n} volume${n > 1 ? 's' : ''}`;
+		if (e.kind === 'started') return 'Commencé';
+		if (e.kind === 'completed') return 'Terminé';
+		if (e.kind === 'rated') return `Noté ${toScale(n, scale)}/${scale}`;
+		return 'Statut modifié';
+	}
+	const journalDot: Record<string, string> = {
+		completed: 'bg-success',
+		started: 'bg-success',
+		rated: 'bg-anime'
+	};
+
+	let entryForm: HTMLFormElement | undefined = $state();
 	let progress = $derived(entry?.progress ?? 0);
 	let confirmRemove = $state(false);
+	let expanded = $state(false);
 	// Closed again once the entry changes (removed, re-added, or another work opened)
 	$effect(() => {
 		void entry?.id;
 		confirmRemove = false;
 	});
+	// Every change is saved right away: no "save" button to forget
+	const save = () => entryForm?.requestSubmit();
+	async function setProgress(n: number) {
+		progress = Math.max(0, m.totalUnits ? Math.min(m.totalUnits, n) : n);
+		await tick();
+		save();
+	}
+	const stars = $derived(entry?.score == null ? 0 : Math.round(entry.score / 20));
+	const showGrid = $derived(
+		!!entry && !!m.totalUnits && m.totalUnits <= 200 && ['tv', 'anime', 'manga'].includes(m.type)
+	);
+	const zone = 'flex flex-col gap-2.5 bg-surface px-6 py-5';
+	const zoneLabel = 'text-[13px] text-muted';
 </script>
 
 <svelte:head><title>{m.title} · Vulu</title></svelte:head>
 
-<div class="flex flex-wrap items-start gap-12">
-	<article class="flex min-w-0 flex-[999_1_560px] flex-wrap gap-8">
-		<Poster src={m.posterUrl} title={m.title} class="w-44 self-start rounded-2xl sm:w-60" />
-		<div class="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5">
-			<div><TypeTag type={m.type} /></div>
-			<h1
-				class="font-display text-[32px] leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[44px]"
-			>
-				{m.title}
-			</h1>
-			<p class="text-muted">
-				{[
-					m.originalTitle !== m.title ? m.originalTitle : null,
-					year,
-					m.totalUnits && unit ? `${m.totalUnits} ${unit}` : null,
-					m.runtimeMinutes ? `${m.runtimeMinutes} min` : null
-				]
-					.filter(Boolean)
-					.join(' · ')}
-			</p>
-			{#if data.upcoming}
-				<div class="flex items-center gap-3.5 card px-4 py-3.5">
-					<svg
-						aria-hidden="true"
-						class="shrink-0 text-accent"
-						width="22"
-						height="22"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						><rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"
-						></path></svg
-					>
-					<p>
-						Prochain épisode : <strong>{data.upcoming.episode}</strong>, {data.upcoming.day}{data
-							.upcoming.time
-							? ` à ${data.upcoming.time}`
-							: ''}
-					</p>
+<div class="flex flex-col gap-10">
+	<div class="flex flex-col">
+		{#if m.backdropUrl}
+			<img
+				src={m.backdropUrl}
+				alt=""
+				referrerpolicy="no-referrer"
+				class="h-44 w-full rounded-3xl bg-surface-2 object-cover sm:h-80"
+			/>
+		{/if}
+		<section
+			class="flex flex-wrap items-start gap-x-10 gap-y-6 {m.backdropUrl ? '-mt-20 sm:-mt-44' : ''}"
+		>
+			<Poster
+				src={m.posterUrl}
+				title={m.title}
+				class="w-36 rounded-2xl sm:w-60 {m.backdropUrl
+					? 'ml-4 border-4 border-bg shadow-xl sm:ml-8'
+					: ''}"
+			/>
+			<div class="flex min-w-0 flex-[1_1_420px] flex-col gap-3.5 {m.backdropUrl ? 'md:pt-48' : ''}">
+				<div class="flex flex-wrap items-center gap-2">
+					<TypeTag type={m.type} />
+					{#if m.status}<span
+							class="rounded-md bg-surface-2 px-2 py-0.5 text-xs font-semibold text-muted"
+							>{releaseStatusLabel[m.status]}</span
+						>{/if}
 				</div>
-			{/if}
-			{#if m.overview}<p class="max-w-[62ch] whitespace-pre-line">{m.overview}</p>{/if}
-			{#if sourceUrl}
-				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external link -->
-				<a href={sourceUrl} rel="external" class="text-sm font-semibold">Voir la fiche source ↗</a>
-			{/if}
-		</div>
-	</article>
-
-	<section
-		aria-labelledby="library-title"
-		class="flex flex-[1_1_340px] flex-col gap-5 card rounded-[20px] p-6"
-	>
-		<h2 id="library-title" class="h2">Ma bibliothèque</h2>
-
-		{#if !entry}
-			<p class="text-muted">Cette œuvre n’est pas encore dans ta bibliothèque.</p>
-			<form method="post" action="?/add" use:enhance>
-				<button class="btn-accent w-full">Ajouter à ma bibliothèque</button>
-			</form>
-		{:else}
-			<form
-				method="post"
-				action="?/update"
-				use:enhance={() =>
-					async ({ update }) =>
-						update({ reset: false })}
-				class="flex flex-col gap-5"
-			>
-				<input type="hidden" name="entryId" value={entry.id} />
-				<fieldset>
-					<legend class="mb-2 text-[13px] text-muted">Statut</legend>
-					<div class="grid grid-cols-3 gap-1.5">
-						{#each ENTRY_STATUSES as s (s)}
-							<label
-								class="flex min-h-11 cursor-pointer items-center justify-center rounded-[10px] border border-line px-1 text-center text-[13px] font-semibold has-checked:border-accent has-checked:bg-accent has-checked:text-on-accent has-focus-visible:outline-2 has-focus-visible:outline-accent"
-							>
-								<input
-									type="radio"
-									name="status"
-									value={s}
-									checked={entry.status === s}
-									class="sr-only"
-								/>
-								{statusLabel[s]}
-							</label>
+				<h1
+					class="font-display text-[32px] leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[48px]"
+				>
+					{m.title}
+				</h1>
+				<p class="text-muted">
+					{[
+						m.originalTitle !== m.title ? m.originalTitle : null,
+						year,
+						m.totalUnits && unit ? `${m.totalUnits} ${unit}` : null,
+						m.runtimeMinutes ? `${m.runtimeMinutes} min` : null,
+						makers.slice(0, 2).join(', ')
+					]
+						.filter(Boolean)
+						.join(' · ')}
+				</p>
+				{#if extra.genres?.length}
+					<ul class="flex flex-wrap gap-1.5" aria-label="Genres">
+						{#each extra.genres as g (g)}
+							<li class="rounded-full border border-line bg-surface px-3 py-1 text-[13px]">{g}</li>
 						{/each}
-					</div>
-				</fieldset>
+					</ul>
+				{/if}
+				{#if data.upcoming}
+					<p class="flex items-center gap-2 text-sm">
+						<svg
+							aria-hidden="true"
+							class="shrink-0 text-accent-ink"
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							><rect x="3" y="5" width="18" height="16" rx="2"></rect><path
+								d="M3 10h18M8 3v4M16 3v4"
+							></path></svg
+						>
+						<span
+							>Prochaine sortie : <strong>{data.upcoming.episode}</strong>, {data.upcoming.day}{data
+								.upcoming.time
+								? ` à ${data.upcoming.time}`
+								: ''}</span
+						>
+					</p>
+				{/if}
+			</div>
+		</section>
+	</div>
+
+	{#if !entry}
+		<form
+			method="post"
+			action="?/add"
+			use:enhance
+			class="flex flex-wrap items-center gap-x-7 gap-y-4 card rounded-[22px] px-6 py-5"
+		>
+			<div class="flex-[1_1_260px]">
+				<h2 class="h2 text-xl">Ajouter à ma bibliothèque</h2>
+				<p class="text-sm text-muted">Choisis directement où tu en es.</p>
+			</div>
+			<div class="flex flex-wrap gap-2">
+				<button name="status" value="planned" class="btn-accent px-5">{statusLabel.planned}</button>
+				<button name="status" value="in_progress" class="btn-ghost"
+					>{statusLabel.in_progress}</button
+				>
+				<button name="status" value="completed" class="btn-ghost"
+					>Déjà {m.type === 'manga' || m.type === 'book' ? 'lu' : 'vu'}</button
+				>
+			</div>
+		</form>
+	{:else}
+		<form
+			bind:this={entryForm}
+			id="entry"
+			method="post"
+			action="?/update"
+			use:enhance={() =>
+				async ({ update }) =>
+					update({ reset: false })}
+			onchange={save}
+			class="overflow-hidden card rounded-[22px]"
+		>
+			<h2 class="sr-only">Mon suivi</h2>
+			<input type="hidden" name="entryId" value={entry.id} />
+			<div class="flex flex-wrap gap-px bg-line">
+				<label class="{zone} flex-[1_1_200px]">
+					<span class={zoneLabel}>Statut</span>
+					<select name="status" value={entry.status} class="field font-semibold">
+						{#each ENTRY_STATUSES as s (s)}
+							<option value={s}>{statusLabel[s]}</option>
+						{/each}
+					</select>
+				</label>
 
 				{#if unit}
-					<div class="flex flex-col gap-2">
-						<label for="progress" class="text-[13px] text-muted"
-							>Progression · {unit}{m.totalUnits ? ` sur ${m.totalUnits}` : ''}</label
-						>
-						<div class="flex items-center gap-2.5">
-							<button
-								type="button"
-								class="btn-ghost w-11 px-0 text-xl"
-								aria-label="Retirer un"
-								onclick={() => (progress = Math.max(0, progress - 1))}>−</button
-							>
-							<input
-								id="progress"
-								name="progress"
-								type="number"
-								min="0"
-								max={m.totalUnits ?? undefined}
-								bind:value={progress}
-								class="field min-w-0 flex-1 text-center font-display text-2xl font-bold tabular-nums"
-							/>
-							<button
-								type="button"
-								class="btn-accent w-11 px-0 text-xl"
-								aria-label="Ajouter un"
-								onclick={() =>
-									(progress = m.totalUnits ? Math.min(m.totalUnits, progress + 1) : progress + 1)}
-								>+</button
-							>
+					<div class="{zone} flex-[3_1_380px]">
+						<div class="flex flex-wrap items-baseline justify-between gap-3">
+							<label for="progress" class={zoneLabel}>Progression · {unit}</label>
+							{#if m.totalUnits && progress < m.totalUnits}
+								<span class="text-[13px] text-muted"
+									>Prochain : <strong class="text-ink">{singular(unit)} {progress + 1}</strong
+									></span
+								>
+							{/if}
 						</div>
-						{#if m.totalUnits}<Progress
-								value={progress}
-								max={m.totalUnits}
-								label="Progression"
-							/>{/if}
+						<div class="flex flex-wrap items-center gap-4">
+							<p
+								class="flex items-baseline font-display text-[40px] leading-none font-extrabold tabular-nums"
+							>
+								<input
+									id="progress"
+									name="progress"
+									type="number"
+									min="0"
+									max={m.totalUnits ?? undefined}
+									bind:value={progress}
+									style:width="{String(progress).length + 0.6}ch"
+									class="rounded-lg bg-transparent text-right outline-offset-4"
+								/>
+								{#if m.totalUnits}<span class="text-[22px] font-semibold text-muted"
+										>&nbsp;/ {m.totalUnits}</span
+									>{/if}
+							</p>
+							{#if m.totalUnits}
+								<div class="flex min-w-36 flex-1 flex-col gap-1.5">
+									<Progress value={progress} max={m.totalUnits} label="Progression" />
+									<span class="text-xs text-muted"
+										>{Math.round((progress / m.totalUnits) * 100)} %{#if progress < m.totalUnits}
+											· reste {m.totalUnits - progress}
+											{unit}{#if m.runtimeMinutes}, environ {duration(
+													(m.totalUnits - progress) * m.runtimeMinutes
+												)}{/if}{/if}</span
+									>
+								</div>
+							{/if}
+							<div class="flex gap-2">
+								<button
+									type="button"
+									class="btn-ghost w-12 px-0 text-xl"
+									aria-label="Retirer un"
+									onclick={() => setProgress(progress - 1)}>−</button
+								>
+								<button type="button" class="btn-accent" onclick={() => setProgress(progress + 1)}
+									>+1 {singular(unit)}</button
+								>
+							</div>
+						</div>
+						{#if secondary}
+							<label class="flex items-center gap-2 text-[13px] text-muted">
+								{capitalize(secondary)}
+								<input
+									name="progressSecondary"
+									type="number"
+									min="0"
+									value={entry.progressSecondary}
+									class="field min-h-9 w-20 px-2"
+								/>
+								{#if m.totalUnitsSecondary}sur {m.totalUnitsSecondary}{/if}
+							</label>
+						{/if}
 					</div>
-				{:else}
-					<input type="hidden" name="progress" value={entry.progress} />
 				{/if}
 
-				<div class="grid grid-cols-2 gap-3">
-					<label class={label}>
-						Note (sur {scale})
-						<input
-							name="score"
-							type="number"
-							min="0"
-							max={scale}
-							step={scale === 100 ? 1 : 0.5}
-							value={entry.score === null ? '' : toScale(entry.score, scale)}
-							class={field}
-						/>
-					</label>
-					{#if secondary}
-						<label class={label}>
-							{secondary[0].toUpperCase() + secondary.slice(1)}{m.totalUnitsSecondary
-								? ` (sur ${m.totalUnitsSecondary})`
-								: ''}
+				<div class="{zone} flex-[1_1_220px]">
+					<label for="score" class={zoneLabel}>Ma note</label>
+					<div class="flex items-center gap-3">
+						<div class="flex text-line" aria-hidden="true">
+							{#each [1, 2, 3, 4, 5] as i (i)}
+								<svg
+									width="24"
+									height="24"
+									viewBox="0 0 24 24"
+									fill="currentColor"
+									class={i <= stars ? 'text-accent' : ''}
+									><polygon
+										points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3"
+									></polygon></svg
+								>
+							{/each}
+						</div>
+						<p class="flex items-baseline font-display text-[26px] font-extrabold">
 							<input
-								name="progressSecondary"
+								id="score"
+								name="score"
 								type="number"
 								min="0"
-								value={entry.progressSecondary}
-								class={field}
+								max={scale}
+								step={scale === 100 ? 1 : 0.5}
+								value={entry.score === null ? '' : toScale(entry.score, scale)}
+								placeholder="–"
+								class="w-[3ch] rounded-lg bg-transparent text-right outline-offset-4 placeholder:text-muted"
 							/>
+							<span class="text-[15px] font-semibold text-muted">/{scale}</span>
+						</p>
+					</div>
+					<div class="flex gap-2">
+						<label
+							class="btn-ghost min-h-10 flex-1 bg-surface text-[13px] has-checked:border-anime has-focus-visible:outline-2 has-focus-visible:outline-accent"
+						>
+							<input
+								name="isFavorite"
+								type="checkbox"
+								checked={entry.isFavorite}
+								class="peer sr-only"
+							/>
+							<svg
+								aria-hidden="true"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="2"
+								class="fill-none text-muted peer-checked:fill-current peer-checked:text-anime"
+								><path
+									d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"
+								></path></svg
+							>
+							Favori
 						</label>
-					{:else}
-						<input type="hidden" name="progressSecondary" value={entry.progressSecondary} />
-					{/if}
-					<label class={label}>
-						Commencé le
-						<input name="startedOn" type="date" value={entry.startedOn ?? ''} class={field} />
-					</label>
-					<label class={label}>
-						Terminé le
-						<input name="completedOn" type="date" value={entry.completedOn ?? ''} class={field} />
-					</label>
+						<details class="relative">
+							<summary
+								aria-label="Plus d’options"
+								class="btn-ghost min-h-10 w-11 list-none bg-surface px-0 [&::-webkit-details-marker]:hidden"
+							>
+								<svg
+									aria-hidden="true"
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="currentColor"
+									><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"
+									></circle><circle cx="19" cy="12" r="2"></circle></svg
+								>
+							</summary>
+							<div class="absolute right-0 z-10 mt-2 flex w-72 flex-col gap-1 card p-2 shadow-xl">
+								<label class="flex min-h-11 items-center gap-2.5 px-2 text-sm">
+									<input
+										name="isPrivate"
+										type="checkbox"
+										checked={entry.isPrivate}
+										class="size-4 accent-accent"
+									/>
+									Masquer de mon profil
+								</label>
+								<!-- Confirmed in the page: native confirm() is blocked in some browsers and webviews -->
+								{#if confirmRemove}
+									<div class="flex flex-col gap-2 border-t border-line p-2">
+										<p class="text-sm">Retirer cette œuvre de ta bibliothèque ?</p>
+										<div class="flex gap-2">
+											<button formaction="?/remove" class="btn bg-danger text-sm text-bg"
+												>Retirer</button
+											>
+											<button
+												type="button"
+												class="btn-ghost text-sm"
+												onclick={() => (confirmRemove = false)}>Annuler</button
+											>
+										</div>
+									</div>
+								{:else}
+									<button
+										type="button"
+										class="min-h-11 cursor-pointer rounded-lg px-2 text-left text-sm text-danger hover:bg-surface-2"
+										onclick={() => (confirmRemove = true)}>Retirer de ma bibliothèque</button
+									>
+								{/if}
+							</div>
+						</details>
+					</div>
 				</div>
-				<label class={label}>
-					Critique
-					<textarea name="review" rows="3" class="{field} py-2.5">{entry.review ?? ''}</textarea>
-				</label>
-				<label class={label}>
-					Notes privées
-					<textarea name="notes" rows="2" class="{field} py-2.5">{entry.notes ?? ''}</textarea>
-				</label>
-				<label class="flex min-h-11 items-center gap-2.5 text-sm">
-					<input
-						name="isFavorite"
-						type="checkbox"
-						checked={entry.isFavorite}
-						class="size-4 accent-accent"
-					/>
-					Favori
-				</label>
-				<label class="flex min-h-11 items-center gap-2.5 text-sm">
-					<input
-						name="isPrivate"
-						type="checkbox"
-						checked={entry.isPrivate}
-						class="size-4 accent-accent"
-					/>
-					Masquer de mon profil
-				</label>
-				<div class="flex flex-wrap items-center gap-3">
-					<button class="btn-ink">Enregistrer</button>
-					{#if form?.error}<p role="alert" class="text-sm text-danger">{form.error}</p>{/if}
-					{#if form?.saved}<p role="status" class="text-sm text-success">Enregistré.</p>{/if}
-				</div>
-			</form>
-			<!-- Confirmed in the page: native confirm() is blocked in some browsers and webviews -->
-			{#if confirmRemove}
-				<form method="post" action="?/remove" use:enhance class="flex flex-wrap items-center gap-3">
-					<input type="hidden" name="entryId" value={entry.id} />
-					<p class="text-sm">Retirer cette œuvre de ta bibliothèque ?</p>
-					<button class="btn bg-danger text-sm text-bg">Retirer</button>
-					<button type="button" class="btn-ghost text-sm" onclick={() => (confirmRemove = false)}
-						>Annuler</button
-					>
-				</form>
-			{:else}
-				<button
-					type="button"
-					class="min-h-11 cursor-pointer self-start text-sm text-danger underline"
-					onclick={() => (confirmRemove = true)}>Retirer de ma bibliothèque</button
-				>
-			{/if}
-		{/if}
-	</section>
+			</div>
 
-	<section aria-labelledby="members-title" class="flex basis-full flex-col gap-8">
-		<h2 id="members-title" class="h2">Chez les membres</h2>
+			{#if !unit}<input type="hidden" name="progress" value={entry.progress} />{/if}
+			{#if !secondary}<input
+					type="hidden"
+					name="progressSecondary"
+					value={entry.progressSecondary}
+				/>{/if}
+
+			<div
+				class="flex flex-wrap items-center gap-x-7 gap-y-2 border-t border-line bg-bg/50 px-6 py-3 text-[13px] text-muted"
+			>
+				<label class="flex items-center gap-2">
+					Commencé le
+					<input
+						name="startedOn"
+						type="date"
+						value={entry.startedOn ?? ''}
+						class="field min-h-9 px-2 text-[13px]"
+					/>
+				</label>
+				<label class="flex items-center gap-2">
+					Terminé le
+					<input
+						name="completedOn"
+						type="date"
+						value={entry.completedOn ?? ''}
+						class="field min-h-9 px-2 text-[13px]"
+					/>
+				</label>
+				{#if data.minutesSpent}
+					<span
+						><strong class="text-ink">{duration(data.minutesSpent)}</strong>
+						{m.type === 'manga' || m.type === 'book' ? 'de lecture' : 'regardées'}</span
+					>
+				{/if}
+				{#if form?.error}<p role="alert" class="text-danger">{form.error}</p>{/if}
+				{#if form?.saved}<p role="status" class="text-success">Enregistré.</p>{/if}
+			</div>
+		</form>
+	{/if}
+
+	<div class="flex flex-wrap items-start gap-x-12 gap-y-10">
+		<div class="flex min-w-0 flex-[999_1_560px] flex-col gap-10">
+			{#if m.overview}
+				<section aria-labelledby="synopsis-title" class="flex flex-col gap-3">
+					<h2 id="synopsis-title" class="h2">Synopsis</h2>
+					<p
+						id="synopsis"
+						class="max-w-[64ch] whitespace-pre-line {expanded ? '' : 'line-clamp-5'}"
+					>
+						{m.overview}
+					</p>
+					{#if m.overview.length > 400}
+						<button
+							type="button"
+							aria-expanded={expanded}
+							aria-controls="synopsis"
+							class="min-h-8 cursor-pointer self-start text-sm font-semibold text-accent-ink"
+							onclick={() => (expanded = !expanded)}
+							>{expanded ? 'Réduire' : 'Lire la suite'}</button
+						>
+					{/if}
+				</section>
+			{/if}
+
+			{#if showGrid && m.totalUnits && unit}
+				<section aria-labelledby="units-title" class="flex flex-col gap-3.5">
+					<div class="flex flex-wrap items-baseline justify-between gap-3">
+						<h2 id="units-title" class="h2">{capitalize(unit)}</h2>
+						<span class="text-[13px] text-muted"
+							>Clique un {singular(unit)} pour y placer ta progression</span
+						>
+					</div>
+					<ol class="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1.5">
+						{#each Array.from({ length: m.totalUnits }, (_, i) => i + 1) as n (n)}
+							<li>
+								<button
+									type="button"
+									aria-label="{capitalize(singular(unit))} {n}{n <= progress
+										? ', vu'
+										: n === progress + 1
+											? ', prochain'
+											: ''}"
+									class="h-11 w-full cursor-pointer rounded-[10px] text-sm font-semibold tabular-nums {n <=
+									progress
+										? 'bg-accent text-on-accent'
+										: n === progress + 1
+											? 'border-2 border-ink bg-surface'
+											: 'bg-surface-2 text-muted hover:text-ink'}"
+									onclick={() => setProgress(n)}>{n}</button
+								>
+							</li>
+						{/each}
+					</ol>
+				</section>
+			{/if}
+
+			{#if entry}
+				<section aria-labelledby="review-title" class="flex flex-col gap-3.5">
+					<h2 id="review-title" class="h2">Ma critique</h2>
+					<textarea
+						form="entry"
+						name="review"
+						rows="4"
+						aria-labelledby="review-title"
+						placeholder="Ce que tu en as pensé. Visible sur ton profil et ici, chez les membres."
+						onchange={save}
+						class="field rounded-2xl px-4 py-3">{entry.review ?? ''}</textarea
+					>
+					<details class="card px-5" open={!!entry.notes}>
+						<summary class="flex min-h-13 cursor-pointer items-center font-semibold"
+							>Notes privées <span class="ml-2 font-normal text-muted">· visibles par toi seul</span
+							></summary
+						>
+						<textarea
+							form="entry"
+							name="notes"
+							rows="3"
+							aria-label="Notes privées"
+							onchange={save}
+							class="mb-4 field w-full py-2.5">{entry.notes ?? ''}</textarea
+						>
+					</details>
+				</section>
+			{/if}
+		</div>
+
+		<aside class="flex min-w-0 flex-[1_1_320px] flex-col gap-8">
+			{#if entry && data.journal.length}
+				<section aria-labelledby="journal-title" class="flex flex-col gap-3.5">
+					<h2 id="journal-title" class="h2">Mon journal</h2>
+					<ol>
+						{#each data.journal as e (e.id)}
+							<li class="flex gap-3.5">
+								<div class="flex w-3 shrink-0 flex-col items-center" aria-hidden="true">
+									<span class="mt-1.5 size-2.5 rounded-full {journalDot[e.kind] ?? 'bg-accent'}"
+									></span>
+									<span class="mt-1 w-0.5 flex-1 bg-line"></span>
+								</div>
+								<div class="pb-4">
+									<p class="font-semibold">{journalLabel(e)}</p>
+									<p class="text-[13px] text-muted">
+										{[e.when, sourceLabel[e.source]].filter(Boolean).join(' · ')}
+									</p>
+								</div>
+							</li>
+						{/each}
+					</ol>
+				</section>
+			{/if}
+
+			<section aria-labelledby="info-title" class="flex flex-col gap-3.5">
+				<h2 id="info-title" class="h2">Fiche</h2>
+				<dl class="card px-4.5 py-1">
+					{#each facts as [k, v] (k)}
+						<div class="flex justify-between gap-4 border-b border-line py-2.75 text-sm">
+							<dt class="text-muted">{k}</dt>
+							<dd class="text-right font-semibold">{v}</dd>
+						</div>
+					{/each}
+					{#if sourceUrl}
+						<div class="py-3">
+							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external link -->
+							<a href={sourceUrl} rel="external" class="text-sm font-semibold"
+								>Voir sur {sourceName} ↗</a
+							>
+						</div>
+					{/if}
+				</dl>
+			</section>
+		</aside>
+	</div>
+
+	<section aria-labelledby="members-title" class="flex flex-col gap-8 border-t border-line pt-10">
+		<h2 id="members-title" class="h2 text-[28px]">Chez les membres</h2>
 		<div class="flex flex-wrap gap-8">
 			<div class="flex flex-[1_1_280px] flex-col gap-3">
 				<h3 class="eyebrow">Notes</h3>

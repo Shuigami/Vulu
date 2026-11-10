@@ -1,5 +1,5 @@
 import { error, fail } from '@sveltejs/kit';
-import { and, eq } from 'drizzle-orm';
+import { and, desc, eq, sum } from 'drizzle-orm';
 import { db } from '#lib/server/app.ts';
 import {
 	describeAirDate,
@@ -8,7 +8,7 @@ import {
 	startOfToday,
 	timeAgo
 } from '#lib/server/calendar.ts';
-import { libraryEntries, media, mediaExternalIds } from '#lib/server/db/schema.ts';
+import { activityEvents, libraryEntries, media, mediaExternalIds } from '#lib/server/db/schema.ts';
 import { addToLibrary, removeEntry, updateEntry, type EntryPatch } from '#lib/server/library.ts';
 import { mediaEntries, ratingSummary } from '#lib/server/social.ts';
 import { fromScale, isEntryStatus } from '#lib/labels.ts';
@@ -38,10 +38,27 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		...describeAirDate(next.airDate!)
 	};
 	const viewerId = locals.user!.id;
-	const [ratings, followed, reviews] = await Promise.all([
+	const mine = and(eq(activityEvents.mediaId, id), eq(activityEvents.userId, viewerId));
+	const [ratings, followed, reviews, journal, [time]] = await Promise.all([
 		ratingSummary(db, id, viewerId),
 		mediaEntries(db, id, viewerId, { followedOnly: true, limit: 24 }),
-		mediaEntries(db, id, viewerId, { reviewsOnly: true })
+		mediaEntries(db, id, viewerId, { reviewsOnly: true }),
+		db
+			.select({
+				id: activityEvents.id,
+				kind: activityEvents.kind,
+				amount: activityEvents.amount,
+				source: activityEvents.source,
+				occurredAt: activityEvents.occurredAt
+			})
+			.from(activityEvents)
+			.where(mine)
+			.orderBy(desc(activityEvents.occurredAt), desc(activityEvents.id))
+			.limit(12),
+		db
+			.select({ minutes: sum(activityEvents.minutes).mapWith(Number) })
+			.from(activityEvents)
+			.where(mine)
 	]);
 	return {
 		media: m,
@@ -50,7 +67,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		upcoming,
 		ratings,
 		followed,
-		reviews: reviews.map(({ updatedAt, ...r }) => ({ ...r, when: timeAgo(updatedAt) }))
+		reviews: reviews.map(({ updatedAt, ...r }) => ({ ...r, when: timeAgo(updatedAt) })),
+		journal: journal.map(({ occurredAt, ...e }) => ({ ...e, when: timeAgo(occurredAt) })),
+		minutesSpent: time?.minutes ?? 0
 	};
 };
 
@@ -98,8 +117,12 @@ function parseEntryForm(form: FormData, ratingScale: number): EntryPatch | strin
 }
 
 export const actions: Actions = {
-	add: async ({ params, locals }) => {
-		await addToLibrary(db, locals.user!.id, parseId(params.id));
+	add: async ({ params, request, locals }) => {
+		const status = (await request.formData()).get('status');
+		const entryId = await addToLibrary(db, locals.user!.id, parseId(params.id));
+		// Added straight as "in progress" or "completed": the usual rules fill in dates and progress
+		if (isEntryStatus(status) && status !== 'planned')
+			await updateEntry(db, locals.user!.id, entryId, { status });
 	},
 
 	update: async ({ request, locals }) => {
