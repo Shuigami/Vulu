@@ -5,6 +5,7 @@
 	import MediaShelf from '#lib/components/MediaShelf.svelte';
 	import Poster from '#lib/components/Poster.svelte';
 	import Progress from '#lib/components/Progress.svelte';
+	import ShelfSkeleton from '#lib/components/ShelfSkeleton.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, toScale, typePlural, unitLabel } from '#lib/labels.ts';
 	import type { DiscoverItem } from '#lib/server/discover.ts';
@@ -159,7 +160,12 @@
 		{/if}
 	</section>
 
-	{#await data.discoveries then discoveries}
+	{#await data.discoveries}
+		<section aria-labelledby="discover" class="flex flex-col gap-5">
+			<h2 id="discover" class="h2">Découvertes pour toi</h2>
+			<ShelfSkeleton label="Chargement des découvertes" />
+		</section>
+	{:then discoveries}
 		{#if discoveries?.length}
 			<section aria-labelledby="discover" class="flex flex-col gap-5">
 				<h2 id="discover" class="h2">Découvertes pour toi</h2>
@@ -183,7 +189,7 @@
 			</div>
 		</div>
 		{#await data.trending}
-			<p class="text-muted" role="status">Chargement des tendances…</p>
+			<ShelfSkeleton label="Chargement des tendances" />
 		{:then trending}
 			{#if trending?.[trendType].length}
 				<MediaShelf

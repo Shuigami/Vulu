@@ -132,3 +132,26 @@
 @utility h2 {
 	@apply font-display text-[22px] font-bold;
 }
+/* Loading placeholder: an oblique highlight sweeping from right to left */
+@utility shimmer {
+	background: linear-gradient(
+			110deg,
+			transparent 40%,
+			color-mix(in oklab, var(--c-ink) 7%, transparent) 50%,
+			transparent 60%
+		)
+		var(--c-surface-2);
+	background-size: 250% 100%;
+	animation: shimmer 1.4s linear infinite;
+	@media (prefers-reduced-motion: reduce) {
+		animation: none;
+	}
+}
+@keyframes shimmer {
+	from {
+		background-position: 0% 0;
+	}
+	to {
+		background-position: 100% 0;
+	}
+}
