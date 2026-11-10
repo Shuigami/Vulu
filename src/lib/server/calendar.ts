@@ -14,12 +14,15 @@ export function upcomingEpisodes(db: Db, userId: string, from: Date, to: Date) {
 		.select({
 			airDate: episodes.airDate,
 			number: episodes.number,
+			absoluteNumber: episodes.absoluteNumber,
 			title: episodes.title,
 			seasonNumber: seasons.number,
 			mediaId: media.id,
 			mediaTitle: media.title,
 			type: media.type,
-			posterUrl: media.posterUrl
+			posterUrl: media.posterUrl,
+			totalUnits: media.totalUnits,
+			progress: libraryEntries.progress
 		})
 		.from(episodes)
 		.innerJoin(media, eq(media.id, episodes.mediaId))

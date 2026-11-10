@@ -13,6 +13,60 @@ import type { Actions, PageServerLoad } from './$types';
 
 const WEEK = 7 * 24 * 3600 * 1000;
 
+const countdown = (days: number) =>
+	days <= 0 ? 'Aujourd’hui' : days === 1 ? 'Demain' : `Dans ${Math.round(days)} j`;
+
+/** One tile per work and day: a season dropped at once shows as "S3E1 à S3E4", not four tiles. */
+function groupWeek(rows: Awaited<ReturnType<typeof upcomingEpisodes>>) {
+	const tiles = new Map<
+		string,
+		{
+			key: string;
+			weekday: string;
+			dayNumber: string;
+			time: string | null;
+			episodes: string[];
+			/** First and last airing episode, counted across seasons (for the progress bar). */
+			release: [number, number];
+			mediaId: number;
+			mediaTitle: string;
+			posterUrl: string | null;
+			progress: number;
+			totalUnits: number | null;
+		}
+	>();
+	const today = Date.parse(describeAirDate(new Date()).dayKey);
+	for (const r of rows) {
+		const { dayKey, weekday, dayNumber, time } = describeAirDate(r.airDate!);
+		const key = `${r.mediaId}:${dayKey}`;
+		const tile = tiles.get(key);
+		const n = r.absoluteNumber ?? r.number;
+		if (tile) {
+			tile.episodes.push(episodeLabel(r));
+			tile.release = [Math.min(tile.release[0], n), Math.max(tile.release[1], n)];
+		} else
+			tiles.set(key, {
+				key,
+				weekday,
+				dayNumber,
+				time,
+				episodes: [episodeLabel(r)],
+				release: [n, n],
+				mediaId: r.mediaId,
+				mediaTitle: r.mediaTitle,
+				posterUrl: r.posterUrl,
+				progress: r.progress,
+				totalUnits: r.totalUnits
+			});
+	}
+	return [...tiles.values()].map(({ episodes, ...t }) => ({
+		...t,
+		episode: episodes.length > 1 ? `${episodes[0]} à ${episodes.at(-1)}` : episodes[0],
+		count: episodes.length,
+		countdown: countdown((Date.parse(t.key.split(':')[1]) - today) / 86_400_000)
+	}));
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
 	const userId = locals.user!.id;
 	const from = startOfToday();
@@ -36,18 +90,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		discoveries: quiet(boss.then((b) => recommendations(db, b, userId))),
 		today: describeAirDate(new Date()).day,
 		entries,
-		week: upcoming.map((r) => {
-			const { weekday, dayNumber, time } = describeAirDate(r.airDate!);
-			return {
-				key: `${r.mediaId}:${r.seasonNumber}:${r.number}`,
-				weekday,
-				dayNumber,
-				time,
-				episode: episodeLabel(r),
-				mediaId: r.mediaId,
-				mediaTitle: r.mediaTitle
-			};
-		})
+		week: groupWeek(upcoming)
 	};
 };
 
