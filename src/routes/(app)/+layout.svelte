@@ -39,7 +39,13 @@
 					class="rounded-[10px] px-3.5 py-2.5 no-underline {current
 						? 'bg-surface-2 font-semibold text-ink'
 						: 'text-muted hover:text-ink'}"
-					aria-current={current ? 'page' : undefined}>{link.label}</a
+					aria-current={current ? 'page' : undefined}
+					><!-- The hidden bold copy keeps the width fixed when the link becomes current --><span
+						class="inline-grid"
+						><span class="invisible col-start-1 row-start-1 font-semibold">{link.label}</span><span
+							class="col-start-1 row-start-1">{link.label}</span
+						></span
+					></a
 				>
 			{/each}
 		</nav>

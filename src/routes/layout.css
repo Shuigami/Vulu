@@ -84,6 +84,10 @@
 }
 
 @layer base {
+	/* Same width with or without a scrollbar, so centred content never shifts between pages */
+	html {
+		scrollbar-gutter: stable;
+	}
 	body {
 		@apply bg-bg font-sans text-[15px] leading-normal text-ink antialiased;
 	}
