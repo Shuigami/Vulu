@@ -26,6 +26,7 @@
 		{ href: resolve(''), label: 'Accueil' },
 		{ href: resolve('activity'), label: 'Activité' },
 		{ href: resolve('library'), label: 'Bibliothèque' },
+		{ href: resolve('lists'), label: 'Listes' },
 		{ href: resolve('calendar'), label: 'Calendrier' },
 		{ href: resolve('stats'), label: 'Statistiques' },
 		{ href: resolve('import'), label: 'Importer' },

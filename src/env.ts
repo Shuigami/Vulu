@@ -23,5 +23,8 @@ export const variables = defineEnvVars({
 	GITHUB_CLIENT_ID: { schema: optional },
 	GITHUB_CLIENT_SECRET: { schema: optional },
 	// Only read to show whether Trakt imports are available; the worker uses it
-	TRAKT_CLIENT_ID: { schema: optional }
+	TRAKT_CLIENT_ID: { schema: optional },
+	// Outgoing e-mail (password reset); without SMTP_URL e-mails are printed to the console
+	SMTP_URL: { schema: optional },
+	MAIL_FROM: { schema: optional }
 });

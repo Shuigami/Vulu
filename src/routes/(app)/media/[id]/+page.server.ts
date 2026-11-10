@@ -10,6 +10,13 @@ import {
 } from '#lib/server/calendar.ts';
 import { activityEvents, libraryEntries, media, mediaExternalIds } from '#lib/server/db/schema.ts';
 import { addToLibrary, removeEntry, updateEntry, type EntryPatch } from '#lib/server/library.ts';
+import {
+	addToList,
+	createList,
+	listsForMedia,
+	parseListInput,
+	removeFromList
+} from '#lib/server/lists.ts';
 import { mediaEntries, ratingSummary } from '#lib/server/social.ts';
 import { fromScale, isEntryStatus } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -39,7 +46,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	};
 	const viewerId = locals.user!.id;
 	const mine = and(eq(activityEvents.mediaId, id), eq(activityEvents.userId, viewerId));
-	const [ratings, followed, reviews, journal, [time]] = await Promise.all([
+	const [ratings, followed, reviews, journal, [time], lists] = await Promise.all([
 		ratingSummary(db, id, viewerId),
 		mediaEntries(db, id, viewerId, { followedOnly: true, limit: 24 }),
 		mediaEntries(db, id, viewerId, { reviewsOnly: true }),
@@ -58,7 +65,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		db
 			.select({ minutes: sum(activityEvents.minutes).mapWith(Number) })
 			.from(activityEvents)
-			.where(mine)
+			.where(mine),
+		listsForMedia(db, viewerId, id)
 	]);
 	return {
 		media: m,
@@ -69,7 +77,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		followed,
 		reviews: reviews.map(({ updatedAt, ...r }) => ({ ...r, when: timeAgo(updatedAt) })),
 		journal: journal.map(({ occurredAt, ...e }) => ({ ...e, when: timeAgo(occurredAt) })),
-		minutesSpent: time?.minutes ?? 0
+		minutesSpent: time?.minutes ?? 0,
+		lists
 	};
 };
 
@@ -117,6 +126,20 @@ function parseEntryForm(form: FormData, ratingScale: number): EntryPatch | strin
 }
 
 export const actions: Actions = {
+	toggleList: async ({ params, request, locals }) => {
+		const form = await request.formData();
+		const listId = Number(form.get('listId'));
+		if (!Number.isInteger(listId)) return fail(400);
+		const mediaId = parseId(params.id);
+		const toggle = form.get('has') === 'true' ? removeFromList : addToList;
+		await toggle(db, locals.user!.id, listId, mediaId);
+	},
+	newList: async ({ params, request, locals }) => {
+		const input = parseListInput(await request.formData());
+		if (typeof input === 'string') return fail(400, { listError: input });
+		const listId = await createList(db, locals.user!.id, input);
+		await addToList(db, locals.user!.id, listId, parseId(params.id));
+	},
 	add: async ({ params, request, locals }) => {
 		const status = (await request.formData()).get('status');
 		const entryId = await addToLibrary(db, locals.user!.id, parseId(params.id));

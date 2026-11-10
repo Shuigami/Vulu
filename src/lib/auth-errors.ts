@@ -9,6 +9,7 @@ const messages: Record<string, string> = {
 	INVALID_EMAIL_OR_PASSWORD: 'E-mail ou mot de passe incorrect.',
 	PASSWORD_TOO_SHORT: 'Le mot de passe doit faire au moins 8 caractères.',
 	PASSWORD_TOO_LONG: 'Le mot de passe est trop long.',
+	INVALID_TOKEN: 'Ce lien n’est plus valable : demande un nouveau lien.',
 	TOO_MANY_REQUESTS: 'Trop de tentatives, réessaie dans un moment.'
 };
 

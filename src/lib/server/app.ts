@@ -7,11 +7,14 @@ import {
 	GITHUB_CLIENT_ID,
 	GITHUB_CLIENT_SECRET,
 	GOOGLE_CLIENT_ID,
-	GOOGLE_CLIENT_SECRET
+	GOOGLE_CLIENT_SECRET,
+	MAIL_FROM,
+	SMTP_URL
 } from '$app/env/private';
 import { PgBoss } from 'pg-boss';
 import { createAuth } from './auth';
 import { createDb } from './db';
+import { createMailer } from './mail';
 
 const oauth = (clientId?: string, clientSecret?: string) =>
 	clientId && clientSecret ? { clientId, clientSecret } : undefined;
@@ -22,7 +25,8 @@ export const auth = createAuth(db, {
 	secret: BETTER_AUTH_SECRET,
 	baseURL: BETTER_AUTH_URL,
 	google: oauth(GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET),
-	github: oauth(GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET)
+	github: oauth(GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET),
+	sendMail: createMailer(SMTP_URL, MAIL_FROM)
 });
 
 /** Social providers configured in the environment, for the sign-in buttons. */

@@ -13,6 +13,7 @@
 	const target = page.url.searchParams.get('redirectTo') ?? '/';
 	const redirectTo = target.startsWith('/') && !target.startsWith('//') ? target : '/';
 
+	const reset = page.url.searchParams.has('reset');
 	const oauthError = page.url.searchParams.get('error');
 	let error = $state(oauthError ? authErrorMessage(oauthError) : '');
 	let pending = $state(false);
@@ -49,6 +50,12 @@
 		Mot de passe
 		<input name="password" type="password" autocomplete="current-password" required class="field" />
 	</label>
+	<a href={resolve('forgot-password')} class="-mt-1 self-end text-[13px] text-muted"
+		>Mot de passe oublié ?</a
+	>
+	{#if reset}<p role="status" class="text-sm text-success">
+			Mot de passe changé. Connecte-toi avec le nouveau.
+		</p>{/if}
 	{#if error}<p role="alert" class="text-sm text-danger">{error}</p>{/if}
 	<button type="submit" disabled={pending} class="mt-1 btn-accent"> Se connecter </button>
 </form>

@@ -2,7 +2,7 @@
 import { and, eq, like, sql } from 'drizzle-orm';
 import type { MediaType } from '../labels';
 import type { Db } from './db';
-import { activityEvents, libraryEntries, media } from './db/schema';
+import { activityEvents, libraryEntries, media, mediaTitles } from './db/schema';
 
 type Entry = typeof libraryEntries.$inferSelect;
 type EventInsert = typeof activityEvents.$inferInsert;
@@ -193,12 +193,33 @@ export async function removeEntry(db: Db, userId: string, entryId: number) {
 		.where(and(eq(libraryEntries.id, entryId), eq(libraryEntries.userId, userId)));
 }
 
-/** The user's entries with their media, most recently updated first. */
+export const LIBRARY_SORTS = ['updated', 'added', 'title', 'score'] as const;
+export type LibrarySort = (typeof LIBRARY_SORTS)[number];
+
+const sortOrder = {
+	updated: [sql`${libraryEntries.updatedAt} desc`],
+	added: [sql`${libraryEntries.createdAt} desc`],
+	title: [sql`lower(${media.title})`],
+	score: [sql`${libraryEntries.score} desc nulls last`, sql`lower(${media.title})`]
+} satisfies Record<LibrarySort, unknown[]>;
+
+/**
+ * The user's entries with their media, most recently updated first by default.
+ * `q` matches any title of the work (accents and case ignored); `total` is the count before paging.
+ */
 export function listEntries(
 	db: Db,
 	userId: string,
-	filters: { type?: MediaType; status?: Entry['status'] } = {}
+	filters: {
+		type?: MediaType;
+		status?: Entry['status'];
+		q?: string;
+		sort?: LibrarySort;
+		limit?: number;
+		offset?: number;
+	} = {}
 ) {
+	const pattern = filters.q && `%${filters.q.replace(/[\\%_]/g, '\\$&')}%`;
 	return db
 		.select({
 			id: libraryEntries.id,
@@ -211,7 +232,8 @@ export function listEntries(
 			title: media.title,
 			posterUrl: media.posterUrl,
 			totalUnits: media.totalUnits,
-			year: sql<number | null>`extract(year from ${media.startDate})::int`
+			year: sql<number | null>`extract(year from ${media.startDate})::int`,
+			total: sql<number>`(count(*) over ())::int`
 		})
 		.from(libraryEntries)
 		.innerJoin(media, eq(media.id, libraryEntries.mediaId))
@@ -219,8 +241,15 @@ export function listEntries(
 			and(
 				eq(libraryEntries.userId, userId),
 				filters.type ? eq(media.type, filters.type) : undefined,
-				filters.status ? eq(libraryEntries.status, filters.status) : undefined
+				filters.status ? eq(libraryEntries.status, filters.status) : undefined,
+				pattern
+					? sql`(f_unaccent(lower(${media.title})) like f_unaccent(lower(${pattern}))
+						or exists (select 1 from ${mediaTitles} where ${mediaTitles.mediaId} = ${media.id}
+						and f_unaccent(lower(${mediaTitles.title})) like f_unaccent(lower(${pattern}))))`
+					: undefined
 			)
 		)
-		.orderBy(sql`${libraryEntries.updatedAt} desc`);
+		.orderBy(...sortOrder[filters.sort ?? 'updated'], sql`${libraryEntries.id} desc`)
+		.limit(filters.limit ?? 10_000)
+		.offset(filters.offset ?? 0);
 }
