@@ -7,7 +7,7 @@
 
 <div class="flex flex-wrap items-start gap-12" aria-hidden="true">
 	<div class="flex min-w-0 flex-[999_1_560px] flex-wrap gap-8">
-		<div class="aspect-[2/3] w-44 shimmer rounded-2xl sm:w-60"></div>
+		<div class="aspect-[2/3] w-44 shimmer self-start rounded-2xl sm:w-60"></div>
 		<div class="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5">
 			<div class="h-6 w-16 shimmer rounded-full"></div>
 			<div class="flex flex-col gap-2.5 py-1">

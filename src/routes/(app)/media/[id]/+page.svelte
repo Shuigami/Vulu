@@ -40,7 +40,7 @@
 
 <div class="flex flex-wrap items-start gap-12">
 	<article class="flex min-w-0 flex-[999_1_560px] flex-wrap gap-8">
-		<Poster src={m.posterUrl} title={m.title} class="w-44 rounded-2xl sm:w-60" />
+		<Poster src={m.posterUrl} title={m.title} class="w-44 self-start rounded-2xl sm:w-60" />
 		<div class="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5">
 			<div><TypeTag type={m.type} /></div>
 			<h1
