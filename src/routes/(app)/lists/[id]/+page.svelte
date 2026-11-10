@@ -2,7 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
-	import { toScale, typeLabel } from '#lib/labels.ts';
+	import { MEDIA_TYPES, toScale, typeLabel, typePlural } from '#lib/labels.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -18,6 +18,18 @@
 	];
 	const scale = $derived(data.user.ratingScale);
 	const inListIds = $derived(new Set(list.items.map((i) => i.mediaId)));
+	// Filtered in the page: lists are small, and the search above still knows every item
+	const shown = $derived(data.type ? list.items.filter((i) => i.type === data.type) : list.items);
+	const presentTypes = $derived(MEDIA_TYPES.filter((t) => list.items.some((i) => i.type === t)));
+	const typeHref = (type: string | null) => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- built and read once, not state
+		const params = new URLSearchParams();
+		if (type) params.set('type', type);
+		if (data.sort !== 'position') params.set('sort', data.sort);
+		if (data.q) params.set('q', data.q);
+		const query = params.toString();
+		return `${resolve('/(app)/lists/[id]', { id: String(list.id) })}${query ? `?${query}` : ''}`;
+	};
 </script>
 
 <svelte:head><title>{list.name} · Vulu</title></svelte:head>
@@ -123,6 +135,7 @@
 				data-sveltekit-noscroll
 			>
 				{#if data.sort !== 'position'}<input type="hidden" name="sort" value={data.sort} />{/if}
+				{#if data.type}<input type="hidden" name="type" value={data.type} />{/if}
 				<input
 					type="search"
 					name="q"
@@ -151,7 +164,8 @@
 								{:else}
 									<form
 										method="post"
-										action="?q={encodeURIComponent(data.q)}&sort={data.sort}&/add"
+										action="?q={encodeURIComponent(data.q)}&sort={data.sort}&type={data.type ??
+											''}&/add"
 										use:enhance={() =>
 											({ update }) =>
 												update({ reset: false })}
@@ -176,27 +190,50 @@
 	{/if}
 
 	{#if list.items.length > 1}
-		<form method="get" class="-mb-4 flex justify-end" data-sveltekit-noscroll>
-			{#if data.q}<input type="hidden" name="q" value={data.q} />{/if}
-			<label class="flex items-center gap-2 text-sm text-muted">
-				Trier par
-				<select
-					name="sort"
-					class="h-10 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus:border-accent"
-					onchange={(e) => e.currentTarget.form?.requestSubmit()}
-				>
-					{#each sorts as o (o.value)}
-						<option value={o.value} selected={data.sort === o.value}>{o.label}</option>
+		<div class="-mb-4 flex flex-wrap items-center justify-between gap-3">
+			{#if presentTypes.length > 1}
+				<!-- eslint-disable svelte/no-navigation-without-resolve -- typeHref() builds on resolve() -->
+				<nav class="flex flex-wrap gap-2" aria-label="Filtrer par type">
+					<a
+						href={typeHref(null)}
+						class={!data.type ? 'chip-on' : 'chip'}
+						aria-current={!data.type ? 'page' : undefined}
+						data-sveltekit-noscroll>Tous</a
+					>
+					{#each presentTypes as t (t)}
+						<a
+							href={typeHref(t)}
+							class={data.type === t ? 'chip-on' : 'chip'}
+							aria-current={data.type === t ? 'page' : undefined}
+							data-sveltekit-noscroll>{typePlural[t]}</a
+						>
 					{/each}
-				</select>
-			</label>
-			<noscript><button class="ml-2 btn-ghost">Trier</button></noscript>
-		</form>
+				</nav>
+				<!-- eslint-enable svelte/no-navigation-without-resolve -->
+			{/if}
+			<form method="get" class="ml-auto flex" data-sveltekit-noscroll>
+				{#if data.q}<input type="hidden" name="q" value={data.q} />{/if}
+				{#if data.type}<input type="hidden" name="type" value={data.type} />{/if}
+				<label class="flex items-center gap-2 text-sm text-muted">
+					Trier par
+					<select
+						name="sort"
+						class="h-10 rounded-xl border border-line bg-surface px-3 text-sm text-ink focus:border-accent"
+						onchange={(e) => e.currentTarget.form?.requestSubmit()}
+					>
+						{#each sorts as o (o.value)}
+							<option value={o.value} selected={data.sort === o.value}>{o.label}</option>
+						{/each}
+					</select>
+				</label>
+				<noscript><button class="ml-2 btn-ghost">Trier</button></noscript>
+			</form>
+		</div>
 	{/if}
 
-	{#if list.items.length}
+	{#if shown.length}
 		<ol class="grid [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] gap-x-5 gap-y-7">
-			{#each list.items as item (item.mediaId)}
+			{#each shown as item (item.mediaId)}
 				<li class="flex flex-col gap-2">
 					<a
 						href={resolve('/(app)/media/[id]', { id: String(item.mediaId) })}

@@ -2,6 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/app.ts';
 import { media } from '#lib/server/db/schema.ts';
+import { isMediaType } from '#lib/labels.ts';
 import {
 	addToList,
 	deleteList,
@@ -24,12 +25,14 @@ const parseId = (raw: string) => {
 export const load: PageServerLoad = async ({ params, url, locals }) => {
 	const o = url.searchParams.get('sort');
 	const sort = LIST_SORTS.includes(o as ListSort) ? (o as ListSort) : 'position';
+	const t = url.searchParams.get('type');
+	const type = isMediaType(t) ? t : null;
 	const list = await getList(db, parseId(params.id), locals.user!.id, sort);
 	if (!list) error(404, 'Liste introuvable');
 	// Owner only: search the catalogue to add works without leaving the list
 	const q = (list.isOwner && url.searchParams.get('q')?.trim().slice(0, 100)) || '';
 	const results = q ? await searchMedia(db, q, { limit: 12 }) : [];
-	return { list, q, sort, results };
+	return { list, q, sort, type, results };
 };
 
 export const actions: Actions = {
