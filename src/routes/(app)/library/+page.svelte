@@ -131,13 +131,13 @@
 						<div class="relative overflow-hidden rounded-xl tile-frame">
 							<Poster src={e.posterUrl} title={e.title} class="w-full" />
 							<div class="absolute top-2.5 left-2.5 flex flex-col items-start gap-1">
-								<span class="rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold text-white"
-									>{statusLabel[e.status]}</span
-								>
 								<span
 									class="flex items-center gap-1.5 rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold text-white"
 									><span class="size-2 rounded-full {typeDot[e.type]}" aria-hidden="true"
 									></span>{typeLabel[e.type]}</span
+								>
+								<span class="rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold text-white"
+									>{statusLabel[e.status]}</span
 								>
 							</div>
 							{#if unit && e.totalUnits && e.progress > 0 && e.status !== 'completed'}
