@@ -158,6 +158,28 @@
 		animation: none;
 	}
 }
+/* Press ripple (src/lib/ripple.ts): clipped to the element's shape */
+.ripple-host {
+	position: absolute;
+	inset: 0;
+	overflow: hidden;
+	border-radius: inherit;
+	pointer-events: none;
+}
+.ripple {
+	position: absolute;
+	border-radius: 50%;
+	background: currentColor;
+	opacity: 0.28;
+	transform: scale(0);
+	animation: ripple 550ms ease-out forwards;
+}
+@keyframes ripple {
+	to {
+		transform: scale(1);
+		opacity: 0;
+	}
+}
 @keyframes shimmer {
 	from {
 		background-position: 0% 0;
