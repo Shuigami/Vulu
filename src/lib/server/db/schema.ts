@@ -107,6 +107,15 @@ export const users = pgTable(
 	]
 );
 
+// Uploaded avatars (resized to 256 px by the browser), served at /avatars/<user id>.
+// Kept in the database so the nightly pg_dump backs them up.
+export const avatars = pgTable('avatars', {
+	userId: userRef().primaryKey(),
+	contentType: text().notNull(),
+	data: bytea().notNull(),
+	updatedAt: updatedAt()
+});
+
 // ---------------------------------------------------------------------------
 // Authentication (tables used by Better Auth, see src/lib/server/auth)
 // ---------------------------------------------------------------------------

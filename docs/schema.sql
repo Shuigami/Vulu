@@ -89,6 +89,15 @@ CREATE TABLE verifications (
 CREATE INDEX verifications_identifier_idx ON verifications (identifier);
 
 -- Bêta sur invitation : l'inscription (mot de passe ou OAuth) exige un e-mail invité
+-- Avatars envoyés par les utilisateurs (redimensionnés à 256 px par le navigateur),
+-- servis sur /avatars/<id utilisateur>. En base pour être inclus dans le pg_dump nocturne.
+CREATE TABLE avatars (
+  user_id       uuid PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  content_type  text NOT NULL,
+  data          bytea NOT NULL,
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE invites (
   email       citext PRIMARY KEY,
   invited_by  uuid REFERENCES users (id) ON DELETE SET NULL,
