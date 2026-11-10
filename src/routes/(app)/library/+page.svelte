@@ -12,6 +12,14 @@
 	} from '#lib/labels.ts';
 	import type { PageProps } from './$types';
 
+	const typeDot = {
+		movie: 'bg-movie',
+		tv: 'bg-tv',
+		anime: 'bg-anime',
+		manga: 'bg-manga',
+		book: 'bg-book'
+	} as const;
+
 	let { data }: PageProps = $props();
 
 	type Query = { type?: string | null; status?: string | null; page?: number };
@@ -122,10 +130,16 @@
 					>
 						<div class="relative overflow-hidden rounded-xl tile-frame">
 							<Poster src={e.posterUrl} title={e.title} class="w-full" />
-							<span
-								class="absolute top-2.5 left-2.5 rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold text-white"
-								>{statusLabel[e.status]}</span
-							>
+							<div class="absolute top-2.5 left-2.5 flex flex-col items-start gap-1">
+								<span class="rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold text-white"
+									>{statusLabel[e.status]}</span
+								>
+								<span
+									class="flex items-center gap-1.5 rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold text-white"
+									><span class="size-2 rounded-full {typeDot[e.type]}" aria-hidden="true"
+									></span>{typeLabel[e.type]}</span
+								>
+							</div>
 							{#if unit && e.totalUnits && e.progress > 0 && e.status !== 'completed'}
 								<span class="absolute inset-x-0 bottom-0 h-1 bg-black/50">
 									<span
@@ -138,11 +152,14 @@
 						<div>
 							<p class="leading-snug font-semibold group-hover:underline">{e.title}</p>
 							<p class="mt-0.5 text-[13px] text-muted">
-								{typeLabel[e.type]}{unit && e.progress
-									? ` · ${e.progress}${e.totalUnits ? `/${e.totalUnits}` : ''} ${unit}`
-									: e.year
-										? ` · ${e.year}`
-										: ''}{e.score !== null ? ` · ★ ${toScale(e.score, scale)}` : ''}
+								{[
+									unit && e.progress
+										? `${e.progress}${e.totalUnits ? `/${e.totalUnits}` : ''} ${unit}`
+										: e.year,
+									e.score !== null && `★ ${toScale(e.score, scale)}`
+								]
+									.filter(Boolean)
+									.join(' · ')}
 							</p>
 						</div>
 					</a>
