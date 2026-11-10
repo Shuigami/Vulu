@@ -44,6 +44,8 @@ src/lib/server/library.ts library entries: add, update (applyChange rules + acti
 src/lib/server/search.ts local fuzzy search, then providers through the worker
 src/lib/server/calendar.ts upcoming episodes, Paris-time formatting (server-side)
 src/lib/server/social.ts follows, profiles, activity feed, community ratings (visibility rule)
+src/lib/server/stats.ts  stats page: time, units and completions per month from activity_events
+src/lib/server/export.ts full JSON/CSV export (/settings/export.json|csv)
 src/lib/server/discover.ts home page: provider trending and recommendations, popular on Vulu
 src/lib/server/imports/  library imports: Goodreads CSV parser, runImport (match, add, journal)
 src/lib/server/jellyfin.ts webhook payload parsing and the template to paste in Jellyfin
@@ -51,8 +53,9 @@ src/lib/server/scrobble.ts watched events -> library progress (worker side)
 src/routes/hooks/        webhooks, no session: /hooks/jellyfin/[token]
 src/lib/labels.ts        French labels for enums, score scale conversions (shared client/server)
 src/routes/(app)/        signed-in pages (guard in +layout.server.ts): / (Accueil, +1),
-                         /search, /media/[id], /library, /calendar, /import, /integrations,
-                         /activity, /u/[username], /settings
+                         /search, /media/[id], /library, /calendar, /stats, /import,
+                         /integrations, /activity, /u/[username], /settings
+static/                  PWA manifest and icons (PNGs drawn from static/icons/icon.svg)
 src/routes/(auth)/       /login and /signup
 src/worker/index.ts      worker entry point (pg-boss); only the worker calls external APIs
 .github/workflows/ci.yml lint, types, migrations on an empty database, schema drift check, tests

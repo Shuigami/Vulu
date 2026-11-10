@@ -58,6 +58,8 @@ export const isMediaType = (v: unknown): v is MediaType => MEDIA_TYPES.includes(
 export const isEntryStatus = (v: unknown): v is EntryStatus =>
 	ENTRY_STATUSES.includes(v as EntryStatus);
 
+export const RATING_SCALES = [5, 10, 100] as const;
+
 /** Scores are stored out of 100 and shown in the user's scale (5, 10 or 100). */
 export const toScale = (score: number, scale: number) => Math.round((score * scale) / 10) / 10;
 export const fromScale = (value: number, scale: number) =>
