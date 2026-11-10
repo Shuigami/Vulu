@@ -4,6 +4,15 @@
 
 	let { data, form }: PageProps = $props();
 	let copied = $state<string | null>(null);
+	const confirmations = {
+		regenerate: {
+			question: 'L’ancienne URL cessera de fonctionner. Continuer ?',
+			action: 'Générer',
+			danger: false
+		},
+		remove: { question: 'Supprimer l’intégration Jellyfin ?', action: 'Supprimer', danger: true }
+	};
+	let confirming = $state<keyof typeof confirmations | null>(null);
 
 	const resultText: Record<string, string> = {
 		updated: 'progression mise à jour',
@@ -129,25 +138,38 @@
 			</p>
 		{/if}
 
-		<div class="mt-6 flex gap-4 text-sm">
+		<!-- Confirmed in the page: native confirm() is blocked in some browsers and webviews -->
+		{#if confirming}
+			{@const c = confirmations[confirming]}
 			<form
 				method="post"
-				action="?/regenerate"
-				use:enhance={({ cancel }) => {
-					if (!confirm('L’ancienne URL cessera de fonctionner. Continuer ?')) cancel();
-				}}
+				action="?/{confirming}"
+				use:enhance={() =>
+					async ({ update }) => {
+						await update();
+						confirming = null;
+					}}
+				class="mt-6 flex flex-wrap items-center gap-3 text-sm"
 			>
-				<button class="cursor-pointer text-ink underline">Générer une nouvelle URL</button>
+				<p>{c.question}</p>
+				<button class="btn {c.danger ? 'bg-danger text-bg' : 'btn-ink'} text-sm">{c.action}</button>
+				<button type="button" class="btn-ghost text-sm" onclick={() => (confirming = null)}
+					>Annuler</button
+				>
 			</form>
-			<form
-				method="post"
-				action="?/remove"
-				use:enhance={({ cancel }) => {
-					if (!confirm('Supprimer l’intégration Jellyfin ?')) cancel();
-				}}
-			>
-				<button class="cursor-pointer text-danger underline">Supprimer</button>
-			</form>
-		</div>
+		{:else}
+			<div class="mt-6 flex gap-4 text-sm">
+				<button
+					type="button"
+					class="min-h-11 cursor-pointer text-ink underline"
+					onclick={() => (confirming = 'regenerate')}>Générer une nouvelle URL</button
+				>
+				<button
+					type="button"
+					class="min-h-11 cursor-pointer text-danger underline"
+					onclick={() => (confirming = 'remove')}>Supprimer</button
+				>
+			</div>
+		{/if}
 	{/if}
 </section>
