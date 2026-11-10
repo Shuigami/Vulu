@@ -9,6 +9,7 @@
 	const list = $derived(data.list);
 	let editing = $state(false);
 	let confirmDelete = $state(false);
+	const inListIds = $derived(new Set(list.items.map((i) => i.mediaId)));
 </script>
 
 <svelte:head><title>{list.name} · Vulu</title></svelte:head>
@@ -103,6 +104,68 @@
 		</form>
 	{/if}
 
+	{#if list.isOwner}
+		<section aria-labelledby="add-title" class="flex flex-col gap-3">
+			<h2 id="add-title" class="sr-only">Ajouter une œuvre</h2>
+			<form
+				method="get"
+				role="search"
+				class="flex gap-2"
+				data-sveltekit-keepfocus
+				data-sveltekit-noscroll
+			>
+				<input
+					type="search"
+					name="q"
+					value={data.q}
+					placeholder="Ajouter une œuvre : film, série, anime, manga, livre…"
+					aria-label="Chercher une œuvre à ajouter"
+					class="field min-w-0 flex-1 text-sm"
+				/>
+				<button class="btn-ghost">Chercher</button>
+			</form>
+			{#if data.q}
+				{#if data.results.length}
+					<ul class="grid gap-2 sm:grid-cols-2">
+						{#each data.results as r (r.id)}
+							{@const inList = inListIds.has(r.id)}
+							<li class="flex items-center gap-3 card p-2">
+								<Poster src={r.posterUrl} title={r.title} class="w-10 shrink-0 rounded-md" />
+								<div class="min-w-0 flex-1">
+									<p class="truncate text-sm font-semibold">{r.title}</p>
+									<p class="text-[13px] text-muted">
+										{typeLabel[r.type]}{r.year ? ` · ${r.year}` : ''}
+									</p>
+								</div>
+								{#if inList}
+									<span class="px-2 text-[13px] text-muted">Dans la liste ✓</span>
+								{:else}
+									<form
+										method="post"
+										action="?q={encodeURIComponent(data.q)}&/add"
+										use:enhance={() =>
+											({ update }) =>
+												update({ reset: false })}
+									>
+										<input type="hidden" name="mediaId" value={r.id} />
+										<button class="btn-ghost text-sm" aria-label="Ajouter {r.title}">Ajouter</button
+										>
+									</form>
+								{/if}
+							</li>
+						{/each}
+					</ul>
+				{/if}
+				<p class="text-[13px] text-muted">
+					{data.results.length ? 'Pas trouvé ?' : 'Rien dans le catalogue Vulu pour l’instant.'}
+					<a href="{resolve('search')}?q={encodeURIComponent(data.q)}"
+						>Chercher chez TMDB, AniList et Open Library</a
+					>, puis ajoute l’œuvre depuis sa fiche.
+				</p>
+			{/if}
+		</section>
+	{/if}
+
 	{#if list.items.length}
 		<ol class="grid [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] gap-x-5 gap-y-7">
 			{#each list.items as item (item.mediaId)}
@@ -136,7 +199,7 @@
 	{:else}
 		<p class="text-muted">
 			{list.isOwner
-				? 'Liste vide. Ouvre la fiche d’une œuvre et choisis « Ajouter à une liste ».'
+				? 'Liste vide. Cherche une œuvre ci-dessus, ou ajoute-la depuis sa fiche (« Mes listes »).'
 				: 'Cette liste est vide.'}
 		</p>
 	{/if}
