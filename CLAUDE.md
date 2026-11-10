@@ -46,6 +46,9 @@ src/lib/server/calendar.ts upcoming episodes, Paris-time formatting (server-side
 src/lib/server/social.ts follows, profiles, activity feed, community ratings (visibility rule)
 src/lib/server/stats.ts  stats page: time, units and completions per month from activity_events
 src/lib/server/export.ts full JSON/CSV export (/settings/export.json|csv)
+src/lib/server/lists.ts  custom lists: CRUD, owner checks, visibility (public list + non-private profile)
+src/lib/server/profile.ts display name, avatars (bytes in `avatars`, served by src/routes/avatars/[id])
+src/lib/server/mail.ts   SMTP via nodemailer (SMTP_URL, MAIL_FROM); without SMTP_URL, prints to console
 src/lib/server/discover.ts home page: provider trending and recommendations, popular on Vulu
 src/lib/server/imports/  library imports: Goodreads CSV parser, runImport (match, add, journal)
 src/lib/server/jellyfin.ts webhook payload parsing and the template to paste in Jellyfin
@@ -53,10 +56,10 @@ src/lib/server/scrobble.ts watched events -> library progress (worker side)
 src/routes/hooks/        webhooks, no session: /hooks/jellyfin/[token]
 src/lib/labels.ts        French labels for enums, score scale conversions (shared client/server)
 src/routes/(app)/        signed-in pages (guard in +layout.server.ts): / (Accueil, +1),
-                         /search, /media/[id], /library, /calendar, /stats, /import,
-                         /integrations, /activity, /u/[username], /settings
+                         /search, /media/[id], /library, /lists, /lists/[id], /calendar,
+                         /stats, /import, /integrations, /activity, /u/[username], /settings
 static/                  PWA manifest and icons (PNGs drawn from static/icons/icon.svg)
-src/routes/(auth)/       /login and /signup
+src/routes/(auth)/       /login, /signup, /forgot-password, /reset-password
 src/worker/index.ts      worker entry point (pg-boss); only the worker calls external APIs
 .github/workflows/ci.yml lint, types, migrations on an empty database, schema drift check, tests
 .github/workflows/release.yml image to ghcr.io/shuigami/vulu on every v* tag
@@ -79,7 +82,7 @@ scripts/backup.sh        nightly pg_dump into restic (host cron)
 - Never commit secrets or API keys. `.env` is git-ignored; document new variables in `.env.example`.
 - Shared server code must not import `$app/*` or other SvelteKit-only modules, and uses relative imports, so the worker (run with tsx) can load it. Pass config (e.g. the database URL) in as arguments. Only `src/lib/server/app.ts` and SvelteKit files read `$app/env/private`.
 - SvelteKit 3: environment variables are declared in `src/env.ts`; `resolve()` from `$app/paths` takes paths without a leading slash (`resolve('login')`).
-- Auth: Better Auth uses the `users` table (`name` -> `display_name`, `image` -> `avatar_url`) and `sessions`, `accounts`, `verifications`. Sign-up (password or OAuth) requires a row in `invites`; the username is chosen at password sign-up and derived from the e-mail for OAuth. No e-mails are sent yet (no verification, no password reset).
+- Auth: Better Auth uses the `users` table (`name` -> `display_name`, `image` -> `avatar_url`) and `sessions`, `accounts`, `verifications`. Sign-up (password or OAuth) requires a row in `invites`; the username is chosen at password sign-up and derived from the e-mail for OAuth. Only password reset sends e-mails (one-hour link, other sessions revoked); no e-mail verification yet.
 - Database changes: edit `schema.ts`, run `pnpm db:generate`, commit the generated migration. Things drizzle-kit cannot express (extensions, functions, triggers) go in a custom migration: `pnpm drizzle-kit generate --custom --name <name>`. Keep `docs/schema.sql` in sync when the schema changes.
 - Drizzle uses `casing: 'snake_case'`: camelCase in TypeScript, snake_case in SQL.
 - Fuzzy search compares `f_unaccent(lower(title))` so queries hit `media_titles_trgm_idx`.
@@ -93,5 +96,5 @@ scripts/backup.sh        nightly pg_dump into restic (host cron)
 - Home page discovery: trending and recommendations go through the `provider-discover` job (cached 1 day) and are streamed; provider suggestions not yet in the catalogue are opened with `search?/open` (import without adding).
 - Dates are formatted on the server in `Europe/Paris` (`calendar.ts`), so pages do not depend on the browser timezone.
 - Scores are stored out of 100; progress is generic (`progress` = episodes/chapters/pages, `progress_secondary` = seasons/volumes).
-- Images are hot-linked from provider CDNs, never re-hosted.
+- Images are hot-linked from provider CDNs, never re-hosted. Only avatars are stored: cropped to 256 px in the browser, at most 300 KB, type checked from the bytes, kept in the `avatars` table (backed up by pg_dump).
 - RAM matters (shared small VPS): avoid adding services or heavy dependencies without asking.
