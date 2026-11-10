@@ -115,7 +115,8 @@ export function createOpenLibraryClient(
 					),
 					status: 'finished',
 					startDate: doc?.first_publish_year ? `${doc.first_publish_year}-01-01` : null,
-					posterUrl: cover(work.covers?.[0] ?? doc?.cover_i, 'L'),
+					// Deleted covers are listed as -1
+					posterUrl: cover(work.covers?.find((c) => c > 0) ?? doc?.cover_i, 'L'),
 					totalUnits: doc?.number_of_pages_median ?? null,
 					extra: {
 						authors: doc?.author_name ?? [],

@@ -1,12 +1,26 @@
 <script lang="ts">
 	import { goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { page } from '$app/state';
+	import { navigating, page } from '$app/state';
 	import { authClient } from '#lib/auth-client.ts';
+	import MediaSkeleton from '#lib/components/MediaSkeleton.svelte';
 	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
+	import { opening } from '#lib/opening.svelte.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
+
+	// Placeholder while a work loads, only past a short delay so fast loads do not flash
+	const loadingMedia = $derived(opening.active || navigating.to?.route.id === '/(app)/media/[id]');
+	let showSkeleton = $state(false);
+	$effect(() => {
+		if (!loadingMedia) return void (showSkeleton = false);
+		const timer = setTimeout(() => {
+			showSkeleton = true;
+			scrollTo(0, 0);
+		}, 150);
+		return () => clearTimeout(timer);
+	});
 
 	const links = [
 		{ href: resolve(''), label: 'Accueil' },
@@ -39,7 +53,13 @@
 					class="rounded-[10px] px-3.5 py-2.5 no-underline {current
 						? 'bg-surface-2 font-semibold text-ink'
 						: 'text-muted hover:text-ink'}"
-					aria-current={current ? 'page' : undefined}>{link.label}</a
+					aria-current={current ? 'page' : undefined}
+					><!-- The hidden bold copy keeps the width fixed when the link becomes current --><span
+						class="inline-grid"
+						><span class="invisible col-start-1 row-start-1 font-semibold">{link.label}</span><span
+							class="col-start-1 row-start-1">{link.label}</span
+						></span
+					></a
 				>
 			{/each}
 		</nav>
@@ -89,7 +109,11 @@
 </header>
 
 <main class="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-12">
-	{@render children()}
+	{#if showSkeleton}
+		<MediaSkeleton />
+	{:else}
+		{@render children()}
+	{/if}
 </main>
 
 <footer class="mx-auto max-w-6xl border-t border-line px-4 pt-8 pb-12 text-xs text-muted sm:px-6">

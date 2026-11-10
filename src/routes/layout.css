@@ -84,6 +84,10 @@
 }
 
 @layer base {
+	/* Same width with or without a scrollbar, so centred content never shifts between pages */
+	html {
+		scrollbar-gutter: stable;
+	}
 	body {
 		@apply bg-bg font-sans text-[15px] leading-normal text-ink antialiased;
 	}
@@ -127,4 +131,29 @@
 }
 @utility h2 {
 	@apply font-display text-[22px] font-bold;
+}
+/* Loading placeholder: an oblique highlight sweeping from right to left. The gradient is
+   4x the box, so the slanted band is fully outside at both ends and the loop is seamless
+   (checked down to a 2:3 poster). */
+@utility shimmer {
+	background: linear-gradient(
+			110deg,
+			transparent 45%,
+			color-mix(in oklab, var(--c-ink) 7%, transparent) 50%,
+			transparent 55%
+		)
+		var(--c-surface-2);
+	background-size: 400% 100%;
+	animation: shimmer 1.6s linear infinite;
+	@media (prefers-reduced-motion: reduce) {
+		animation: none;
+	}
+}
+@keyframes shimmer {
+	from {
+		background-position: 0% 0;
+	}
+	to {
+		background-position: 100% 0;
+	}
 }

@@ -34,13 +34,19 @@
 	const field = 'field w-full';
 	const label = 'flex flex-col gap-1.5 text-[13px] text-muted';
 	let progress = $derived(entry?.progress ?? 0);
+	let confirmRemove = $state(false);
+	// Closed again once the entry changes (removed, re-added, or another work opened)
+	$effect(() => {
+		void entry?.id;
+		confirmRemove = false;
+	});
 </script>
 
 <svelte:head><title>{m.title} · Vulu</title></svelte:head>
 
 <div class="flex flex-wrap items-start gap-12">
 	<article class="flex min-w-0 flex-[999_1_560px] flex-wrap gap-8">
-		<Poster src={m.posterUrl} title={m.title} class="w-44 rounded-2xl sm:w-60" />
+		<Poster src={m.posterUrl} title={m.title} class="w-44 self-start rounded-2xl sm:w-60" />
 		<div class="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5">
 			<div><TypeTag type={m.type} /></div>
 			<h1
@@ -240,18 +246,23 @@
 					{#if form?.saved}<p role="status" class="text-sm text-success">Enregistré.</p>{/if}
 				</div>
 			</form>
-			<form
-				method="post"
-				action="?/remove"
-				use:enhance={({ cancel }) => {
-					if (!confirm('Retirer cette œuvre de ta bibliothèque ?')) cancel();
-				}}
-			>
-				<input type="hidden" name="entryId" value={entry.id} />
-				<button class="min-h-11 cursor-pointer text-sm text-danger underline"
-					>Retirer de ma bibliothèque</button
+			<!-- Confirmed in the page: native confirm() is blocked in some browsers and webviews -->
+			{#if confirmRemove}
+				<form method="post" action="?/remove" use:enhance class="flex flex-wrap items-center gap-3">
+					<input type="hidden" name="entryId" value={entry.id} />
+					<p class="text-sm">Retirer cette œuvre de ta bibliothèque ?</p>
+					<button class="btn bg-danger text-sm text-bg">Retirer</button>
+					<button type="button" class="btn-ghost text-sm" onclick={() => (confirmRemove = false)}
+						>Annuler</button
+					>
+				</form>
+			{:else}
+				<button
+					type="button"
+					class="min-h-11 cursor-pointer self-start text-sm text-danger underline"
+					onclick={() => (confirmRemove = true)}>Retirer de ma bibliothèque</button
 				>
-			</form>
+			{/if}
 		{/if}
 	</section>
 

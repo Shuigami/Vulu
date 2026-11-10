@@ -15,7 +15,6 @@ SvelteKit 3 + TypeScript (strict, adapter-node), PostgreSQL 16, Drizzle ORM (nod
 | `pnpm db:up`          | Start PostgreSQL 16 in Docker (`docker-compose.dev.yml`)           |
 | `pnpm db:migrate`     | Apply migrations in `drizzle/`                                     |
 | `pnpm db:generate`    | Generate a migration from changes in `src/lib/server/db/schema.ts` |
-| `pnpm db:seed`        | Insert demo data (idempotent)                                      |
 | `pnpm invite <email>` | Invite an e-mail address (sign-up is invite-only during the beta)  |
 | `pnpm dev`            | SvelteKit dev server                                               |
 | `pnpm worker:dev`     | Worker (pg-boss) in watch mode                                     |
@@ -33,7 +32,7 @@ docs/                    spec and reference schema (source of truth, French)
 drizzle/                 SQL migrations (0000 and 0002 are hand-written), meta/ is generated
 src/env.ts               app environment variables, validated at startup ($app/env/private)
 src/hooks.server.ts      session -> locals.user / locals.session, serves /api/auth/*
-src/lib/server/db/       schema.ts (Drizzle), index.ts (createDb), seed.ts, invite.ts
+src/lib/server/db/       schema.ts (Drizzle), index.ts (createDb), invite.ts
 src/lib/server/auth/     createAuth (Better Auth on the users table, invite check, usernames)
 src/lib/server/app.ts    app-only singletons: db, auth (reads $app/env/private)
 src/lib/server/providers/ TMDB, AniList, Open Library clients (rate limiter, retries in http.ts, cache.ts)
