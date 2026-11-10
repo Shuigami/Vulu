@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { flip } from 'svelte/animate';
 	import type { TransitionConfig } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
@@ -21,6 +22,11 @@
 					duration: 320,
 					css: (t: number) => `transform: scale(${1 + 0.45 * Math.sin(Math.PI * t)})`
 				};
+	// After +1 the work moves to the front of "Reprendre" (most recent first): the cards glide there
+	const glide = (node: Element, move: { from: DOMRect; to: DOMRect }) =>
+		flip(node, move, {
+			duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 450
+		});
 	let pending = $state<number | null>(null);
 	const singular = { épisodes: 'épisode', chapitres: 'chapitre', pages: 'page' } as Record<
 		string,
@@ -120,7 +126,7 @@
 					{@const unit = unitLabel[e.type]}
 					{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
 					<!-- The whole card opens the work (the title link covers it), except the +1 button -->
-					<li class="group relative flex gap-4 card p-3.5 tile-frame">
+					<li animate:glide class="group relative flex gap-4 card p-3.5 tile-frame">
 						<Poster src={e.posterUrl} title={e.title} class="w-21 rounded-[10px]" />
 						<div class="flex min-w-0 flex-1 flex-col gap-1.5">
 							<div><TypeTag type={e.type} /></div>
