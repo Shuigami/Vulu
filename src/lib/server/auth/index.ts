@@ -6,6 +6,7 @@ import { APIError } from 'better-auth/api';
 import { eq } from 'drizzle-orm';
 import type { Db } from '../db';
 import { accounts, invites, sessions, users, verifications } from '../db/schema';
+import { createMailer, resetPasswordMail, type SendMail } from '../mail';
 import { availableUsername, USERNAME_RE, usernameBase } from './username';
 
 type OAuthCredentials = { clientId: string; clientSecret: string };
@@ -15,6 +16,8 @@ export type AuthConfig = {
 	baseURL: string;
 	google?: OAuthCredentials;
 	github?: OAuthCredentials;
+	/** Defaults to printing e-mails to the console. */
+	sendMail?: SendMail;
 };
 
 /** Error codes returned to the client, translated in src/lib/auth-errors.ts. */
@@ -25,6 +28,7 @@ export const AUTH_ERRORS = {
 } as const;
 
 export function createAuth(db: Db, config: AuthConfig) {
+	const sendMail = config.sendMail ?? createMailer();
 	return betterAuth({
 		secret: config.secret,
 		baseURL: config.baseURL,
@@ -45,8 +49,18 @@ export function createAuth(db: Db, config: AuthConfig) {
 		account: { modelName: 'accounts' },
 		verification: { modelName: 'verifications' },
 		advanced: { database: { generateId: 'uuid' } },
-		// shortcut: no e-mail verification nor password reset until an e-mail provider is chosen.
-		emailAndPassword: { enabled: true },
+		// shortcut: no e-mail verification yet, only password reset sends e-mails.
+		emailAndPassword: {
+			enabled: true,
+			resetPasswordTokenExpiresIn: 60 * 60,
+			revokeSessionsOnPasswordReset: true,
+			sendResetPassword: async ({ user, url }) => {
+				// Not awaited: answer time must not reveal whether the address has an account
+				void sendMail(resetPasswordMail(user.email, user.name || 'toi', url)).catch((err) =>
+					console.error('[auth] reset e-mail failed', err)
+				);
+			}
+		},
 		socialProviders: {
 			...(config.google && { google: config.google }),
 			...(config.github && { github: config.github })

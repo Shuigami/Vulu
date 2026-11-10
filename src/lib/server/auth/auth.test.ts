@@ -3,6 +3,7 @@ import { like } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDb } from '../db';
 import { invites, users } from '../db/schema';
+import type { Mail } from '../mail';
 import { createAuth } from '.';
 import { usernameBase } from './username';
 
@@ -82,5 +83,50 @@ describe('usernameBase', () => {
 		expect(usernameBase('a')).toBe('a__');
 		expect(usernameBase('...')).toBe('user');
 		expect(usernameBase('x'.repeat(40))).toHaveLength(24);
+	});
+});
+
+describe('password reset', () => {
+	const sent: Mail[] = [];
+	const mailing = createAuth(db, {
+		secret: 'test-secret-test-secret-test-secret',
+		baseURL: 'http://localhost:5173',
+		sendMail: async (mail) => void sent.push(mail)
+	});
+	const tick = () => new Promise((r) => setTimeout(r, 50));
+
+	it('mails a one-hour link and sets the new password with its token', async () => {
+		const address = email('forgetful');
+		await invite(address);
+		await signUp({ email: address, username: `forget_${domain.slice(0, 8)}` });
+
+		await mailing.api.requestPasswordReset({
+			body: { email: address, redirectTo: '/reset-password' }
+		});
+		await tick();
+		expect(sent).toHaveLength(1);
+		expect(sent[0].to).toBe(address);
+		const token = sent[0].text.match(/\/reset-password\/([^?\s]+)/)?.[1];
+		expect(token).toBeTruthy();
+
+		await mailing.api.resetPassword({ body: { token: token!, newPassword: 'new horse battery' } });
+		await expect(
+			auth.api.signInEmail({ body: { email: address, password: 'correct horse battery' } })
+		).rejects.toBeDefined();
+		const signIn = await auth.api.signInEmail({
+			body: { email: address, password: 'new horse battery' }
+		});
+		expect(signIn.user.email).toBe(address);
+		// A token works once
+		await expect(
+			mailing.api.resetPassword({ body: { token: token!, newPassword: 'third horse battery' } })
+		).rejects.toBeDefined();
+	});
+
+	it('answers the same for an unknown address and sends nothing', async () => {
+		const before = sent.length;
+		await mailing.api.requestPasswordReset({ body: { email: email('nobody') } });
+		await tick();
+		expect(sent).toHaveLength(before);
 	});
 });
