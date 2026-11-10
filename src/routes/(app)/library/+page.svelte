@@ -17,6 +17,7 @@
 	type Query = { type?: string | null; status?: string | null; page?: number };
 	// Filters keep the search and the sort; changing a filter goes back to page 1
 	const href = (change: Query) => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- built and read once, not state
 		const params = new URLSearchParams();
 		const type = 'type' in change ? change.type : data.type;
 		const status = 'status' in change ? change.status : data.status;
