@@ -1,6 +1,8 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
+	import { opening } from '#lib/opening.svelte.ts';
 
 	/** A work in the catalogue (`mediaId`) or a provider result, imported when opened. */
 	type Item = {
@@ -40,7 +42,17 @@
 					</span>
 				</a>
 			{:else}
-				<form method="post" action="{resolve('search')}?/open">
+				<form
+					method="post"
+					action="{resolve('search')}?/open"
+					use:enhance={() => {
+						opening.active = true;
+						return async ({ update }) => {
+							await update();
+							opening.active = false;
+						};
+					}}
+				>
 					<input type="hidden" name="type" value={i.type} />
 					<input type="hidden" name="provider" value={i.provider} />
 					<input type="hidden" name="externalId" value={i.externalId} />
