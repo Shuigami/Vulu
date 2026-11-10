@@ -141,7 +141,7 @@ describe('Open Library client', () => {
 						type: { key: '/type/work' },
 						title: 'Dune',
 						description: { type: '/type/text', value: 'Arrakis.' },
-						covers: [11481354],
+						covers: [-1, 11481354], // -1: a deleted cover
 						subjects: ['Science fiction']
 					})
 			],
