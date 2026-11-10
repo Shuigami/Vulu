@@ -97,10 +97,19 @@
 	:focus-visible {
 		@apply outline-2 outline-offset-2 outline-accent;
 	}
+	/* Press feedback: anything clickable sinks a little while held */
+	@media (prefers-reduced-motion: no-preference) {
+		:where(button, label:has(> input:is([type='checkbox'], [type='radio']))) {
+			transition: transform 120ms ease-out;
+		}
+		:where(button:not(:disabled), label:has(> input:is([type='checkbox'], [type='radio']))):active {
+			transform: scale(0.95);
+		}
+	}
 }
 
 @utility btn {
-	@apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 font-semibold no-underline disabled:cursor-default disabled:opacity-50;
+	@apply inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 font-semibold no-underline disabled:cursor-default disabled:opacity-50 motion-safe:transition motion-safe:not-disabled:active:scale-95;
 }
 @utility btn-accent {
 	@apply btn bg-accent text-on-accent;
@@ -118,7 +127,7 @@
 	@apply rounded-2xl border border-line bg-surface;
 }
 @utility chip {
-	@apply inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line px-4 text-sm font-semibold text-ink no-underline hover:border-muted;
+	@apply inline-flex min-h-10 items-center gap-1.5 rounded-full border border-line px-4 text-sm font-semibold text-ink no-underline hover:border-muted motion-safe:transition motion-safe:active:scale-95;
 }
 @utility chip-on {
 	@apply chip border-ink bg-ink text-bg hover:border-ink;

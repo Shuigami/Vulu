@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { TransitionConfig } from 'svelte/transition';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import ActivityFeed from '#lib/components/ActivityFeed.svelte';
@@ -12,6 +13,14 @@
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
+	// The count swells and settles when it changes (not on first render: intros are off)
+	const pop: (node: Element) => TransitionConfig = () =>
+		matchMedia('(prefers-reduced-motion: reduce)').matches
+			? { duration: 0 }
+			: {
+					duration: 320,
+					css: (t: number) => `transform: scale(${1 + 0.45 * Math.sin(Math.PI * t)})`
+				};
 	let pending = $state<number | null>(null);
 	const singular = { épisodes: 'épisode', chapitres: 'chapitre', pages: 'page' } as Record<
 		string,
@@ -135,9 +144,9 @@
 											/>
 										{/if}
 										<p class="text-[13px] text-muted tabular-nums">
-											<strong class="font-semibold text-ink">{e.progress}</strong>{e.totalUnits
-												? ` / ${e.totalUnits}`
-												: ''}
+											{#key e.progress}<strong in:pop class="inline-block font-semibold text-ink"
+													>{e.progress}</strong
+												>{/key}{e.totalUnits ? ` / ${e.totalUnits}` : ''}
 											{unit}
 										</p>
 									</div>
