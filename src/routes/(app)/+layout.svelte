@@ -5,7 +5,6 @@
 	import { authClient } from '#lib/auth-client.ts';
 	import Avatar from '#lib/components/Avatar.svelte';
 	import MediaSkeleton from '#lib/components/MediaSkeleton.svelte';
-	import ThemeToggle from '#lib/components/ThemeToggle.svelte';
 	import SearchBox from '#lib/components/SearchBox.svelte';
 	import Toaster from '#lib/components/Toaster.svelte';
 	import { opening } from '#lib/opening.svelte.ts';
@@ -113,7 +112,6 @@
 		</nav>
 		<SearchBox class="flex-[1_1_240px] max-md:order-last max-md:basis-full" />
 		<div class="ml-auto flex items-center gap-2">
-			<ThemeToggle />
 			<details bind:this={menu} class="relative">
 				<summary
 					aria-label="Mon compte"
