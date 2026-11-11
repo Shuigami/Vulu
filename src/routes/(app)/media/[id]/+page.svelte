@@ -393,12 +393,12 @@
 					</div>
 				{/if}
 
-				<!-- Phones: stars, score and the two icon buttons on a single line -->
+				<!-- Phones: stars and the two icon buttons on a single line -->
 				<div
 					class="{zone} flex-[1_1_220px] max-sm:flex-row max-sm:flex-wrap max-sm:items-center max-sm:justify-between max-sm:gap-x-1.5"
 				>
-					<label for="score" class="{zoneLabel} max-sm:sr-only">Ma note</label>
-					<div class="flex items-center gap-1.5 sm:gap-3">
+					<span class="{zoneLabel} max-sm:sr-only">Ma note</span>
+					<div class="flex items-center">
 						<div
 							class="flex text-line"
 							role="group"
@@ -409,7 +409,7 @@
 								{@const fill = Math.min(2, Math.max(0, halves - 2 * (i - 1)))}
 								<!-- Star i: a grey star, the accent star clipped to 0, 50 or 100 %, and two
 									 invisible half buttons on top (left = i - 0.5, right = i) -->
-								<span class="relative block size-[26px] p-0.5 sm:size-[30px]">
+								<span class="relative block size-[30px] p-0.5">
 									{#each [false, true] as accent (accent)}
 										<span
 											class="absolute inset-0.5 overflow-hidden {accent ? 'text-accent' : ''}"
@@ -418,7 +418,7 @@
 												aria-hidden="true"
 												viewBox="0 0 24 24"
 												fill="currentColor"
-												class="size-[22px] max-w-none sm:size-[26px]"
+												class="size-[26px] max-w-none"
 												><polygon
 													points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3"
 												></polygon></svg
@@ -440,20 +440,8 @@
 								</span>
 							{/each}
 						</div>
-						<p class="flex items-baseline font-display text-[22px] font-extrabold sm:text-[26px]">
-							<input
-								id="score"
-								name="score"
-								type="number"
-								min="0"
-								max={scale}
-								step={scale === 100 ? 1 : 0.5}
-								bind:value={score}
-								placeholder="–"
-								class="w-[3ch] rounded-lg bg-transparent text-right outline-offset-4 placeholder:text-muted"
-							/>
-							<span class="text-[15px] font-semibold text-muted">/{scale}</span>
-						</p>
+						<!-- The stars are the only control; the score travels in the user's scale -->
+						<input type="hidden" name="score" value={score ?? ''} />
 					</div>
 					<div class="flex gap-1 sm:gap-2">
 						<label
