@@ -153,7 +153,7 @@
 	const closeMenu = () => moreMenu?.open && (moreMenu.open = false);
 	// Unit hovered (or focused) in the grid: the units it would mark as seen are tinted
 	let previewTo = $state(0);
-	const zone = 'flex flex-col gap-2.5 bg-surface px-6 py-5';
+	const zone = 'flex flex-col gap-2.5 bg-surface px-4 py-3.5 sm:px-6 sm:py-5';
 	const zoneLabel = 'text-[13px] text-muted';
 </script>
 
@@ -310,9 +310,12 @@
 			<h2 class="sr-only">Mon suivi</h2>
 			<input type="hidden" name="entryId" value={entry.id} />
 			<div class="flex flex-wrap gap-px bg-line">
-				<label class="{zone} flex-[1_1_200px]">
+				<!-- Phones: the label sits beside the select, to keep the card short -->
+				<label
+					class="{zone} flex-[1_1_200px] max-sm:flex-row max-sm:items-center max-sm:justify-between"
+				>
 					<span class={zoneLabel}>Statut</span>
-					<select name="status" value={entry.status} class="field font-semibold">
+					<select name="status" value={entry.status} class="field font-semibold max-sm:min-w-44">
 						{#each ENTRY_STATUSES as s (s)}
 							<option value={s}>{statusLabel[s]}</option>
 						{/each}
@@ -332,7 +335,7 @@
 						</div>
 						<div class="flex flex-wrap items-center gap-4">
 							<p
-								class="flex items-baseline font-display text-[40px] leading-none font-extrabold tabular-nums"
+								class="flex items-baseline font-display text-[32px] leading-none font-extrabold tabular-nums sm:text-[40px]"
 							>
 								<input
 									id="progress"
@@ -344,12 +347,14 @@
 									style:width="{String(progress).length + 0.6}ch"
 									class="rounded-lg bg-transparent text-right outline-offset-4"
 								/>
-								{#if m.totalUnits}<span class="text-[22px] font-semibold text-muted"
+								{#if m.totalUnits}<span class="text-lg font-semibold text-muted sm:text-[22px]"
 										>&nbsp;/ {m.totalUnits}</span
 									>{/if}
 							</p>
 							{#if m.totalUnits}
-								<div class="flex min-w-36 flex-1 flex-col gap-1.5">
+								<div
+									class="flex min-w-36 flex-1 flex-col gap-1.5 max-sm:order-last max-sm:basis-full"
+								>
 									<Progress value={progress} max={m.totalUnits} label="Progression" />
 									<span class="text-xs text-muted"
 										>{Math.round((progress / m.totalUnits) * 100)} %{#if progress < m.totalUnits}
@@ -360,7 +365,7 @@
 									>
 								</div>
 							{/if}
-							<div class="flex gap-2">
+							<div class="flex gap-2 max-sm:ml-auto">
 								<button
 									type="button"
 									class="btn-ghost w-12 px-0 text-xl"
@@ -389,7 +394,7 @@
 				{/if}
 
 				<div class="{zone} flex-[1_1_220px]">
-					<label for="score" class={zoneLabel}>Ma note</label>
+					<label for="score" class="{zoneLabel} max-sm:sr-only">Ma note</label>
 					<div class="flex items-center gap-3">
 						<div
 							class="flex text-line"
@@ -543,34 +548,35 @@
 				/>{/if}
 
 			<div
-				class="flex flex-wrap items-center gap-x-7 gap-y-2 border-t border-line bg-bg/50 px-6 py-3 text-[13px] text-muted"
+				class="grid grid-cols-2 items-center gap-x-3 gap-y-2 border-t border-line bg-bg/50 px-4 py-3 text-[13px] text-muted sm:flex sm:flex-wrap sm:gap-x-7 sm:px-6"
 			>
-				<label class="flex items-center gap-2">
+				<!-- Phones: the two dates side by side, labels above -->
+				<label class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
 					Commencé le
 					<input
 						name="startedOn"
 						type="date"
 						value={entry.startedOn ?? ''}
-						class="field min-h-9 px-2 text-[13px]"
+						class="field min-h-9 min-w-0 px-2 text-[13px]"
 					/>
 				</label>
-				<label class="flex items-center gap-2">
+				<label class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
 					Terminé le
 					<input
 						name="completedOn"
 						type="date"
 						value={entry.completedOn ?? ''}
-						class="field min-h-9 px-2 text-[13px]"
+						class="field min-h-9 min-w-0 px-2 text-[13px]"
 					/>
 				</label>
 				{#if data.minutesSpent}
-					<span
+					<span class="col-span-2"
 						><strong class="text-ink">{duration(data.minutesSpent)}</strong>
 						{m.type === 'manga' || m.type === 'book' ? 'de lecture' : 'regardées'}</span
 					>
 				{/if}
-				{#if form?.error}<p role="alert" class="text-danger">{form.error}</p>{/if}
-				{#if form?.saved}<p role="status" class="text-success">Enregistré.</p>{/if}
+				{#if form?.error}<p role="alert" class="col-span-2 text-danger">{form.error}</p>{/if}
+				{#if form?.saved}<p role="status" class="col-span-2 text-success">Enregistré.</p>{/if}
 			</div>
 		</form>
 	{/if}
