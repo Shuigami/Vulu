@@ -1,0 +1,1 @@
+ALTER TABLE "users" ALTER COLUMN "rating_scale" SET DEFAULT 5;

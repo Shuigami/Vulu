@@ -36,7 +36,7 @@ CREATE TABLE users (
   display_name  text,
   avatar_url    text,
   locale        text NOT NULL DEFAULT 'fr',
-  rating_scale  smallint NOT NULL DEFAULT 10 CHECK (rating_scale IN (5, 10, 100)),
+  rating_scale  smallint NOT NULL DEFAULT 5 CHECK (rating_scale IN (5, 10, 100)),
   profile_visibility visibility NOT NULL DEFAULT 'public',
   plan          text NOT NULL DEFAULT 'free',          -- prêt pour le freemium
   created_at    timestamptz NOT NULL DEFAULT now(),

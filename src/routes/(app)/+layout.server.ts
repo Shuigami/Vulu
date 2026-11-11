@@ -9,7 +9,7 @@ export const load: LayoutServerLoad = ({ locals, url }) => {
 			// Always set: the sign-up hook picks one (src/lib/server/auth)
 			username: locals.user.username!,
 			displayName: locals.user.name,
-			ratingScale: locals.user.ratingScale ?? 10
+			ratingScale: locals.user.ratingScale ?? 5
 		}
 	};
 };

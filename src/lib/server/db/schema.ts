@@ -95,7 +95,7 @@ export const users = pgTable(
 		displayName: text(), // Better Auth "name"
 		avatarUrl: text(), // Better Auth "image"
 		locale: text().notNull().default('fr'),
-		ratingScale: smallint().notNull().default(10),
+		ratingScale: smallint().notNull().default(5),
 		profileVisibility: visibility().notNull().default('public'),
 		plan: text().notNull().default('free'),
 		createdAt: createdAt(),
