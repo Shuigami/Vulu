@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import Avatar from '#lib/components/Avatar.svelte';
 	import Poster from '#lib/components/Poster.svelte';
@@ -16,6 +17,7 @@
 		typeLabel,
 		unitLabel
 	} from '#lib/labels.ts';
+	import { postAction, toast } from '#lib/toast.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -114,25 +116,74 @@
 		await tick();
 		save();
 	}
-	const stars = $derived(entry?.score == null ? 0 : Math.round(entry.score / 20));
+	// Typed in the field or set from the stars, in the user's scale (null when not rated)
+	let score = $derived<number | null>(entry?.score == null ? null : toScale(entry.score, scale));
+	// Stars count in halves: 1 to 10 half-stars
+	let hovered = $state(0);
+	const rated = $derived(score == null ? 0 : Math.round((score / scale) * 10));
+	const halves = $derived(hovered || rated);
+	async function rate(h: number) {
+		// Clicking the current rating again clears it
+		score = h === rated ? null : toScale(h * 10, scale);
+		await tick();
+		save();
+	}
+	const undoAdd = async (entryId: number) => {
+		await postAction('?/remove', { entryId });
+		await invalidateAll();
+	};
 	const showGrid = $derived(
 		!!entry && !!m.totalUnits && m.totalUnits <= 200 && ['tv', 'anime', 'manga'].includes(m.type)
 	);
+	// Phones: a +1 bar stays at the bottom once the tracking block has scrolled out of view
+	let trackingVisible = $state(true);
+	$effect(() => {
+		if (!entryForm) return;
+		// Only once scrolled past it: below the fold at load, the bar would just repeat it
+		const observer = new IntersectionObserver(
+			([e]) => (trackingVisible = e.isIntersecting || e.boundingClientRect.top > 0)
+		);
+		observer.observe(entryForm);
+		return () => observer.disconnect();
+	});
+	// "More options" menu: placed under its button when opened; closed on scroll, a click
+	// elsewhere or Escape, since a fixed menu would not follow the page
+	let moreMenu: HTMLDetailsElement | undefined = $state();
+	let menuAt = $state({ top: 0, right: 0 });
+	const closeMenu = () => moreMenu?.open && (moreMenu.open = false);
+	// Unit hovered (or focused) in the grid: the units it would mark as seen are tinted
+	let previewTo = $state(0);
 	const zone = 'flex flex-col gap-2.5 bg-surface px-6 py-5';
 	const zoneLabel = 'text-[13px] text-muted';
 </script>
 
 <svelte:head><title>{m.title} · Vulu</title></svelte:head>
 
+<svelte:window
+	onscroll={closeMenu}
+	onresize={closeMenu}
+	onclick={(e) => {
+		if (moreMenu?.open && !e.composedPath().includes(moreMenu)) closeMenu();
+	}}
+	onkeydown={(e) => e.key === 'Escape' && closeMenu()}
+/>
+
 <div class="flex flex-col gap-10">
 	<div class="flex flex-col">
 		{#if m.backdropUrl}
-			<img
-				src={m.backdropUrl}
-				alt=""
-				referrerpolicy="no-referrer"
-				class="h-44 w-full rounded-3xl bg-surface-2 object-cover sm:h-80"
-			/>
+			<!-- The bottom fades into the page so the poster and title sit on it -->
+			<div class="relative overflow-hidden rounded-3xl">
+				<img
+					src={m.backdropUrl}
+					alt=""
+					referrerpolicy="no-referrer"
+					class="h-44 w-full bg-surface-2 object-cover sm:h-80"
+				/>
+				<div
+					class="absolute inset-0 bg-linear-to-t from-bg via-bg/30 via-35% to-transparent"
+					aria-hidden="true"
+				></div>
+			</div>
 		{/if}
 		<section
 			class="flex flex-wrap items-start gap-x-10 gap-y-6 {m.backdropUrl ? '-mt-20 sm:-mt-44' : ''}"
@@ -140,6 +191,7 @@
 			<Poster
 				src={m.posterUrl}
 				title={m.title}
+				type={m.type}
 				class="w-36 rounded-2xl sm:w-60 {m.backdropUrl
 					? 'ml-4 border-4 border-bg shadow-xl sm:ml-8'
 					: ''}"
@@ -207,7 +259,13 @@
 		<form
 			method="post"
 			action="?/add"
-			use:enhance
+			use:enhance={() =>
+				async ({ result, update }) => {
+					await update();
+					const added = data.entry;
+					if (result.type === 'success' && added)
+						toast('Ajouté à ta bibliothèque', () => undoAdd(added.id));
+				}}
 			class="flex flex-wrap items-center gap-x-7 gap-y-4 card rounded-[22px] px-6 py-5"
 		>
 			<div class="flex-[1_1_260px]">
@@ -230,9 +288,12 @@
 			id="entry"
 			method="post"
 			action="?/update"
-			use:enhance={() =>
-				async ({ update }) =>
-					update({ reset: false })}
+			use:enhance={({ action }) =>
+				async ({ result, update }) => {
+					await update({ reset: false });
+					if (action.search === '?/remove' && result.type === 'success')
+						toast('Retiré de ta bibliothèque');
+				}}
 			onchange={save}
 			class="overflow-hidden card rounded-[22px]"
 		>
@@ -320,18 +381,47 @@
 				<div class="{zone} flex-[1_1_220px]">
 					<label for="score" class={zoneLabel}>Ma note</label>
 					<div class="flex items-center gap-3">
-						<div class="flex text-line" aria-hidden="true">
+						<div
+							class="flex text-line"
+							role="group"
+							aria-label="Note en étoiles"
+							onmouseleave={() => (hovered = 0)}
+						>
 							{#each [1, 2, 3, 4, 5] as i (i)}
-								<svg
-									width="24"
-									height="24"
-									viewBox="0 0 24 24"
-									fill="currentColor"
-									class={i <= stars ? 'text-accent' : ''}
-									><polygon
-										points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3"
-									></polygon></svg
-								>
+								{@const fill = Math.min(2, Math.max(0, halves - 2 * (i - 1)))}
+								<!-- Star i: a grey star, the accent star clipped to 0, 50 or 100 %, and two
+									 invisible half buttons on top (left = i - 0.5, right = i) -->
+								<span class="relative block size-[30px] p-0.5">
+									{#each [false, true] as accent (accent)}
+										<span
+											class="absolute inset-0.5 overflow-hidden {accent ? 'text-accent' : ''}"
+											style:width={accent ? `${(fill / 2) * 26}px` : undefined}
+											><svg
+												aria-hidden="true"
+												width="26"
+												height="26"
+												viewBox="0 0 24 24"
+												fill="currentColor"
+												class="max-w-none"
+												><polygon
+													points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3"
+												></polygon></svg
+											></span
+										>
+									{/each}
+									{#each [2 * i - 1, 2 * i] as h (h)}
+										<button
+											type="button"
+											class="absolute inset-y-0 w-1/2 cursor-pointer rounded {h % 2
+												? 'left-0'
+												: 'right-0'}"
+											aria-label="{String(h / 2).replace('.', ',')} étoile{h >= 4 ? 's' : ''} sur 5"
+											aria-pressed={h === rated}
+											onmouseenter={() => (hovered = h)}
+											onclick={() => rate(h)}
+										></button>
+									{/each}
+								</span>
 							{/each}
 						</div>
 						<p class="flex items-baseline font-display text-[26px] font-extrabold">
@@ -342,7 +432,7 @@
 								min="0"
 								max={scale}
 								step={scale === 100 ? 1 : 0.5}
-								value={entry.score === null ? '' : toScale(entry.score, scale)}
+								bind:value={score}
 								placeholder="–"
 								class="w-[3ch] rounded-lg bg-transparent text-right outline-offset-4 placeholder:text-muted"
 							/>
@@ -373,10 +463,14 @@
 							>
 							Favori
 						</label>
-						<details class="relative">
+						<details bind:this={moreMenu}>
 							<summary
 								aria-label="Plus d’options"
 								class="btn-ghost min-h-10 w-11 list-none bg-surface px-0 [&::-webkit-details-marker]:hidden"
+								onclick={(e) => {
+									const r = e.currentTarget.getBoundingClientRect();
+									menuAt = { top: r.bottom + 8, right: innerWidth - r.right };
+								}}
 							>
 								<svg
 									aria-hidden="true"
@@ -388,7 +482,12 @@
 									></circle><circle cx="19" cy="12" r="2"></circle></svg
 								>
 							</summary>
-							<div class="absolute right-0 z-10 mt-2 flex w-72 flex-col gap-1 card p-2 shadow-xl">
+							<!-- Fixed, so the tracking card's rounded clipping (overflow-hidden) does not cut it -->
+							<div
+								class="fixed z-40 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-1 card p-2 shadow-xl"
+								style:top="{menuAt.top}px"
+								style:right="{menuAt.right}px"
+							>
 								<label class="flex min-h-11 items-center gap-2.5 px-2 text-sm">
 									<input
 										name="isPrivate"
@@ -498,8 +597,13 @@
 							>Clique un {singular(unit)} pour y placer ta progression</span
 						>
 					</div>
-					<ol class="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1.5">
+					<ol
+						class="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1.5"
+						onmouseleave={() => (previewTo = 0)}
+						onfocusout={() => (previewTo = 0)}
+					>
 						{#each Array.from({ length: m.totalUnits }, (_, i) => i + 1) as n (n)}
+							{@const preview = n > progress && n <= previewTo}
 							<li>
 								<button
 									type="button"
@@ -508,13 +612,18 @@
 										: n === progress + 1
 											? ', prochain'
 											: ''}"
-									class="h-11 w-full cursor-pointer rounded-[10px] text-sm font-semibold tabular-nums {n <=
+									class="h-11 w-full cursor-pointer rounded-[10px] text-sm font-semibold tabular-nums motion-safe:transition-colors {n <=
 									progress
 										? 'bg-accent text-on-accent'
-										: n === progress + 1
-											? 'border-2 border-ink bg-surface'
-											: 'bg-surface-2 text-muted hover:text-ink'}"
-									onclick={() => setProgress(n)}>{n}</button
+										: preview
+											? 'bg-accent/35 text-ink'
+											: 'bg-surface-2 text-muted'}"
+									onmouseenter={() => (previewTo = n)}
+									onfocus={() => (previewTo = n)}
+									onclick={() => {
+										previewTo = 0;
+										setProgress(n);
+									}}>{n}</button
 								>
 							</li>
 						{/each}
@@ -580,7 +689,22 @@
 				<h2 id="lists-title" class="h2">Mes listes</h2>
 				<div class="flex flex-col gap-1 card p-2">
 					{#each data.lists as l (l.id)}
-						<form method="post" action="?/toggleList" use:enhance>
+						<form
+							method="post"
+							action="?/toggleList"
+							use:enhance={() =>
+								async ({ result, update }) => {
+									await update();
+									if (result.type !== 'success') return;
+									// `l` is refreshed: `has` is the new state, the undo posts it to toggle back
+									const { id, name, has } = l;
+									const undo = async () => {
+										await postAction('?/toggleList', { listId: id, has: String(has) });
+										await invalidateAll();
+									};
+									toast(has ? `Ajouté à « ${name} »` : `Retiré de « ${name} »`, undo);
+								}}
+						>
 							<input type="hidden" name="listId" value={l.id} />
 							<input type="hidden" name="has" value={String(l.has)} />
 							<button
@@ -707,3 +831,19 @@
 		{/if}
 	</section>
 </div>
+
+{#if entry && unit && !trackingVisible && (!m.totalUnits || progress < m.totalUnits)}
+	<div
+		class="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 flex items-center gap-3 border-t border-line bg-surface/95 px-4 py-2.5 backdrop-blur md:hidden"
+	>
+		<div class="flex min-w-0 flex-1 flex-col">
+			<span class="truncate text-sm font-semibold">{m.title}</span>
+			<span class="text-[13px] text-muted tabular-nums"
+				>{progress}{m.totalUnits ? ` / ${m.totalUnits}` : ''} {unit}</span
+			>
+		</div>
+		<button type="button" class="btn-accent shrink-0" onclick={() => setProgress(progress + 1)}
+			>+1 {singular(unit)}</button
+		>
+	</div>
+{/if}
