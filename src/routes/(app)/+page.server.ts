@@ -4,6 +4,7 @@ import {
 	describeAirDate,
 	episodeLabel,
 	startOfToday,
+	TIMEZONE,
 	upcomingEpisodes
 } from '#lib/server/calendar.ts';
 import { popularOnVulu, recommendations, trending } from '#lib/server/discover.ts';
@@ -83,12 +84,17 @@ export const load: PageServerLoad = async ({ locals }) => {
 			return null;
 		});
 	const boss = getBoss();
+	const hour = Number(
+		new Intl.DateTimeFormat('en-GB', { hour: 'numeric', timeZone: TIMEZONE }).format(new Date())
+	);
 	return {
 		friends: feedView(friends.items).slice(0, 8),
 		popular,
 		trending: quiet(boss.then((b) => trending(db, b))),
 		discoveries: quiet(boss.then((b) => recommendations(db, b, userId))),
 		today: describeAirDate(new Date()).day,
+		evening: hour >= 17 || hour < 5,
+
 		entries,
 		week: groupWeek(upcoming)
 	};
