@@ -8,6 +8,7 @@
 	import SearchBox from '#lib/components/SearchBox.svelte';
 	import Toaster from '#lib/components/Toaster.svelte';
 	import { opening } from '#lib/opening.svelte.ts';
+	import { openSearch, searchUi } from '#lib/search-ui.svelte.ts';
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
@@ -64,6 +65,7 @@
 	$effect(() => {
 		void page.url.pathname;
 		if (menu) menu.open = false;
+		searchUi.open = false;
 	});
 
 	async function signOut() {
@@ -86,11 +88,13 @@
 />
 
 <header class="border-b border-line">
-	<div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-7 gap-y-3 px-4 py-3.5 sm:px-6">
+	<!-- Phones: one line (logo, magnifier, avatar); the magnifier swaps it for the search field -->
+	<div class="mx-auto flex max-w-6xl items-center gap-x-3 px-4 py-3 sm:px-6 md:gap-x-7 md:py-3.5">
 		<a
 			href={resolve('')}
-			class="font-display text-[26px] font-extrabold tracking-tight text-ink no-underline"
-			>vulu<span class="text-accent">.</span></a
+			class="font-display text-[26px] font-extrabold tracking-tight text-ink no-underline {searchUi.open
+				? 'max-md:hidden'
+				: ''}">vulu<span class="text-accent">.</span></a
 		>
 		<nav aria-label="Navigation principale" class="hidden gap-1 text-sm md:flex">
 			{#each links as link (link.href)}
@@ -110,8 +114,32 @@
 				>
 			{/each}
 		</nav>
-		<SearchBox class="flex-[1_1_240px] max-md:order-last max-md:basis-full" />
-		<div class="ml-auto flex items-center gap-2">
+		<SearchBox class="flex-[1_1_240px] {searchUi.open ? '' : 'max-md:hidden'}" />
+		{#if searchUi.open}
+			<button
+				type="button"
+				class="cursor-pointer text-sm font-semibold text-muted hover:text-ink md:hidden"
+				onclick={() => (searchUi.open = false)}>Annuler</button
+			>
+		{/if}
+		<div class="ml-auto flex items-center gap-2 {searchUi.open ? 'max-md:hidden' : ''}">
+			<button
+				type="button"
+				aria-label="Ouvrir la recherche"
+				class="flex size-10 cursor-pointer items-center justify-center rounded-full text-ink hover:bg-surface-2 md:hidden"
+				onclick={openSearch}
+				><svg
+					aria-hidden="true"
+					width="22"
+					height="22"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg
+				></button
+			>
 			<details bind:this={menu} class="relative">
 				<summary
 					aria-label="Mon compte"

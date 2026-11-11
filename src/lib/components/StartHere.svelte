@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { resolve } from '$app/paths';
+	import { openSearch } from '#lib/search-ui.svelte.ts';
 
 	/** Empty library or nothing in progress: points to the two ways of filling it. */
 	let { title }: { title: string } = $props();
@@ -14,12 +15,7 @@
 		</p>
 	</div>
 	<div class="flex flex-wrap gap-2">
-		<button
-			type="button"
-			class="btn-accent"
-			onclick={() => document.querySelector<HTMLInputElement>('input[name="q"]')?.focus()}
-			>Chercher une œuvre</button
-		>
+		<button type="button" class="btn-accent" onclick={openSearch}>Chercher une œuvre</button>
 		<a href={resolve('import')} class="btn-ghost">Importer ma bibliothèque</a>
 	</div>
 </div>
