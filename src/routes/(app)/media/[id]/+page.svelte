@@ -4,6 +4,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import Avatar from '#lib/components/Avatar.svelte';
+	import Marquee from '#lib/components/Marquee.svelte';
 	import Poster from '#lib/components/Poster.svelte';
 	import RatingHistogram from '#lib/components/RatingHistogram.svelte';
 	import Progress from '#lib/components/Progress.svelte';
@@ -219,7 +220,7 @@
 				>
 					{m.title}
 				</h1>
-				<p class="text-muted">
+				<Marquee class="text-muted">
 					{[
 						m.originalTitle !== m.title ? m.originalTitle : null,
 						year,
@@ -229,7 +230,7 @@
 					]
 						.filter(Boolean)
 						.join(' · ')}
-				</p>
+				</Marquee>
 				{#if extra.genres?.length}
 					<ul class="flex flex-wrap gap-1.5" aria-label="Genres">
 						{#each extra.genres as g (g)}

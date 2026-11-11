@@ -193,6 +193,27 @@
 		opacity: 0;
 	}
 }
+/* Marquee (src/lib/components/Marquee.svelte): still at first, scrolls to the end (25 px/s),
+   waits, then glides back */
+.marquee {
+	animation: marquee var(--duration) ease-in-out infinite;
+	@media (prefers-reduced-motion: reduce) {
+		animation: none;
+	}
+}
+@keyframes marquee {
+	0%,
+	20% {
+		transform: translateX(0);
+	}
+	75%,
+	90% {
+		transform: translateX(var(--shift));
+	}
+	100% {
+		transform: translateX(0);
+	}
+}
 @keyframes shimmer {
 	from {
 		background-position: 0% 0;
