@@ -186,7 +186,9 @@
 			</div>
 		{/if}
 		<section
-			class="flex flex-wrap items-start gap-x-10 gap-y-6 {m.backdropUrl ? '-mt-20 sm:-mt-44' : ''}"
+			class="relative flex flex-wrap items-start gap-x-10 gap-y-6 {m.backdropUrl
+				? '-mt-20 sm:-mt-44'
+				: ''}"
 		>
 			<Poster
 				src={m.posterUrl}
