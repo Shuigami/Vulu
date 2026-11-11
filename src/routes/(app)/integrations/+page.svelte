@@ -33,9 +33,9 @@
 
 <svelte:head><title>Intégrations · Vulu</title></svelte:head>
 
-<h1 class="h1">Intégrations</h1>
+<h1 class="sr-only">Intégrations</h1>
 
-<section class="mt-7 max-w-3xl card p-6" aria-labelledby="jellyfin-title">
+<section class="max-w-3xl card p-6" aria-labelledby="jellyfin-title">
 	<h2 id="jellyfin-title" class="h2">Jellyfin</h2>
 	<p class="mt-2.5 text-muted">
 		Coche automatiquement les films et épisodes que tu finis de regarder sur ton serveur Jellyfin.

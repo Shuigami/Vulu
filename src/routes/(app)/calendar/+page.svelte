@@ -34,10 +34,8 @@
 <div class="flex flex-col gap-7">
 	<div class="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
 		<div>
-			<h1 class="h1">Calendrier</h1>
-			<p class="mt-2.5 text-muted">
-				Prochains épisodes des séries et anime que tu suis · heure de Paris
-			</p>
+			<h1 class="sr-only">Calendrier</h1>
+			<p class="text-muted">Prochains épisodes des séries et anime que tu suis · heure de Paris</p>
 		</div>
 		<!-- eslint-disable svelte/no-navigation-without-resolve -- built on resolve('calendar') -->
 		<nav aria-label="Affichage" class="flex gap-1 card rounded-[14px] p-1">

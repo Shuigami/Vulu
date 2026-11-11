@@ -60,9 +60,7 @@
 <svelte:head><title>Bibliothèque · Vulu</title></svelte:head>
 
 <div class="flex flex-col gap-7">
-	<h1 class="h1">
-		Bibliothèque <span class="text-[32px] font-medium text-muted">{data.total}</span>
-	</h1>
+	<h1 class="sr-only">Bibliothèque</h1>
 
 	<!-- eslint-disable svelte/no-navigation-without-resolve -- href() builds on resolve() -->
 	<div class="flex flex-col gap-3">

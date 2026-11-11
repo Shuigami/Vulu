@@ -22,7 +22,7 @@
 
 <div class="mx-auto flex max-w-3xl flex-col gap-7">
 	{#if !data.q}
-		<h1 class="h1">Recherche</h1>
+		<h1 class="sr-only">Recherche</h1>
 		<p class="text-muted">Tape un titre dans la barre de recherche, en haut.</p>
 	{:else}
 		<div class="flex flex-col gap-4">

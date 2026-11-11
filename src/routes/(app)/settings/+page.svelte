@@ -61,7 +61,7 @@
 <svelte:head><title>Réglages · Vulu</title></svelte:head>
 
 <div class="flex max-w-xl flex-col gap-7">
-	<h1 class="h1">Réglages</h1>
+	<h1 class="sr-only">Réglages</h1>
 	<form
 		method="post"
 		action="?/profile"

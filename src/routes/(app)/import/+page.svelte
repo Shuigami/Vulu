@@ -48,10 +48,8 @@
 
 <svelte:head><title>Importer · Vulu</title></svelte:head>
 
-<h1 class="h1">Importer ma bibliothèque</h1>
-<p class="mt-2.5 text-muted">
-	Les œuvres déjà présentes dans ta bibliothèque Vulu ne sont pas modifiées.
-</p>
+<h1 class="sr-only">Importer ma bibliothèque</h1>
+<p class="text-muted">Les œuvres déjà présentes dans ta bibliothèque Vulu ne sont pas modifiées.</p>
 
 {#if form?.error}<p role="alert" class="mt-3 text-sm text-danger">{form.error}</p>{/if}
 {#if form?.started}<p role="status" class="mt-3 text-sm text-success">Import lancé.</p>{/if}

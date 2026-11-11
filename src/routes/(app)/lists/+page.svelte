@@ -9,7 +9,7 @@
 <svelte:head><title>Mes listes · Vulu</title></svelte:head>
 
 <div class="flex flex-col gap-9">
-	<h1 class="h1">Mes listes</h1>
+	<h1 class="sr-only">Mes listes</h1>
 
 	<form
 		method="post"
