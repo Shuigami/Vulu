@@ -52,7 +52,7 @@
 		{ value: 'score', label: 'Note' }
 	];
 	const tab = (active: boolean) =>
-		`-mb-px border-b-2 px-3.5 py-2.5 text-sm no-underline ${active ? 'border-accent font-semibold text-ink' : 'border-transparent text-muted hover:text-ink'}`;
+		`border-b-2 px-3.5 py-2.5 text-sm no-underline ${active ? 'border-accent font-semibold text-ink' : 'border-transparent text-muted hover:text-ink'}`;
 	const scale = $derived(data.user.ratingScale);
 	const allCount = $derived(Object.values(data.counts).reduce((a, b) => a + b, 0));
 </script>
@@ -66,8 +66,8 @@
 
 	<!-- eslint-disable svelte/no-navigation-without-resolve -- href() builds on resolve() -->
 	<div class="flex flex-col gap-3">
-		<div class="flex flex-wrap items-center justify-between gap-2">
-			<nav class="flex flex-wrap gap-2" aria-label="Filtrer par type">
+		<div class="scroll-row items-center justify-between">
+			<nav class="flex gap-2 md:flex-wrap" aria-label="Filtrer par type">
 				<a
 					href={href({ type: null })}
 					class={!data.type ? 'chip-on' : 'chip'}
@@ -99,7 +99,11 @@
 				>Favoris</a
 			>
 		</div>
-		<nav class="flex flex-wrap gap-1 border-b border-line" aria-label="Filtrer par statut">
+		<!-- Inset line rather than a border: the scrolling row would clip tabs overlapping it -->
+		<nav
+			class="scroll-row gap-1 shadow-[inset_0_-1px_0_var(--c-line)]"
+			aria-label="Filtrer par statut"
+		>
 			<a
 				href={href({ status: null })}
 				class={tab(!data.status)}

@@ -133,6 +133,15 @@
 @utility tile-frame {
 	@apply outline-2 outline-offset-0 outline-transparent group-hover:outline-offset-2 group-hover:outline-accent group-focus-visible:outline-offset-2 group-focus-visible:outline-accent hover:outline-offset-2 hover:outline-accent motion-safe:transition-[outline-color,outline-offset] motion-safe:duration-200;
 }
+/* A row of filters: wraps on wide screens; on phones and tablets a single line scrolled
+   sideways, running to the screen edges (cancels the page gutter of <main>) */
+@utility scroll-row {
+	@apply flex gap-2 max-md:-mx-4 max-md:[scrollbar-width:none] max-md:flex-nowrap max-md:overflow-x-auto max-md:px-4 sm:max-md:-mx-6 sm:max-md:px-6 md:flex-wrap;
+	& > * {
+		flex-shrink: 0;
+		white-space: nowrap;
+	}
+}
 @utility chip-on {
 	@apply chip border-ink bg-ink text-bg hover:border-ink;
 }

@@ -32,7 +32,7 @@
 				Résultats pour <span class="text-accent-ink">« {data.q} »</span>
 			</h1>
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- filterHref() builds on resolve() -->
-			<nav class="flex flex-wrap gap-2" aria-label="Filtrer par type">
+			<nav class="scroll-row" aria-label="Filtrer par type">
 				{#each [undefined, ...MEDIA_TYPES] as type (type ?? 'all')}
 					<a
 						href={filterHref(type)}

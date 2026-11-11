@@ -193,7 +193,7 @@
 	<section aria-labelledby="trending" class="flex flex-col gap-5">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<h2 id="trending" class="h2">Tendances de la semaine</h2>
-			<div class="flex flex-wrap gap-2" role="group" aria-label="Type de tendances">
+			<div class="scroll-row" role="group" aria-label="Type de tendances">
 				{#each MEDIA_TYPES as t (t)}
 					<button
 						type="button"
