@@ -73,7 +73,8 @@ scripts/backup.sh        nightly pg_dump into restic (host cron)
 - One image runs the app (`node build`), the worker and `migrate.ts` (`node --import tsx …`, so `tsx` is a runtime dependency). The build validates `src/env.ts`, hence the placeholder values in the Dockerfile; real values are read at runtime.
 - The compose project is `vulu-prod`, not `vulu`, which is the dev database's project.
 - The app sets `ORIGIN`, `BETTER_AUTH_URL` and `DATABASE_URL` from `VULU_DOMAIN` and `POSTGRES_PASSWORD`. `BODY_SIZE_LIMIT` must stay above the 5 MB import cap.
-- Deployment to the VPS is not done yet (no server). See the README.
+- Deployed at https://vulu.shuii.net on a netcup VPS (Debian 13, 4 GB) shared with other projects: SSH as `shui` (key only), stack in `/srv/vulu`, shared Caddy in `/srv/proxy` (`deploy/proxy/`, the bundled caddy is disabled by `docker-compose.override.yml`). Release: push a `v*` tag, then `docker compose pull && docker compose up -d` in `/srv/vulu`.
+- netcup blocks outbound 25/465/587: mail goes through Brevo on port 2525. Nightly restic backup to Cloudflare R2 (shui's crontab, 03:30 UTC, log in `/srv/vulu/backup.log`).
 
 ## Conventions
 
