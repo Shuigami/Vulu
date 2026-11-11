@@ -409,18 +409,16 @@
 								{@const fill = Math.min(2, Math.max(0, halves - 2 * (i - 1)))}
 								<!-- Star i: a grey star, the accent star clipped to 0, 50 or 100 %, and two
 									 invisible half buttons on top (left = i - 0.5, right = i) -->
-								<span class="relative block size-[30px] p-0.5">
+								<span class="relative block size-[26px] p-0.5 sm:size-[30px]">
 									{#each [false, true] as accent (accent)}
 										<span
 											class="absolute inset-0.5 overflow-hidden {accent ? 'text-accent' : ''}"
-											style:width={accent ? `${(fill / 2) * 26}px` : undefined}
+											style:width={accent ? `calc((100% - 4px) * ${fill / 2})` : undefined}
 											><svg
 												aria-hidden="true"
-												width="26"
-												height="26"
 												viewBox="0 0 24 24"
 												fill="currentColor"
-												class="max-w-none"
+												class="size-[22px] max-w-none sm:size-[26px]"
 												><polygon
 													points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3"
 												></polygon></svg
@@ -572,12 +570,6 @@
 						class="field min-h-9 min-w-0 px-2 text-[13px]"
 					/>
 				</label>
-				{#if data.minutesSpent}
-					<span class="col-span-2"
-						><strong class="text-ink">{duration(data.minutesSpent)}</strong>
-						{m.type === 'manga' || m.type === 'book' ? 'de lecture' : 'regardées'}</span
-					>
-				{/if}
 				{#if form?.error}<p role="alert" class="col-span-2 text-danger">{form.error}</p>{/if}
 				{#if form?.saved}<p role="status" class="col-span-2 text-success">Enregistré.</p>{/if}
 			</div>
@@ -771,6 +763,16 @@
 							<dd class="text-right font-semibold">{v}</dd>
 						</div>
 					{/each}
+					{#if data.minutesSpent}
+						<div class="flex justify-between gap-4 border-b border-line py-2.75 text-sm">
+							<dt class="text-muted">
+								{m.type === 'manga' || m.type === 'book'
+									? 'Mon temps de lecture'
+									: 'Mon temps passé'}
+							</dt>
+							<dd class="text-right font-semibold">{duration(data.minutesSpent)}</dd>
+						</div>
+					{/if}
 					{#if sourceUrl}
 						<div class="py-3">
 							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external link -->
