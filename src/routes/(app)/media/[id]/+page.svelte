@@ -393,9 +393,12 @@
 					</div>
 				{/if}
 
-				<div class="{zone} flex-[1_1_220px]">
+				<!-- Phones: stars, score and the two icon buttons on a single line -->
+				<div
+					class="{zone} flex-[1_1_220px] max-sm:flex-row max-sm:flex-wrap max-sm:items-center max-sm:justify-between max-sm:gap-x-1.5"
+				>
 					<label for="score" class="{zoneLabel} max-sm:sr-only">Ma note</label>
-					<div class="flex items-center gap-3">
+					<div class="flex items-center gap-1.5 sm:gap-3">
 						<div
 							class="flex text-line"
 							role="group"
@@ -439,7 +442,7 @@
 								</span>
 							{/each}
 						</div>
-						<p class="flex items-baseline font-display text-[26px] font-extrabold">
+						<p class="flex items-baseline font-display text-[22px] font-extrabold sm:text-[26px]">
 							<input
 								id="score"
 								name="score"
@@ -454,9 +457,9 @@
 							<span class="text-[15px] font-semibold text-muted">/{scale}</span>
 						</p>
 					</div>
-					<div class="flex gap-2">
+					<div class="flex gap-1 sm:gap-2">
 						<label
-							class="btn-ghost min-h-10 flex-1 bg-surface text-[13px] has-checked:border-anime has-focus-visible:outline-2 has-focus-visible:outline-accent"
+							class="btn-ghost min-h-10 flex-1 bg-surface text-[13px] has-checked:border-anime has-focus-visible:outline-2 has-focus-visible:outline-accent max-sm:w-10 max-sm:flex-none max-sm:px-0"
 						>
 							<input
 								name="isFavorite"
@@ -476,12 +479,12 @@
 									d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"
 								></path></svg
 							>
-							Favori
+							<span class="max-sm:sr-only">Favori</span>
 						</label>
 						<details bind:this={moreMenu}>
 							<summary
 								aria-label="Plus d’options"
-								class="btn-ghost min-h-10 w-11 list-none bg-surface px-0 [&::-webkit-details-marker]:hidden"
+								class="btn-ghost min-h-10 w-10 list-none bg-surface px-0 sm:w-11 [&::-webkit-details-marker]:hidden"
 								onclick={(e) => {
 									const r = e.currentTarget.getBoundingClientRect();
 									menuAt = { top: r.bottom + 8, right: innerWidth - r.right };
