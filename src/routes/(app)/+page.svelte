@@ -46,12 +46,7 @@
 <svelte:head><title>Accueil · Vulu</title></svelte:head>
 
 <div class="flex flex-col gap-14">
-	<div>
-		<p class="eyebrow first-letter:uppercase">{data.today}</p>
-		<h1 class="mt-1.5 h1">
-			{data.evening ? 'Bonsoir' : 'Bonjour'}, {data.user.displayName || data.user.username}
-		</h1>
-	</div>
+	<h1 class="sr-only">Accueil</h1>
 
 	<section aria-labelledby="resume" class="flex flex-col gap-5">
 		<h2 id="resume" class="h2">Reprendre</h2>
