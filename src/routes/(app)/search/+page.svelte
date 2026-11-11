@@ -74,7 +74,7 @@
 				<ul class="flex flex-col gap-2">
 					{#each data.local as m (m.id)}
 						<li class="flex items-center gap-4 card rounded-[14px] py-2.5 pr-3.5 pl-2.5">
-							<Poster src={m.posterUrl} title={m.title} class="w-13 rounded-lg" />
+							<Poster src={m.posterUrl} title={m.title} type={m.type} class="w-13 rounded-lg" />
 							<div class="min-w-0 flex-1">
 								<a
 									href={resolve('/(app)/media/[id]', { id: String(m.id) })}
@@ -111,7 +111,7 @@
 								<li
 									class="flex items-center gap-4 rounded-[14px] border border-dashed border-line py-2.5 pr-3.5 pl-2.5"
 								>
-									<Poster src={r.posterUrl} title={r.title} class="w-13 rounded-lg" />
+									<Poster src={r.posterUrl} title={r.title} type={r.type} class="w-13 rounded-lg" />
 									<div class="min-w-0 flex-1">
 										<p class="text-base font-semibold">{r.title}</p>
 										<p class="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted">

@@ -1,10 +1,23 @@
 <script lang="ts">
+	import type { MediaType } from '#lib/labels.ts';
+
 	// Hot-linked from the provider CDN (no re-hosting, see docs/v1-spec.md).
 	let {
 		src,
 		title,
+		type,
 		class: cls = 'w-12 rounded-lg'
-	}: { src: string | null; title: string; class?: string } = $props();
+	}: { src: string | null; title: string; type?: MediaType; class?: string } = $props();
+
+	// Fades in once loaded. Images already loaded (cached, or before hydration) show at once,
+	// and without JavaScript nothing is hidden.
+	function fadeIn(img: HTMLImageElement) {
+		if (img.complete) return;
+		img.style.opacity = '0';
+		const show = () => (img.style.opacity = '');
+		img.addEventListener('load', show, { once: true });
+		img.addEventListener('error', show, { once: true });
+	}
 </script>
 
 {#if src}
@@ -13,11 +26,15 @@
 		alt=""
 		loading="lazy"
 		referrerpolicy="no-referrer"
-		class="{cls} aspect-[2/3] shrink-0 bg-surface-2 object-cover"
+		use:fadeIn
+		class="{cls} aspect-[2/3] shrink-0 bg-surface-2 object-cover motion-safe:transition-opacity motion-safe:duration-300"
 	/>
 {:else}
 	<div
 		class="{cls} flex aspect-[2/3] shrink-0 items-end overflow-hidden bg-surface-2 p-1.5 font-display text-[11px] leading-tight font-bold text-muted"
+		style:background-image={type
+			? `linear-gradient(160deg, color-mix(in oklab, var(--c-${type}) 40%, var(--c-surface-2)), var(--c-surface-2) 75%)`
+			: undefined}
 		aria-hidden="true"
 	>
 		{title.slice(0, 40)}
