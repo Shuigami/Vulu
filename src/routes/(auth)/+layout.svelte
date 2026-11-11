@@ -15,10 +15,13 @@
 		<p class="font-display text-[34px] font-extrabold tracking-tight">
 			vulu<span class="text-accent">.</span>
 		</p>
-		<div class="-mx-10 my-8 grid -rotate-6 grid-cols-4 gap-3.5 max-sm:hidden">
-			{#each [...tiles, ...tiles].slice(0, 12) as tint, i (i)}
-				<div class="aspect-[2/3] rounded-xl" style:background={tint}></div>
-			{/each}
+		<!-- The poster wall fills the space left between the texts and never sets the page height -->
+		<div class="relative -mx-10 my-8 min-h-48 flex-1 overflow-hidden mask-y-from-85% max-sm:hidden">
+			<div class="absolute inset-x-0 top-1/2 grid -translate-y-1/2 -rotate-6 grid-cols-4 gap-3.5">
+				{#each [...tiles, ...tiles].slice(0, 12) as tint, i (i)}
+					<div class="aspect-[2/3] rounded-xl" style:background={tint}></div>
+				{/each}
+			</div>
 		</div>
 		<p
 			class="max-w-[16ch] font-display text-[28px] leading-tight font-bold tracking-tight sm:text-[34px]"

@@ -2,7 +2,7 @@
 
 Nov 8, 2026 · @shui
 
-Proposition pour une première version développée seul, hébergée sur un VPS Hetzner CX23 partagé avec d'autres projets. Objectif : peu de briques, peu de RAM, et un schéma qui tienne quand on ajoutera le social et le freemium.
+Proposition pour une première version développée seul, hébergée sur un petit VPS partagé avec d'autres projets (netcup VPS 500, 2 vCPU et 4 Go ; le Hetzner CX23 prévu au départ était en rupture de stock). Objectif : peu de briques, peu de RAM, et un schéma qui tienne quand on ajoutera le social et le freemium.
 
 ## Stack retenue
 
@@ -18,7 +18,7 @@ Proposition pour une première version développée seul, hébergée sur un VPS 
 | Images | **CDN des fournisseurs** (TMDB, AniList, Open Library) | Pas de ré-hébergement : zéro stockage, et c'est ce que prévoient les conditions d'utilisation (avec attribution). |
 | Déploiement | **Docker Compose + Caddy** | HTTPS automatique ; quatre conteneurs : caddy, app, worker, postgres. |
 | CI/CD | **GitHub Actions → GHCR** | Build de l'image à chaque tag, puis `docker compose pull && up -d` sur le VPS. |
-| Sauvegardes | **pg\_dump nocturne + restic** | Vers une Hetzner Storage Box ou un stockage objet. |
+| Sauvegardes | **pg\_dump nocturne + restic** | Vers un stockage objet (Cloudflare R2). |
 | Mobile | **PWA** | Installable sur téléphone sans app native en V1. |
 
 ## Architecture

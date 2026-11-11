@@ -81,17 +81,20 @@ Pour essayer la pile en local : `docker build -t ghcr.io/shuigami/vulu:latest .`
 
 ### Sauvegardes
 
-`scripts/backup.sh` envoie un `pg_dump` dans un dépôt [restic](https://restic.net) (Hetzner Storage Box ou stockage objet), puis garde 7 sauvegardes quotidiennes, 4 hebdomadaires et 6 mensuelles. Il faut restic ≥ 0.17 sur le serveur et un fichier `/srv/vulu/.backup.env` :
+`scripts/backup.sh` envoie un `pg_dump` dans un dépôt [restic](https://restic.net) (en production : un bucket Cloudflare R2, via l'API S3), puis garde 7 sauvegardes quotidiennes, 4 hebdomadaires et 6 mensuelles. Il faut restic ≥ 0.17 sur le serveur et un fichier `/srv/vulu/.backup.env` (mode 600) :
 
 ```bash
-RESTIC_REPOSITORY=sftp:u123456@u123456.your-storagebox.de:vulu
-RESTIC_PASSWORD_FILE=/root/.restic-password
+RESTIC_REPOSITORY=s3:https://<account-id>.r2.cloudflarestorage.com/vulu-backups
+RESTIC_PASSWORD_FILE=/srv/vulu/.restic-password
+AWS_ACCESS_KEY_ID=...        # jeton R2 limité au bucket, Object Read & Write
+AWS_SECRET_ACCESS_KEY=...
+AWS_DEFAULT_REGION=auto
 ```
 
-Initialiser le dépôt une fois (`restic init`), puis ajouter au cron de root :
+Garder une copie du mot de passe restic hors du serveur : sans lui, les sauvegardes sont illisibles. Initialiser le dépôt une fois (`restic init`), puis ajouter au cron de l'utilisateur qui gère Vulu (membre du groupe `docker`) :
 
 ```bash
-30 3 * * * /srv/vulu/scripts/backup.sh >> /var/log/vulu-backup.log 2>&1
+30 3 * * * /srv/vulu/scripts/backup.sh >> /srv/vulu/backup.log 2>&1
 ```
 
 Restaurer la dernière sauvegarde (écrase la base) :

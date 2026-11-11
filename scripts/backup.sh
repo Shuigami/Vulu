@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Nightly database backup: pg_dump streamed into restic, then old snapshots pruned.
-# Run on the server from cron, e.g. `30 3 * * * /srv/vulu/scripts/backup.sh >> /var/log/vulu-backup.log 2>&1`.
+# Run on the server from cron, e.g. `30 3 * * * /srv/vulu/scripts/backup.sh >> /srv/vulu/backup.log 2>&1`.
 # Needs restic >= 0.17 on the host, RESTIC_REPOSITORY and RESTIC_PASSWORD_FILE in the environment
 # (or in /srv/vulu/.backup.env, read below). See the README for setup and restore.
 set -euo pipefail
