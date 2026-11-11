@@ -62,6 +62,19 @@ docker compose pull && docker compose up -d
 docker compose exec app node --import tsx src/lib/server/db/invite.ts toi@example.com
 ```
 
+#### Serveur partagé avec d'autres projets
+
+Un seul Caddy peut écouter sur les ports 80 et 443. Sur un serveur qui héberge plusieurs projets, le proxy commun vit dans `deploy/proxy/` (copié dans `/srv/proxy`, un bloc par site dans son `Caddyfile`) et Vulu n'utilise pas son propre Caddy :
+
+```bash
+cd /srv/proxy && docker compose up -d                                  # une fois, crée le réseau "proxy"
+cp docker-compose.shared-proxy.yml /srv/vulu/docker-compose.override.yml # caddy de Vulu désactivé, app joignable en vulu-app
+```
+
+Les autres projets rejoignent le réseau externe `proxy` de la même façon, sous un alias unique. Aucun autre conteneur ne publie de port (Docker contourne le pare-feu pour les ports publiés).
+
+Chez netcup, les ports sortants 25, 465 et 587 sont bloqués : utiliser le port 2525 du relais SMTP (`smtp://user:password@smtp-relay.brevo.com:2525`).
+
 Mise à jour : pousser un tag (`git tag v0.2.0 && git push --tags`), attendre l'image, puis `docker compose pull && docker compose up -d` sur le serveur.
 
 Pour essayer la pile en local : `docker build -t ghcr.io/shuigami/vulu:latest .`, puis `docker compose --env-file <fichier avec VULU_DOMAIN=localhost et POSTGRES_PASSWORD> up -d` (Caddy signe alors un certificat local). Le projet Compose s'appelle `vulu-prod` et ne touche pas à la base de développement.
