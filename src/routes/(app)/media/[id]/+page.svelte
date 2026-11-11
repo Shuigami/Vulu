@@ -168,16 +168,19 @@
 	onkeydown={(e) => e.key === 'Escape' && closeMenu()}
 />
 
-<div class="flex flex-col gap-10">
+<div class="flex flex-col gap-6 sm:gap-10">
 	<div class="flex flex-col">
 		{#if m.backdropUrl}
-			<!-- The bottom fades into the page so the poster and title sit on it -->
-			<div class="relative overflow-hidden rounded-3xl">
+			<!-- The bottom fades into the page so the poster and title sit on it. Phones: edge to
+				 edge, right under the header (cancels the gutters and top padding of <main>) -->
+			<div
+				class="relative overflow-hidden rounded-3xl max-sm:-mx-4 max-sm:-mt-10 max-sm:rounded-none"
+			>
 				<img
 					src={m.backdropUrl}
 					alt=""
 					referrerpolicy="no-referrer"
-					class="h-44 w-full bg-surface-2 object-cover sm:h-80"
+					class="h-52 w-full bg-surface-2 object-cover sm:h-80"
 				/>
 				<div
 					class="absolute inset-0 bg-linear-to-t from-bg via-bg/30 via-35% to-transparent"
@@ -185,20 +188,25 @@
 				></div>
 			</div>
 		{/if}
+		<!-- Phones: title and facts on the left, a smaller poster on the right -->
 		<section
-			class="relative flex flex-wrap items-start gap-x-10 gap-y-6 {m.backdropUrl
-				? '-mt-20 sm:-mt-44'
+			class="relative flex items-start gap-x-4 gap-y-6 sm:flex-wrap sm:gap-x-10 {m.backdropUrl
+				? '-mt-14 sm:-mt-44'
 				: ''}"
 		>
 			<Poster
 				src={m.posterUrl}
 				title={m.title}
 				type={m.type}
-				class="w-36 rounded-2xl sm:w-60 {m.backdropUrl
-					? 'ml-4 border-4 border-bg shadow-xl sm:ml-8'
+				class="w-28 rounded-xl max-sm:order-last sm:w-60 sm:rounded-2xl {m.backdropUrl
+					? 'border-4 border-bg shadow-xl sm:ml-8'
 					: ''}"
 			/>
-			<div class="flex min-w-0 flex-[1_1_420px] flex-col gap-3.5 {m.backdropUrl ? 'md:pt-48' : ''}">
+			<div
+				class="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-[1_1_420px] sm:gap-3.5 {m.backdropUrl
+					? 'pt-8 sm:pt-0 md:pt-48'
+					: ''}"
+			>
 				<div class="flex flex-wrap items-center gap-2">
 					<TypeTag type={m.type} />
 					{#if m.status}<span
@@ -207,7 +215,7 @@
 						>{/if}
 				</div>
 				<h1
-					class="font-display text-[32px] leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[48px]"
+					class="font-display text-[26px] leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[48px]"
 				>
 					{m.title}
 				</h1>
