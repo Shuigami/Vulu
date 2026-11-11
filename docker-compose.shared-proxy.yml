@@ -1,0 +1,14 @@
+# Server with a shared proxy (deploy/proxy): copy next to docker-compose.yml as docker-compose.override.yml.
+# Compose then skips the bundled caddy and puts the app on the "proxy" network as vulu-app.
+services:
+  caddy:
+    profiles: [standalone]
+  app:
+    networks:
+      default: {}
+      proxy:
+        aliases: [vulu-app]
+
+networks:
+  proxy:
+    external: true

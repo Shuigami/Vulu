@@ -1,0 +1,5 @@
+# One block per site; reload after editing: docker compose exec caddy caddy reload --config /etc/caddy/Caddyfile
+vulu.shuii.net {
+	encode zstd gzip
+	reverse_proxy vulu-app:3000
+}
