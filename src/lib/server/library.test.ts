@@ -4,7 +4,14 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { fromScale, toScale } from '../labels';
 import { createDb } from './db';
 import { activityEvents, libraryEntries, media, users } from './db/schema';
-import { addToLibrary, applyChange, incrementProgress, listEntries, updateEntry } from './library';
+import {
+	addToLibrary,
+	applyChange,
+	countByStatus,
+	incrementProgress,
+	listEntries,
+	updateEntry
+} from './library';
 
 const TODAY = '2026-11-08';
 const entry = (over: Partial<typeof libraryEntries.$inferSelect> = {}) => ({
@@ -147,6 +154,24 @@ describe('library entries in the database', () => {
 		expect(byTitle.map((e) => e.mediaId)).toEqual([mediaId, other.id]);
 		const page2 = await listEntries(db, userId, { sort: 'title', limit: 1, offset: 1 });
 		expect(page2).toMatchObject([{ mediaId: other.id, total: 2 }]);
+	});
+
+	it('filters favorites and counts entries per status', async () => {
+		const { userId, mediaId } = await fixture();
+		const [other] = await db
+			.insert(media)
+			.values({ type: 'movie', title: `Fav ${run}` })
+			.returning({ id: media.id });
+		created.media.push(other.id);
+		await addToLibrary(db, userId, mediaId);
+		const fav = await addToLibrary(db, userId, other.id);
+		await updateEntry(db, userId, fav, { status: 'completed', isFavorite: true });
+
+		const favorites = await listEntries(db, userId, { favorite: true });
+		expect(favorites.map((e) => e.id)).toEqual([fav]);
+		expect(await countByStatus(db, userId)).toEqual({ planned: 1, completed: 1 });
+		expect(await countByStatus(db, userId, { favorite: true })).toEqual({ completed: 1 });
+		expect(await countByStatus(db, userId, { type: 'tv' })).toEqual({ planned: 1 });
 	});
 
 	it("refuses to update another user's entry", async () => {

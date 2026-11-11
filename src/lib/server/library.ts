@@ -203,6 +203,29 @@ const sortOrder = {
 	score: [sql`${libraryEntries.score} desc nulls last`, sql`lower(${media.title})`]
 } satisfies Record<LibrarySort, unknown[]>;
 
+/** Number of the user's entries per status, for the library tabs (type and favorite filters apply). */
+export async function countByStatus(
+	db: Db,
+	userId: string,
+	filters: { type?: MediaType; favorite?: boolean } = {}
+) {
+	const rows = await db
+		.select({ status: libraryEntries.status, count: sql<number>`count(*)::int` })
+		.from(libraryEntries)
+		.innerJoin(media, eq(media.id, libraryEntries.mediaId))
+		.where(
+			and(
+				eq(libraryEntries.userId, userId),
+				filters.type ? eq(media.type, filters.type) : undefined,
+				filters.favorite ? eq(libraryEntries.isFavorite, true) : undefined
+			)
+		)
+		.groupBy(libraryEntries.status);
+	return Object.fromEntries(rows.map((r) => [r.status, r.count])) as Partial<
+		Record<Entry['status'], number>
+	>;
+}
+
 /**
  * The user's entries with their media, most recently updated first by default.
  * `q` matches any title of the work (accents and case ignored); `total` is the count before paging.
@@ -213,6 +236,7 @@ export function listEntries(
 	filters: {
 		type?: MediaType;
 		status?: Entry['status'];
+		favorite?: boolean;
 		q?: string;
 		sort?: LibrarySort;
 		limit?: number;
@@ -227,6 +251,7 @@ export function listEntries(
 			progress: libraryEntries.progress,
 			progressSecondary: libraryEntries.progressSecondary,
 			score: libraryEntries.score,
+			isFavorite: libraryEntries.isFavorite,
 			mediaId: media.id,
 			type: media.type,
 			title: media.title,
@@ -242,6 +267,7 @@ export function listEntries(
 				eq(libraryEntries.userId, userId),
 				filters.type ? eq(media.type, filters.type) : undefined,
 				filters.status ? eq(libraryEntries.status, filters.status) : undefined,
+				filters.favorite ? eq(libraryEntries.isFavorite, true) : undefined,
 				pattern
 					? sql`(f_unaccent(lower(${media.title})) like f_unaccent(lower(${pattern}))
 						or exists (select 1 from ${mediaTitles} where ${mediaTitles.mediaId} = ${media.id}
