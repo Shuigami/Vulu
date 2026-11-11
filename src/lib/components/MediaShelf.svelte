@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
+	import type { MediaType } from '#lib/labels.ts';
 	import { opening } from '#lib/opening.svelte.ts';
 
 	/** A work in the catalogue (`mediaId`) or a provider result, imported when opened. */
@@ -31,7 +32,12 @@
 					href={resolve('/(app)/media/[id]', { id: String(i.mediaId) })}
 					class="group flex flex-col gap-2 text-ink no-underline"
 				>
-					<Poster src={i.posterUrl} title={i.title} class="w-full rounded-[10px] tile-frame" />
+					<Poster
+						src={i.posterUrl}
+						title={i.title}
+						type={i.type as MediaType}
+						class="w-full rounded-[10px] tile-frame"
+					/>
 					<span class={caption}>
 						<span class="line-clamp-2 font-semibold group-hover:underline">{i.title}</span>
 						{#if i.note}<span class="line-clamp-2 text-muted">{i.note}</span>{/if}
@@ -53,7 +59,12 @@
 					<input type="hidden" name="provider" value={i.provider} />
 					<input type="hidden" name="externalId" value={i.externalId} />
 					<button class="group flex w-full cursor-pointer flex-col gap-2 text-ink">
-						<Poster src={i.posterUrl} title={i.title} class="w-full rounded-[10px] tile-frame" />
+						<Poster
+							src={i.posterUrl}
+							title={i.title}
+							type={i.type as MediaType}
+							class="w-full rounded-[10px] tile-frame"
+						/>
 						<span class={caption}>
 							<span class="line-clamp-2 font-semibold group-hover:underline">{i.title}</span>
 							{#if i.note}<span class="line-clamp-2 text-muted">{i.note}</span>{/if}

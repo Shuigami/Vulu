@@ -56,12 +56,31 @@
 		10: 'Demi-points possibles.',
 		100: 'Comme sur AniList.'
 	};
+
+	// Theme: stored in the `theme` cookie (read by hooks.server.ts); "system" removes it
+	const themes = [
+		{ value: 'system', label: 'Système' },
+		{ value: 'light', label: 'Clair' },
+		{ value: 'dark', label: 'Sombre' }
+	] as const;
+	let theme = $derived(data.theme);
+	function setTheme(value: typeof theme) {
+		theme = value;
+		const root = document.documentElement;
+		if (value === 'system') {
+			delete root.dataset.theme;
+			document.cookie = 'theme=; path=/; max-age=0; samesite=lax';
+		} else {
+			root.dataset.theme = value;
+			document.cookie = `theme=${value}; path=/; max-age=31536000; samesite=lax`;
+		}
+	}
 </script>
 
 <svelte:head><title>Réglages · Vulu</title></svelte:head>
 
 <div class="flex max-w-xl flex-col gap-7">
-	<h1 class="h1">Réglages</h1>
+	<h1 class="sr-only">Réglages</h1>
 	<form
 		method="post"
 		action="?/profile"
@@ -163,6 +182,24 @@
 			{#if form?.saved}<p role="status" class="text-sm text-success">Enregistré.</p>{/if}
 		</div>
 	</form>
+
+	<section class="flex flex-col gap-3 card p-5" aria-labelledby="theme-title">
+		<h2 id="theme-title" class="h2">Apparence</h2>
+		<div class="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="theme-title">
+			{#each themes as t (t.value)}
+				<button
+					type="button"
+					role="radio"
+					aria-checked={theme === t.value}
+					class={theme === t.value ? 'chip-on' : 'chip'}
+					onclick={() => setTheme(t.value)}>{t.label}</button
+				>
+			{/each}
+		</div>
+		<p class="text-[13px] text-muted">
+			« Système » suit le réglage clair ou sombre de ton appareil.
+		</p>
+	</section>
 
 	<section class="flex flex-col gap-3 card p-5" aria-labelledby="export-title">
 		<h2 id="export-title" class="h2">Exporter mes données</h2>

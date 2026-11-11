@@ -151,7 +151,7 @@ export const actions: Actions = {
 	update: async ({ request, locals }) => {
 		const form = await request.formData();
 		const entryId = Number(form.get('entryId'));
-		const parsed = parseEntryForm(form, locals.user!.ratingScale ?? 10);
+		const parsed = parseEntryForm(form, locals.user!.ratingScale ?? 5);
 		if (typeof parsed === 'string') return fail(400, { error: parsed });
 		// Only send what changed, so automatic rules (e.g. completing at the last episode) apply
 		const ok = await updateEntry(db, locals.user!.id, entryId, (current) =>

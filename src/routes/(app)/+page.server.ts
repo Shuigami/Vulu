@@ -88,7 +88,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		popular,
 		trending: quiet(boss.then((b) => trending(db, b))),
 		discoveries: quiet(boss.then((b) => recommendations(db, b, userId))),
-		today: describeAirDate(new Date()).day,
+
 		entries,
 		week: groupWeek(upcoming)
 	};

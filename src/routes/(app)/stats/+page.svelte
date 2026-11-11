@@ -51,7 +51,7 @@
 <div class="flex flex-col gap-9">
 	<div>
 		<p class="eyebrow">Depuis ton inscription</p>
-		<h1 class="mt-1.5 h1">Statistiques</h1>
+		<h1 class="sr-only">Statistiques</h1>
 	</div>
 
 	{#if !totalMinutes && !totalCompleted && !data.units.chapter && !data.units.pages}

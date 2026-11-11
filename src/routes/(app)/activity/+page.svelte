@@ -11,7 +11,7 @@
 <div class="flex flex-col gap-7">
 	<div>
 		<p class="eyebrow">Tes abonnements</p>
-		<h1 class="mt-1.5 h1">Activité</h1>
+		<h1 class="sr-only">Activité</h1>
 	</div>
 	{#if data.items.length}
 		<ActivityFeed items={data.items} scale={data.user.ratingScale} />

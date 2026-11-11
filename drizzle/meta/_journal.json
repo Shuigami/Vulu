@@ -57,6 +57,13 @@
       "when": 1794351985710,
       "tag": "0007_avatars",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794416119766,
+      "tag": "0008_rating_scale_default_5",
+      "breakpoints": true
     }
   ]
 }

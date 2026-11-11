@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import Avatar from '#lib/components/Avatar.svelte';
+	import Marquee from '#lib/components/Marquee.svelte';
 	import Poster from '#lib/components/Poster.svelte';
 	import RatingHistogram from '#lib/components/RatingHistogram.svelte';
 	import Progress from '#lib/components/Progress.svelte';
@@ -16,6 +18,7 @@
 		typeLabel,
 		unitLabel
 	} from '#lib/labels.ts';
+	import { postAction, toast } from '#lib/toast.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -114,37 +117,97 @@
 		await tick();
 		save();
 	}
-	const stars = $derived(entry?.score == null ? 0 : Math.round(entry.score / 20));
+	// Typed in the field or set from the stars, in the user's scale (null when not rated)
+	let score = $derived<number | null>(entry?.score == null ? null : toScale(entry.score, scale));
+	// Stars count in halves: 1 to 10 half-stars
+	let hovered = $state(0);
+	const rated = $derived(score == null ? 0 : Math.round((score / scale) * 10));
+	const halves = $derived(hovered || rated);
+	async function rate(h: number) {
+		// Clicking the current rating again clears it
+		score = h === rated ? null : toScale(h * 10, scale);
+		await tick();
+		save();
+	}
+	const undoAdd = async (entryId: number) => {
+		await postAction('?/remove', { entryId });
+		await invalidateAll();
+	};
 	const showGrid = $derived(
 		!!entry && !!m.totalUnits && m.totalUnits <= 200 && ['tv', 'anime', 'manga'].includes(m.type)
 	);
-	const zone = 'flex flex-col gap-2.5 bg-surface px-6 py-5';
+	// Phones: a +1 bar stays at the bottom once the tracking block has scrolled out of view
+	let trackingVisible = $state(true);
+	$effect(() => {
+		if (!entryForm) return;
+		// Only once scrolled past it: below the fold at load, the bar would just repeat it
+		const observer = new IntersectionObserver(
+			([e]) => (trackingVisible = e.isIntersecting || e.boundingClientRect.top > 0)
+		);
+		observer.observe(entryForm);
+		return () => observer.disconnect();
+	});
+	// "More options" menu: placed under its button when opened; closed on scroll, a click
+	// elsewhere or Escape, since a fixed menu would not follow the page
+	let moreMenu: HTMLDetailsElement | undefined = $state();
+	let menuAt = $state({ top: 0, right: 0 });
+	const closeMenu = () => moreMenu?.open && (moreMenu.open = false);
+	// Unit hovered (or focused) in the grid: the units it would mark as seen are tinted
+	let previewTo = $state(0);
+	const zone = 'flex flex-col gap-2.5 bg-surface px-4 py-3.5 sm:px-6 sm:py-5';
 	const zoneLabel = 'text-[13px] text-muted';
 </script>
 
 <svelte:head><title>{m.title} · Vulu</title></svelte:head>
 
-<div class="flex flex-col gap-10">
+<svelte:window
+	onscroll={closeMenu}
+	onresize={closeMenu}
+	onclick={(e) => {
+		if (moreMenu?.open && !e.composedPath().includes(moreMenu)) closeMenu();
+	}}
+	onkeydown={(e) => e.key === 'Escape' && closeMenu()}
+/>
+
+<div class="flex flex-col gap-6 sm:gap-10">
 	<div class="flex flex-col">
 		{#if m.backdropUrl}
-			<img
-				src={m.backdropUrl}
-				alt=""
-				referrerpolicy="no-referrer"
-				class="h-44 w-full rounded-3xl bg-surface-2 object-cover sm:h-80"
-			/>
+			<!-- The bottom fades into the page so the poster and title sit on it. Phones: edge to
+				 edge, right under the header (cancels the gutters and top padding of <main>) -->
+			<div
+				class="relative overflow-hidden rounded-3xl max-sm:-mx-4 max-sm:-mt-10 max-sm:rounded-none"
+			>
+				<img
+					src={m.backdropUrl}
+					alt=""
+					referrerpolicy="no-referrer"
+					class="h-52 w-full bg-surface-2 object-cover sm:h-80"
+				/>
+				<div
+					class="absolute inset-0 bg-linear-to-t from-bg via-bg/30 via-35% to-transparent"
+					aria-hidden="true"
+				></div>
+			</div>
 		{/if}
+		<!-- Phones: title and facts on the left, a smaller poster on the right -->
 		<section
-			class="flex flex-wrap items-start gap-x-10 gap-y-6 {m.backdropUrl ? '-mt-20 sm:-mt-44' : ''}"
+			class="relative flex items-start gap-x-4 gap-y-6 sm:flex-wrap sm:gap-x-10 {m.backdropUrl
+				? '-mt-14 sm:-mt-44'
+				: ''}"
 		>
 			<Poster
 				src={m.posterUrl}
 				title={m.title}
-				class="w-36 rounded-2xl sm:w-60 {m.backdropUrl
-					? 'ml-4 border-4 border-bg shadow-xl sm:ml-8'
+				type={m.type}
+				class="w-28 rounded-xl max-sm:order-last sm:w-60 sm:rounded-2xl {m.backdropUrl
+					? 'border-4 border-bg shadow-xl sm:ml-8'
 					: ''}"
 			/>
-			<div class="flex min-w-0 flex-[1_1_420px] flex-col gap-3.5 {m.backdropUrl ? 'md:pt-48' : ''}">
+			<div
+				class="flex min-w-0 flex-1 flex-col gap-2.5 sm:flex-[1_1_420px] sm:gap-3.5 {m.backdropUrl
+					? 'pt-8 sm:pt-0 md:pt-48'
+					: ''}"
+			>
 				<div class="flex flex-wrap items-center gap-2">
 					<TypeTag type={m.type} />
 					{#if m.status}<span
@@ -153,11 +216,11 @@
 						>{/if}
 				</div>
 				<h1
-					class="font-display text-[32px] leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[48px]"
+					class="font-display text-[26px] leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[48px]"
 				>
 					{m.title}
 				</h1>
-				<p class="text-muted">
+				<Marquee class="text-muted">
 					{[
 						m.originalTitle !== m.title ? m.originalTitle : null,
 						year,
@@ -167,7 +230,7 @@
 					]
 						.filter(Boolean)
 						.join(' · ')}
-				</p>
+				</Marquee>
 				{#if extra.genres?.length}
 					<ul class="flex flex-wrap gap-1.5" aria-label="Genres">
 						{#each extra.genres as g (g)}
@@ -207,7 +270,13 @@
 		<form
 			method="post"
 			action="?/add"
-			use:enhance
+			use:enhance={() =>
+				async ({ result, update }) => {
+					await update();
+					const added = data.entry;
+					if (result.type === 'success' && added)
+						toast('Ajouté à ta bibliothèque', () => undoAdd(added.id));
+				}}
 			class="flex flex-wrap items-center gap-x-7 gap-y-4 card rounded-[22px] px-6 py-5"
 		>
 			<div class="flex-[1_1_260px]">
@@ -230,18 +299,24 @@
 			id="entry"
 			method="post"
 			action="?/update"
-			use:enhance={() =>
-				async ({ update }) =>
-					update({ reset: false })}
+			use:enhance={({ action }) =>
+				async ({ result, update }) => {
+					await update({ reset: false });
+					if (action.search === '?/remove' && result.type === 'success')
+						toast('Retiré de ta bibliothèque');
+				}}
 			onchange={save}
 			class="overflow-hidden card rounded-[22px]"
 		>
 			<h2 class="sr-only">Mon suivi</h2>
 			<input type="hidden" name="entryId" value={entry.id} />
 			<div class="flex flex-wrap gap-px bg-line">
-				<label class="{zone} flex-[1_1_200px]">
+				<!-- Phones: the label sits beside the select, to keep the card short -->
+				<label
+					class="{zone} flex-[1_1_200px] max-sm:flex-row max-sm:items-center max-sm:justify-between"
+				>
 					<span class={zoneLabel}>Statut</span>
-					<select name="status" value={entry.status} class="field font-semibold">
+					<select name="status" value={entry.status} class="field font-semibold max-sm:min-w-44">
 						{#each ENTRY_STATUSES as s (s)}
 							<option value={s}>{statusLabel[s]}</option>
 						{/each}
@@ -261,7 +336,7 @@
 						</div>
 						<div class="flex flex-wrap items-center gap-4">
 							<p
-								class="flex items-baseline font-display text-[40px] leading-none font-extrabold tabular-nums"
+								class="flex items-baseline font-display text-[32px] leading-none font-extrabold tabular-nums sm:text-[40px]"
 							>
 								<input
 									id="progress"
@@ -273,12 +348,14 @@
 									style:width="{String(progress).length + 0.6}ch"
 									class="rounded-lg bg-transparent text-right outline-offset-4"
 								/>
-								{#if m.totalUnits}<span class="text-[22px] font-semibold text-muted"
+								{#if m.totalUnits}<span class="text-lg font-semibold text-muted sm:text-[22px]"
 										>&nbsp;/ {m.totalUnits}</span
 									>{/if}
 							</p>
 							{#if m.totalUnits}
-								<div class="flex min-w-36 flex-1 flex-col gap-1.5">
+								<div
+									class="flex min-w-36 flex-1 flex-col gap-1.5 max-sm:order-last max-sm:basis-full"
+								>
 									<Progress value={progress} max={m.totalUnits} label="Progression" />
 									<span class="text-xs text-muted"
 										>{Math.round((progress / m.totalUnits) * 100)} %{#if progress < m.totalUnits}
@@ -289,7 +366,7 @@
 									>
 								</div>
 							{/if}
-							<div class="flex gap-2">
+							<div class="flex gap-2 max-sm:ml-auto">
 								<button
 									type="button"
 									class="btn-ghost w-12 px-0 text-xl"
@@ -317,41 +394,63 @@
 					</div>
 				{/if}
 
-				<div class="{zone} flex-[1_1_220px]">
-					<label for="score" class={zoneLabel}>Ma note</label>
-					<div class="flex items-center gap-3">
-						<div class="flex text-line" aria-hidden="true">
-							{#each [1, 2, 3, 4, 5] as i (i)}
-								<svg
-									width="24"
-									height="24"
-									viewBox="0 0 24 24"
-									fill="currentColor"
-									class={i <= stars ? 'text-accent' : ''}
-									><polygon
-										points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3"
-									></polygon></svg
-								>
-							{/each}
+				<!-- Phones: stars and the two icon buttons on a single line -->
+				<div
+					class="{zone} flex-[1_1_220px] max-sm:flex-row max-sm:flex-wrap max-sm:items-center max-sm:justify-between max-sm:gap-x-1.5"
+				>
+					<div class="flex flex-col gap-1">
+						<span class="{zoneLabel} max-sm:sr-only">Ma note</span>
+						<div class="flex items-center">
+							<div
+								class="flex text-line"
+								role="group"
+								aria-label="Note en étoiles"
+								onmouseleave={() => (hovered = 0)}
+							>
+								{#each [1, 2, 3, 4, 5] as i (i)}
+									{@const fill = Math.min(2, Math.max(0, halves - 2 * (i - 1)))}
+									<!-- Star i: a grey star, the accent star clipped to 0, 50 or 100 %, and two
+										 invisible half buttons on top (left = i - 0.5, right = i) -->
+									<span class="relative block size-[30px] p-0.5">
+										{#each [false, true] as accent (accent)}
+											<span
+												class="absolute inset-0.5 overflow-hidden {accent ? 'text-accent' : ''}"
+												style:width={accent ? `calc((100% - 4px) * ${fill / 2})` : undefined}
+												><svg
+													aria-hidden="true"
+													viewBox="0 0 24 24"
+													fill="currentColor"
+													class="size-[26px] max-w-none"
+													><polygon
+														points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3"
+													></polygon></svg
+												></span
+											>
+										{/each}
+										{#each [2 * i - 1, 2 * i] as h (h)}
+											<button
+												type="button"
+												class="absolute inset-y-0 w-1/2 cursor-pointer rounded {h % 2
+													? 'left-0'
+													: 'right-0'}"
+												aria-label="{String(h / 2).replace('.', ',')} étoile{h >= 4
+													? 's'
+													: ''} sur 5"
+												aria-pressed={h === rated}
+												onmouseenter={() => (hovered = h)}
+												onclick={() => rate(h)}
+											></button>
+										{/each}
+									</span>
+								{/each}
+							</div>
+							<!-- The stars are the only control; the score travels in the user's scale -->
+							<input type="hidden" name="score" value={score ?? ''} />
 						</div>
-						<p class="flex items-baseline font-display text-[26px] font-extrabold">
-							<input
-								id="score"
-								name="score"
-								type="number"
-								min="0"
-								max={scale}
-								step={scale === 100 ? 1 : 0.5}
-								value={entry.score === null ? '' : toScale(entry.score, scale)}
-								placeholder="–"
-								class="w-[3ch] rounded-lg bg-transparent text-right outline-offset-4 placeholder:text-muted"
-							/>
-							<span class="text-[15px] font-semibold text-muted">/{scale}</span>
-						</p>
 					</div>
-					<div class="flex gap-2">
+					<div class="flex gap-1 sm:gap-2">
 						<label
-							class="btn-ghost min-h-10 flex-1 bg-surface text-[13px] has-checked:border-anime has-focus-visible:outline-2 has-focus-visible:outline-accent"
+							class="btn-ghost min-h-10 flex-1 bg-surface text-[13px] has-checked:border-anime has-focus-visible:outline-2 has-focus-visible:outline-accent max-sm:w-10 max-sm:flex-none max-sm:px-0"
 						>
 							<input
 								name="isFavorite"
@@ -371,12 +470,16 @@
 									d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"
 								></path></svg
 							>
-							Favori
+							<span class="max-sm:sr-only">Favori</span>
 						</label>
-						<details class="relative">
+						<details bind:this={moreMenu}>
 							<summary
 								aria-label="Plus d’options"
-								class="btn-ghost min-h-10 w-11 list-none bg-surface px-0 [&::-webkit-details-marker]:hidden"
+								class="btn-ghost min-h-10 w-10 list-none bg-surface px-0 sm:w-11 [&::-webkit-details-marker]:hidden"
+								onclick={(e) => {
+									const r = e.currentTarget.getBoundingClientRect();
+									menuAt = { top: r.bottom + 8, right: innerWidth - r.right };
+								}}
 							>
 								<svg
 									aria-hidden="true"
@@ -388,7 +491,12 @@
 									></circle><circle cx="19" cy="12" r="2"></circle></svg
 								>
 							</summary>
-							<div class="absolute right-0 z-10 mt-2 flex w-72 flex-col gap-1 card p-2 shadow-xl">
+							<!-- Fixed, so the tracking card's rounded clipping (overflow-hidden) does not cut it -->
+							<div
+								class="fixed z-40 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-1 card p-2 shadow-xl"
+								style:top="{menuAt.top}px"
+								style:right="{menuAt.right}px"
+							>
 								<label class="flex min-h-11 items-center gap-2.5 px-2 text-sm">
 									<input
 										name="isPrivate"
@@ -434,34 +542,29 @@
 				/>{/if}
 
 			<div
-				class="flex flex-wrap items-center gap-x-7 gap-y-2 border-t border-line bg-bg/50 px-6 py-3 text-[13px] text-muted"
+				class="grid grid-cols-2 items-center gap-x-3 gap-y-2 border-t border-line bg-bg/50 px-4 py-3 text-[13px] text-muted sm:flex sm:flex-wrap sm:gap-x-7 sm:px-6"
 			>
-				<label class="flex items-center gap-2">
+				<!-- Phones: the two dates side by side, labels above -->
+				<label class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
 					Commencé le
 					<input
 						name="startedOn"
 						type="date"
 						value={entry.startedOn ?? ''}
-						class="field min-h-9 px-2 text-[13px]"
+						class="field min-h-9 min-w-0 px-2 text-[13px]"
 					/>
 				</label>
-				<label class="flex items-center gap-2">
+				<label class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
 					Terminé le
 					<input
 						name="completedOn"
 						type="date"
 						value={entry.completedOn ?? ''}
-						class="field min-h-9 px-2 text-[13px]"
+						class="field min-h-9 min-w-0 px-2 text-[13px]"
 					/>
 				</label>
-				{#if data.minutesSpent}
-					<span
-						><strong class="text-ink">{duration(data.minutesSpent)}</strong>
-						{m.type === 'manga' || m.type === 'book' ? 'de lecture' : 'regardées'}</span
-					>
-				{/if}
-				{#if form?.error}<p role="alert" class="text-danger">{form.error}</p>{/if}
-				{#if form?.saved}<p role="status" class="text-success">Enregistré.</p>{/if}
+				{#if form?.error}<p role="alert" class="col-span-2 text-danger">{form.error}</p>{/if}
+				{#if form?.saved}<p role="status" class="col-span-2 text-success">Enregistré.</p>{/if}
 			</div>
 		</form>
 	{/if}
@@ -498,8 +601,13 @@
 							>Clique un {singular(unit)} pour y placer ta progression</span
 						>
 					</div>
-					<ol class="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1.5">
+					<ol
+						class="grid grid-cols-[repeat(auto-fill,minmax(52px,1fr))] gap-1.5"
+						onmouseleave={() => (previewTo = 0)}
+						onfocusout={() => (previewTo = 0)}
+					>
 						{#each Array.from({ length: m.totalUnits }, (_, i) => i + 1) as n (n)}
+							{@const preview = n > progress && n <= previewTo}
 							<li>
 								<button
 									type="button"
@@ -508,13 +616,18 @@
 										: n === progress + 1
 											? ', prochain'
 											: ''}"
-									class="h-11 w-full cursor-pointer rounded-[10px] text-sm font-semibold tabular-nums {n <=
+									class="h-11 w-full cursor-pointer rounded-[10px] text-sm font-semibold tabular-nums motion-safe:transition-colors {n <=
 									progress
 										? 'bg-accent text-on-accent'
-										: n === progress + 1
-											? 'border-2 border-ink bg-surface'
-											: 'bg-surface-2 text-muted hover:text-ink'}"
-									onclick={() => setProgress(n)}>{n}</button
+										: preview
+											? 'bg-accent/35 text-ink'
+											: 'bg-surface-2 text-muted'}"
+									onmouseenter={() => (previewTo = n)}
+									onfocus={() => (previewTo = n)}
+									onclick={() => {
+										previewTo = 0;
+										setProgress(n);
+									}}>{n}</button
 								>
 							</li>
 						{/each}
@@ -580,7 +693,22 @@
 				<h2 id="lists-title" class="h2">Mes listes</h2>
 				<div class="flex flex-col gap-1 card p-2">
 					{#each data.lists as l (l.id)}
-						<form method="post" action="?/toggleList" use:enhance>
+						<form
+							method="post"
+							action="?/toggleList"
+							use:enhance={() =>
+								async ({ result, update }) => {
+									await update();
+									if (result.type !== 'success') return;
+									// `l` is refreshed: `has` is the new state, the undo posts it to toggle back
+									const { id, name, has } = l;
+									const undo = async () => {
+										await postAction('?/toggleList', { listId: id, has: String(has) });
+										await invalidateAll();
+									};
+									toast(has ? `Ajouté à « ${name} »` : `Retiré de « ${name} »`, undo);
+								}}
+						>
 							<input type="hidden" name="listId" value={l.id} />
 							<input type="hidden" name="has" value={String(l.has)} />
 							<button
@@ -628,6 +756,16 @@
 							<dd class="text-right font-semibold">{v}</dd>
 						</div>
 					{/each}
+					{#if data.minutesSpent}
+						<div class="flex justify-between gap-4 border-b border-line py-2.75 text-sm">
+							<dt class="text-muted">
+								{m.type === 'manga' || m.type === 'book'
+									? 'Mon temps de lecture'
+									: 'Mon temps passé'}
+							</dt>
+							<dd class="text-right font-semibold">{duration(data.minutesSpent)}</dd>
+						</div>
+					{/if}
 					{#if sourceUrl}
 						<div class="py-3">
 							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- external link -->
@@ -707,3 +845,19 @@
 		{/if}
 	</section>
 </div>
+
+{#if entry && unit && !trackingVisible && (!m.totalUnits || progress < m.totalUnits)}
+	<div
+		class="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 flex items-center gap-3 border-t border-line bg-surface/95 px-4 py-2.5 backdrop-blur md:hidden"
+	>
+		<div class="flex min-w-0 flex-1 flex-col">
+			<span class="truncate text-sm font-semibold">{m.title}</span>
+			<span class="text-[13px] text-muted tabular-nums"
+				>{progress}{m.totalUnits ? ` / ${m.totalUnits}` : ''} {unit}</span
+			>
+		</div>
+		<button type="button" class="btn-accent shrink-0" onclick={() => setProgress(progress + 1)}
+			>+1 {singular(unit)}</button
+		>
+	</div>
+{/if}

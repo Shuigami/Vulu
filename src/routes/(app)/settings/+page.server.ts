@@ -6,7 +6,7 @@ import { removeAvatar, saveAvatar, setDisplayName } from '#lib/server/profile.ts
 import { RATING_SCALES } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, cookies }) => {
 	const [u] = await db
 		.select({
 			profileVisibility: users.profileVisibility,
@@ -16,7 +16,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 		})
 		.from(users)
 		.where(eq(users.id, locals.user!.id));
-	return u;
+	// Set by the theme choice below; hooks.server.ts applies it to every page
+	const cookie = cookies.get('theme');
+	const theme: 'light' | 'dark' | 'system' =
+		(['light', 'dark'] as const).find((t) => t === cookie) ?? 'system';
+	return { ...u, theme };
 };
 
 export const actions: Actions = {
