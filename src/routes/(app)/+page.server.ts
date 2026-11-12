@@ -6,7 +6,13 @@ import {
 	startOfToday,
 	upcomingEpisodes
 } from '#lib/server/calendar.ts';
-import { popularOnVulu, recommendations, trending } from '#lib/server/discover.ts';
+import { MEDIA_TYPES } from '#lib/labels.ts';
+import {
+	popularOnVulu,
+	recommendations,
+	trending,
+	type DiscoverItem
+} from '#lib/server/discover.ts';
 import { incrementProgress, listEntries } from '#lib/server/library.ts';
 import { feed, feedView } from '#lib/server/social.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -86,7 +92,10 @@ export const load: PageServerLoad = async ({ locals }) => {
 	return {
 		friends: feedView(friends.items).slice(0, 8),
 		popular,
-		trending: quiet(boss.then((b) => trending(db, b))),
+		// One promise per type, each streamed on its own: the shown type does not wait for the others
+		trending: Object.fromEntries(
+			MEDIA_TYPES.map((type) => [type, quiet(boss.then((b) => trending(db, b, type)))])
+		) as Record<(typeof MEDIA_TYPES)[number], Promise<DiscoverItem[] | null>>,
 		discoveries: quiet(boss.then((b) => recommendations(db, b, userId))),
 
 		entries,
