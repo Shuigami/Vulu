@@ -42,11 +42,15 @@ const providers = createProviders(process.env);
 const trakt = process.env.TRAKT_CLIENT_ID
 	? createTraktClient({ clientId: process.env.TRAKT_CLIENT_ID })
 	: null;
-const boss = new PgBoss(url);
+// LISTEN/NOTIFY (one connection) wakes workers as soon as the app sends a job the user waits on
+const boss = new PgBoss({ connectionString: url, useListenNotify: true });
 boss.on('error', (err) => console.error('[worker] pg-boss error', err));
 
 await boss.start();
 for (const name of Object.values(QUEUES)) await boss.createQueue(name);
+// Without notify a job waits up to the 2 s polling interval before a worker picks it up
+for (const name of [QUEUES.search, QUEUES.discover, QUEUES.importMedia])
+	await boss.updateQueue(name, { notify: true });
 
 // A search on "all types" sends one job per type: run them side by side, the per-provider
 // rate limiters still keep each API within its quota.
