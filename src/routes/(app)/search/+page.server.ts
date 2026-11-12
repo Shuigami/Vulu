@@ -1,6 +1,7 @@
 import { error, fail, redirect } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, getBoss } from '#lib/server/app.ts';
+import { requireUser, viewerId } from '#lib/server/guard.ts';
 import { libraryEntries } from '#lib/server/db/schema.ts';
 import { QUEUES, requestJob, type ImportOutput } from '#lib/server/jobs.ts';
 import { addToLibrary } from '#lib/server/library.ts';
@@ -28,7 +29,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 					.from(libraryEntries)
 					.where(
 						and(
-							eq(libraryEntries.userId, locals.user!.id),
+							eq(libraryEntries.userId, viewerId(locals)),
 							inArray(
 								libraryEntries.mediaId,
 								local.map((m) => m.id)
@@ -82,18 +83,18 @@ async function importResult(form: FormData) {
 
 export const actions: Actions = {
 	/** Adds a media already in the catalogue. */
-	add: async ({ request, locals }) => {
+	add: async ({ request, locals, url }) => {
 		const mediaId = Number((await request.formData()).get('mediaId'));
 		if (!Number.isInteger(mediaId) || mediaId <= 0) error(400, 'Œuvre invalide');
-		await addToLibrary(db, locals.user!.id, mediaId);
+		await addToLibrary(db, requireUser(locals, url).id, mediaId);
 		redirect(303, `/media/${mediaId}`);
 	},
 
 	/** Imports a provider result into the catalogue through the worker, then adds it. */
-	import: async ({ request, locals }) => {
+	import: async ({ request, locals, url }) => {
 		const mediaId = await importResult(await request.formData());
 		if (typeof mediaId !== 'number') return mediaId;
-		await addToLibrary(db, locals.user!.id, mediaId);
+		await addToLibrary(db, requireUser(locals, url).id, mediaId);
 		redirect(303, `/media/${mediaId}`);
 	},
 

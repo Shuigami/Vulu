@@ -1,6 +1,7 @@
 import { fail } from '@sveltejs/kit';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { db, getBoss } from '#lib/server/app.ts';
+import { requireUser } from '#lib/server/guard.ts';
 import { importJobs } from '#lib/server/db/schema.ts';
 import { TRAKT_CLIENT_ID } from '$app/env/private';
 import { parseGoodreads } from '#lib/server/imports/goodreads.ts';
@@ -12,11 +13,11 @@ import type { Actions, PageServerLoad } from './$types';
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const MAX_ROWS = 10_000;
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const jobs = await db
 		.select()
 		.from(importJobs)
-		.where(eq(importJobs.userId, locals.user!.id))
+		.where(eq(importJobs.userId, requireUser(locals, url).id))
 		.orderBy(desc(importJobs.createdAt))
 		.limit(10);
 	return {
@@ -63,15 +64,15 @@ async function start(
 }
 
 export const actions: Actions = {
-	anilist: async ({ request, locals }) => {
+	anilist: async ({ request, locals, url }) => {
 		const userName = String((await request.formData()).get('userName') ?? '').trim();
 		if (!/^[A-Za-z0-9_-]{2,30}$/.test(userName)) {
 			return fail(400, { error: 'Pseudo AniList invalide.' });
 		}
-		return start(locals.user!.id, 'anilist', { userName });
+		return start(requireUser(locals, url).id, 'anilist', { userName });
 	},
 
-	goodreads: async ({ request, locals }) => {
+	goodreads: async ({ request, locals, url }) => {
 		const file = (await request.formData()).get('file');
 		if (!(file instanceof File) || file.size === 0) {
 			return fail(400, { error: 'Choisis le fichier CSV exporté depuis Goodreads.' });
@@ -86,10 +87,10 @@ export const actions: Actions = {
 		}
 		if (!items.length) return fail(400, { error: 'Aucun livre trouvé dans ce fichier.' });
 		if (items.length > MAX_ROWS) return fail(400, { error: `Trop de lignes (${MAX_ROWS} max).` });
-		return start(locals.user!.id, 'goodreads', { items });
+		return start(requireUser(locals, url).id, 'goodreads', { items });
 	},
 
-	mal: async ({ request, locals }) => {
+	mal: async ({ request, locals, url }) => {
 		const file = (await request.formData()).get('file');
 		if (!(file instanceof File) || file.size === 0) {
 			return fail(400, { error: 'Choisis le fichier exporté depuis MyAnimeList.' });
@@ -104,16 +105,16 @@ export const actions: Actions = {
 		}
 		if (!items.length) return fail(400, { error: 'Aucune œuvre trouvée dans ce fichier.' });
 		if (items.length > MAX_ROWS) return fail(400, { error: `Trop de lignes (${MAX_ROWS} max).` });
-		return start(locals.user!.id, 'mal', { items });
+		return start(requireUser(locals, url).id, 'mal', { items });
 	},
 
-	trakt: async ({ request, locals }) => {
+	trakt: async ({ request, locals, url }) => {
 		if (!TRAKT_CLIENT_ID) return fail(503, { error: 'L’import Trakt n’est pas configuré.' });
 		const userName = String((await request.formData()).get('userName') ?? '').trim();
 		// Trakt slugs: letters, digits, dashes, underscores and dots
 		if (!/^[A-Za-z0-9._-]{1,50}$/.test(userName)) {
 			return fail(400, { error: 'Pseudo Trakt invalide.' });
 		}
-		return start(locals.user!.id, 'trakt', { userName });
+		return start(requireUser(locals, url).id, 'trakt', { userName });
 	}
 };

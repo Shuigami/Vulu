@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { db, getBoss } from '#lib/server/app.ts';
+import { ANONYMOUS_ID, requireUser } from '#lib/server/guard.ts';
 import {
 	describeAirDate,
 	episodeLabel,
@@ -74,13 +75,14 @@ function groupWeek(rows: Awaited<ReturnType<typeof upcomingEpisodes>>) {
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
-	const userId = locals.user!.id;
+	// Signed-out visitors only get the discovery shelves
+	const userId = locals.user?.id;
 	const from = startOfToday();
 	const [entries, upcoming, friends, popular] = await Promise.all([
-		listEntries(db, userId, { status: 'in_progress' }),
-		upcomingEpisodes(db, userId, from, new Date(from.getTime() + WEEK)),
-		feed(db, { viewerId: userId, limit: 12 }),
-		popularOnVulu(db, userId)
+		userId ? listEntries(db, userId, { status: 'in_progress' }) : [],
+		userId ? upcomingEpisodes(db, userId, from, new Date(from.getTime() + WEEK)) : [],
+		userId ? feed(db, { viewerId: userId, limit: 12 }) : { items: [] },
+		popularOnVulu(db, userId ?? ANONYMOUS_ID)
 	]);
 	// Streamed: provider lists come from the worker (cached a day) and never block the page
 	const quiet = <T>(p: Promise<T>) =>
@@ -96,7 +98,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 		trending: Object.fromEntries(
 			MEDIA_TYPES.map((type) => [type, quiet(boss.then((b) => trending(db, b, type)))])
 		) as Record<(typeof MEDIA_TYPES)[number], Promise<DiscoverItem[] | null>>,
-		discoveries: quiet(boss.then((b) => recommendations(db, b, userId))),
+		discoveries: userId
+			? quiet(boss.then((b) => recommendations(db, b, userId)))
+			: Promise.resolve(null),
 
 		entries,
 		week: groupWeek(upcoming)
@@ -104,8 +108,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	increment: async ({ request, locals }) => {
+	increment: async ({ request, locals, url }) => {
 		const entryId = Number((await request.formData()).get('entryId'));
-		if (!(await incrementProgress(db, locals.user!.id, entryId))) error(404, 'Entrée introuvable');
+		if (!(await incrementProgress(db, requireUser(locals, url).id, entryId)))
+			error(404, 'Entrée introuvable');
 	}
 };

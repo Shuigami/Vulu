@@ -10,18 +10,17 @@ SvelteKit 3 + TypeScript (strict, adapter-node), PostgreSQL 16, Drizzle ORM (nod
 
 ## Commands
 
-| Command               | What it does                                                       |
-| --------------------- | ------------------------------------------------------------------ |
-| `pnpm db:up`          | Start PostgreSQL 16 in Docker (`docker-compose.dev.yml`)           |
-| `pnpm db:migrate`     | Apply migrations in `drizzle/`                                     |
-| `pnpm db:generate`    | Generate a migration from changes in `src/lib/server/db/schema.ts` |
-| `pnpm invite <email>` | Invite an e-mail address (sign-up is invite-only during the beta)  |
-| `pnpm dev`            | SvelteKit dev server                                               |
-| `pnpm worker:dev`     | Worker (pg-boss) in watch mode                                     |
-| `pnpm lint`           | Prettier check + ESLint                                            |
-| `pnpm check`          | svelte-check (types)                                               |
-| `pnpm test`           | Vitest, once. Needs a migrated database (`db:up` + `db:migrate`)   |
-| `pnpm format`         | Prettier write                                                     |
+| Command            | What it does                                                       |
+| ------------------ | ------------------------------------------------------------------ |
+| `pnpm db:up`       | Start PostgreSQL 16 in Docker (`docker-compose.dev.yml`)           |
+| `pnpm db:migrate`  | Apply migrations in `drizzle/`                                     |
+| `pnpm db:generate` | Generate a migration from changes in `src/lib/server/db/schema.ts` |
+| `pnpm dev`         | SvelteKit dev server                                               |
+| `pnpm worker:dev`  | Worker (pg-boss) in watch mode                                     |
+| `pnpm lint`        | Prettier check + ESLint                                            |
+| `pnpm check`       | svelte-check (types)                                               |
+| `pnpm test`        | Vitest, once. Needs a migrated database (`db:up` + `db:migrate`)   |
+| `pnpm format`      | Prettier write                                                     |
 
 Before finishing a task: `pnpm lint && pnpm check && pnpm test` must pass.
 
@@ -32,8 +31,8 @@ docs/                    spec and reference schema (source of truth, French)
 drizzle/                 SQL migrations (0000 and 0002 are hand-written), meta/ is generated
 src/env.ts               app environment variables, validated at startup ($app/env/private)
 src/hooks.server.ts      session -> locals.user / locals.session, serves /api/auth/*
-src/lib/server/db/       schema.ts (Drizzle), index.ts (createDb), invite.ts
-src/lib/server/auth/     createAuth (Better Auth on the users table, invite check, usernames)
+src/lib/server/db/       schema.ts (Drizzle), index.ts (createDb)
+src/lib/server/auth/     createAuth (Better Auth on the users table, usernames)
 src/lib/server/app.ts    app-only singletons: db, auth (reads $app/env/private)
 src/lib/server/providers/ TMDB, AniList, Open Library clients (rate limiter, retries in http.ts, cache.ts)
 src/lib/server/catalogue.ts provider per media type, cached search, import/upsert into the catalogue
@@ -55,7 +54,7 @@ src/lib/server/jellyfin.ts webhook payload parsing and the template to paste in 
 src/lib/server/scrobble.ts watched events -> library progress (worker side)
 src/routes/hooks/        webhooks, no session: /hooks/jellyfin/[token]
 src/lib/labels.ts        French labels for enums, score scale conversions (shared client/server)
-src/routes/(app)/        signed-in pages (guard in +layout.server.ts): / (Accueil, +1),
+src/routes/(app)/        pages; browsing is public, personal pages and actions call requireUser (server/guard.ts): / (Accueil, +1),
                          /search, /media/[id], /library, /lists, /lists/[id], /calendar,
                          /stats, /import, /integrations, /activity, /u/[username], /settings
 static/                  PWA manifest and icons (PNGs drawn from static/icons/icon.svg)
@@ -83,7 +82,7 @@ scripts/backup.sh        nightly pg_dump into restic (host cron)
 - Never commit secrets or API keys. `.env` is git-ignored; document new variables in `.env.example`.
 - Shared server code must not import `$app/*` or other SvelteKit-only modules, and uses relative imports, so the worker (run with tsx) can load it. Pass config (e.g. the database URL) in as arguments. Only `src/lib/server/app.ts` and SvelteKit files read `$app/env/private`.
 - SvelteKit 3: environment variables are declared in `src/env.ts`; `resolve()` from `$app/paths` takes paths without a leading slash (`resolve('login')`).
-- Auth: Better Auth uses the `users` table (`name` -> `display_name`, `image` -> `avatar_url`) and `sessions`, `accounts`, `verifications`. Sign-up (password or OAuth) requires a row in `invites`; the username is chosen at password sign-up and derived from the e-mail for OAuth. Only password reset sends e-mails (one-hour link, other sessions revoked); no e-mail verification yet.
+- Auth: Better Auth uses the `users` table (`name` -> `display_name`, `image` -> `avatar_url`) and `sessions`, `accounts`, `verifications`. Sign-up is open (password, Google or GitHub; the `invites` table is unused). Signing in with Google (or GitHub with a verified e-mail) on an existing password account links it and drops the password and sessions (local e-mails are unverified: `accountLinking` + account hook); the username is chosen at password sign-up and derived from the e-mail for OAuth. Only password reset sends e-mails (one-hour link, other sessions revoked); no e-mail verification yet. Browsing needs no account: public loads use `viewerId(locals)` (signed-out = `ANONYMOUS_ID`, sees only public data), personal pages and every action call `requireUser(locals, url)`, which redirects to `/login?redirectTo=`.
 - Database changes: edit `schema.ts`, run `pnpm db:generate`, commit the generated migration. Things drizzle-kit cannot express (extensions, functions, triggers) go in a custom migration: `pnpm drizzle-kit generate --custom --name <name>`. Keep `docs/schema.sql` in sync when the schema changes.
 - Drizzle uses `casing: 'snake_case'`: camelCase in TypeScript, snake_case in SQL.
 - Fuzzy search compares `f_unaccent(lower(title))` so queries hit `media_titles_trgm_idx`.

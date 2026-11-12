@@ -16,7 +16,7 @@
 		{ value: 'year', label: 'Date de sortie' },
 		{ value: 'score', label: 'Ma note' }
 	];
-	const scale = $derived(data.user.ratingScale);
+	const scale = $derived(data.ratingScale);
 	const inListIds = $derived(new Set(list.items.map((i) => i.mediaId)));
 	// Filtered in the page: lists are small, and the search above still knows every item
 	const shown = $derived(data.type ? list.items.filter((i) => i.type === data.type) : list.items);

@@ -1,4 +1,5 @@
 import { db } from '#lib/server/app.ts';
+import { requireUser } from '#lib/server/guard.ts';
 import {
 	currentMonth,
 	describeAirDate,
@@ -39,7 +40,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		const param = url.searchParams.get('month');
 		const month = param && /^\d{4}-(0[1-9]|1[0-2])$/.test(param) ? param : currentMonth();
 		const { from, to } = monthRange(month);
-		const items = (await upcomingEpisodes(db, locals.user!.id, from, to)).map(toItem);
+		const items = (await upcomingEpisodes(db, requireUser(locals, url).id, from, to)).map(toItem);
 		return {
 			view: 'month' as const,
 			today,
@@ -58,7 +59,9 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	const from = startOfToday();
 	const to = new Date(from.getTime() + DAYS * 24 * 3600 * 1000);
 	const days: { key: string; label: string; items: ReturnType<typeof toItem>[] }[] = [];
-	for (const item of (await upcomingEpisodes(db, locals.user!.id, from, to)).map(toItem)) {
+	for (const item of (await upcomingEpisodes(db, requireUser(locals, url).id, from, to)).map(
+		toItem
+	)) {
 		if (days.at(-1)?.key !== item.dayKey)
 			days.push({ key: item.dayKey, label: item.day, items: [] });
 		days.at(-1)!.items.push(item);

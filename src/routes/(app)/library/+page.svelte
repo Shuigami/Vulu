@@ -53,7 +53,7 @@
 	];
 	const tab = (active: boolean) =>
 		`border-b-2 px-3.5 py-2.5 text-sm no-underline ${active ? 'border-accent font-semibold text-ink' : 'border-transparent text-muted hover:text-ink'}`;
-	const scale = $derived(data.user.ratingScale);
+	const scale = $derived(data.ratingScale);
 	const allCount = $derived(Object.values(data.counts).reduce((a, b) => a + b, 0));
 </script>
 

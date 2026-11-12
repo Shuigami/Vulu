@@ -71,7 +71,7 @@
 	async function signOut() {
 		await authClient.signOut();
 		await invalidateAll();
-		await goto(resolve('login'));
+		await goto(resolve(''));
 	}
 </script>
 
@@ -140,44 +140,54 @@
 					><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg
 				></button
 			>
-			<details bind:this={menu} class="relative">
-				<summary
-					aria-label="Mon compte"
-					class="flex cursor-pointer list-none items-center rounded-full border border-line p-0.5 hover:border-muted [&::-webkit-details-marker]:hidden"
-				>
-					<Avatar
-						src={data.user.avatarUrl}
-						name={data.user.displayName || data.user.username}
-						class="size-9"
-					/>
-				</summary>
-				<div class="absolute right-0 z-40 mt-2 flex w-60 flex-col card p-1.5 text-sm shadow-xl">
-					<a
-						href={resolve('/(app)/u/[username]', { username: data.user.username })}
-						class="flex flex-col rounded-lg px-3 py-2.5 text-ink no-underline hover:bg-surface-2"
+			{#if data.user}
+				<details bind:this={menu} class="relative">
+					<summary
+						aria-label="Mon compte"
+						class="flex cursor-pointer list-none items-center rounded-full border border-line p-0.5 hover:border-muted [&::-webkit-details-marker]:hidden"
 					>
-						<span class="font-semibold">{data.user.displayName || data.user.username}</span>
-						<span class="text-[13px] text-muted">Voir mon profil</span>
-					</a>
-					<div class="my-1 border-t border-line"></div>
-					{#each more as link (link.href)}
-						{@const current = isCurrent(link.href)}
+						<Avatar
+							src={data.user.avatarUrl}
+							name={data.user.displayName || data.user.username}
+							class="size-9"
+						/>
+					</summary>
+					<div class="absolute right-0 z-40 mt-2 flex w-60 flex-col card p-1.5 text-sm shadow-xl">
 						<a
-							href={link.href}
-							aria-current={current ? 'page' : undefined}
-							class="flex min-h-10 items-center rounded-lg px-3 text-ink no-underline hover:bg-surface-2 {current
-								? 'bg-surface-2 font-semibold'
-								: ''}">{link.label}</a
+							href={resolve('/(app)/u/[username]', { username: data.user.username })}
+							class="flex flex-col rounded-lg px-3 py-2.5 text-ink no-underline hover:bg-surface-2"
 						>
-					{/each}
-					<div class="my-1 border-t border-line"></div>
-					<button
-						type="button"
-						class="flex min-h-10 cursor-pointer items-center rounded-lg px-3 text-left text-muted hover:bg-surface-2 hover:text-ink"
-						onclick={signOut}>Se déconnecter</button
-					>
-				</div>
-			</details>
+							<span class="font-semibold">{data.user.displayName || data.user.username}</span>
+							<span class="text-[13px] text-muted">Voir mon profil</span>
+						</a>
+						<div class="my-1 border-t border-line"></div>
+						{#each more as link (link.href)}
+							{@const current = isCurrent(link.href)}
+							<a
+								href={link.href}
+								aria-current={current ? 'page' : undefined}
+								class="flex min-h-10 items-center rounded-lg px-3 text-ink no-underline hover:bg-surface-2 {current
+									? 'bg-surface-2 font-semibold'
+									: ''}">{link.label}</a
+							>
+						{/each}
+						<div class="my-1 border-t border-line"></div>
+						<button
+							type="button"
+							class="flex min-h-10 cursor-pointer items-center rounded-lg px-3 text-left text-muted hover:bg-surface-2 hover:text-ink"
+							onclick={signOut}>Se déconnecter</button
+						>
+					</div>
+				</details>
+			{:else}
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query string -->
+				<a
+					href="{resolve('login')}?redirectTo={encodeURIComponent(
+						page.url.pathname + page.url.search
+					)}"
+					class="btn-accent px-4 text-sm no-underline">Se connecter</a
+				>
+			{/if}
 		</div>
 	</div>
 </header>
@@ -200,6 +210,7 @@
 		<a href="https://openlibrary.org" rel="external">Open Library</a>. Ce produit utilise l’API TMDB
 		mais n’est ni approuvé ni certifié par TMDB.
 	</p>
+	<p class="mt-2"><a href={resolve('privacy')}>Confidentialité</a></p>
 </footer>
 
 <nav

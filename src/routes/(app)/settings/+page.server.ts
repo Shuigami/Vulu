@@ -1,12 +1,13 @@
 import { fail } from '@sveltejs/kit';
 import { eq } from 'drizzle-orm';
 import { db } from '#lib/server/app.ts';
+import { requireUser } from '#lib/server/guard.ts';
 import { users } from '#lib/server/db/schema.ts';
 import { removeAvatar, saveAvatar, setDisplayName } from '#lib/server/profile.ts';
 import { RATING_SCALES } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
 
-export const load: PageServerLoad = async ({ locals, cookies }) => {
+export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 	const [u] = await db
 		.select({
 			profileVisibility: users.profileVisibility,
@@ -15,7 +16,7 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 			avatarUrl: users.avatarUrl
 		})
 		.from(users)
-		.where(eq(users.id, locals.user!.id));
+		.where(eq(users.id, requireUser(locals, url).id));
 	// Set by the theme choice below; hooks.server.ts applies it to every page
 	const cookie = cookies.get('theme');
 	const theme: 'light' | 'dark' | 'system' =
@@ -24,14 +25,14 @@ export const load: PageServerLoad = async ({ locals, cookies }) => {
 };
 
 export const actions: Actions = {
-	profile: async ({ request, locals }) => {
+	profile: async ({ request, locals, url }) => {
 		const form = await request.formData();
-		await setDisplayName(db, locals.user!.id, String(form.get('displayName') ?? ''));
+		await setDisplayName(db, requireUser(locals, url).id, String(form.get('displayName') ?? ''));
 		const file = form.get('avatar');
 		if (file instanceof File && file.size > 0) {
 			const result = await saveAvatar(
 				db,
-				locals.user!.id,
+				requireUser(locals, url).id,
 				new Uint8Array(await file.arrayBuffer())
 			);
 			if (result === 'invalid')
@@ -41,11 +42,11 @@ export const actions: Actions = {
 		}
 		return { profileSaved: true };
 	},
-	removeAvatar: async ({ locals }) => {
-		await removeAvatar(db, locals.user!.id);
+	removeAvatar: async ({ locals, url }) => {
+		await removeAvatar(db, requireUser(locals, url).id);
 		return { profileSaved: true };
 	},
-	preferences: async ({ request, locals }) => {
+	preferences: async ({ request, locals, url }) => {
 		const form = await request.formData();
 		const visibility = form.get('profileVisibility');
 		const ratingScale = Number(form.get('ratingScale'));
@@ -56,7 +57,7 @@ export const actions: Actions = {
 		await db
 			.update(users)
 			.set({ profileVisibility: visibility, ratingScale })
-			.where(eq(users.id, locals.user!.id));
+			.where(eq(users.id, requireUser(locals, url).id));
 		return { saved: true };
 	}
 };

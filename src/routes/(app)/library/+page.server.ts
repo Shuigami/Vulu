@@ -1,5 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { db } from '#lib/server/app.ts';
+import { requireUser } from '#lib/server/guard.ts';
 import {
 	countByStatus,
 	incrementProgress,
@@ -23,7 +24,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 	const q = url.searchParams.get('q')?.trim().slice(0, 100) || undefined;
 	const page = Math.max(1, Math.floor(Number(url.searchParams.get('page')) || 1));
 	const [entries, counts] = await Promise.all([
-		listEntries(db, locals.user!.id, {
+		listEntries(db, requireUser(locals, url).id, {
 			type,
 			status,
 			favorite,
@@ -32,7 +33,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			limit: PAGE_SIZE,
 			offset: (page - 1) * PAGE_SIZE
 		}),
-		countByStatus(db, locals.user!.id, { type, favorite })
+		countByStatus(db, requireUser(locals, url).id, { type, favorite })
 	]);
 	// Past the last page no row carries the count: the page then shows its empty state
 	const total = entries[0]?.total ?? 0;
@@ -51,8 +52,9 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 };
 
 export const actions: Actions = {
-	increment: async ({ request, locals }) => {
+	increment: async ({ request, locals, url }) => {
 		const entryId = Number((await request.formData()).get('entryId'));
-		if (!(await incrementProgress(db, locals.user!.id, entryId))) error(404, 'Entrée introuvable');
+		if (!(await incrementProgress(db, requireUser(locals, url).id, entryId)))
+			error(404, 'Entrée introuvable');
 	}
 };
