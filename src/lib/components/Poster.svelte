@@ -6,15 +6,34 @@
 		src,
 		title,
 		type,
-		class: cls = 'w-12 rounded-lg'
-	}: { src: string | null; title: string; type?: MediaType; class?: string } = $props();
+		class: cls = 'w-12 rounded-lg',
+		delay = 0
+	}: {
+		src: string | null;
+		title: string;
+		type?: MediaType;
+		class?: string;
+		/** Delay of the fade-in (ms), to reveal a row one poster after the other. */
+		delay?: number;
+	} = $props();
 
-	// Fades in once loaded. Images already loaded (cached, or before hydration) show at once,
-	// and without JavaScript nothing is hidden.
+	// Fades in once loaded. Without a delay, images already loaded (cached, or before
+	// hydration) show at once; without JavaScript nothing is hidden.
 	function fadeIn(img: HTMLImageElement) {
-		if (img.complete) return;
+		if (img.complete && !delay) return;
 		img.style.opacity = '0';
-		const show = () => (img.style.opacity = '');
+		img.style.transitionDelay = `${delay}ms`;
+		// Next frame, so the transition starts from 0 even for a cached image
+		const show = () =>
+			requestAnimationFrame(() => {
+				img.style.opacity = '';
+				// The delay would also hold back the hover frame afterwards
+				setTimeout(() => (img.style.transitionDelay = ''), delay + 300);
+			});
+		if (img.complete) {
+			show();
+			return;
+		}
 		img.addEventListener('load', show, { once: true });
 		img.addEventListener('error', show, { once: true });
 	}

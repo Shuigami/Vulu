@@ -129,14 +129,11 @@
 				{/each}
 			</div>
 		</div>
-		{#await data.trending}
+		{#await data.trending[trendType]}
 			<ShelfSkeleton label="Chargement des tendances" />
 		{:then trending}
-			{#if trending?.[trendType].length}
-				<MediaShelf
-					items={shelf(trending[trendType])}
-					label="Tendances : {typePlural[trendType]}"
-				/>
+			{#if trending?.length}
+				<MediaShelf items={shelf(trending)} label="Tendances : {typePlural[trendType]}" />
 			{:else}
 				<p class="text-muted">Tendances indisponibles pour le moment.</p>
 			{/if}

@@ -2,7 +2,7 @@
 // and what is popular among Vulu members. Providers are reached through the worker.
 import { and, desc, eq, gte, inArray, ne, or, sql } from 'drizzle-orm';
 import type { PgBoss } from 'pg-boss';
-import { MEDIA_TYPES, type MediaType } from '../labels';
+import type { MediaType } from '../labels';
 import type { Db } from './db';
 import { activityEvents, libraryEntries, media, mediaExternalIds, users } from './db/schema';
 import { QUEUES, requestJob, type DiscoverJob, type SearchOutput } from './jobs';
@@ -40,19 +40,11 @@ async function knownIds(db: Db, results: SearchResult[]) {
 const discover = (boss: PgBoss, job: DiscoverJob) =>
 	requestJob<SearchOutput>(boss, QUEUES.discover, job).then((o) => o.results);
 
-/** Trending works per type; a type whose provider fails is left empty. */
-export async function trending(db: Db, boss: PgBoss) {
-	const settled = await Promise.allSettled(MEDIA_TYPES.map((type) => discover(boss, { type })));
-	const lists = settled.map((s) =>
-		s.status === 'fulfilled' ? s.value.filter((r) => !r.isAdult).slice(0, 18) : []
-	);
-	const known = await knownIds(db, lists.flat());
-	return Object.fromEntries(
-		MEDIA_TYPES.map((type, i) => [
-			type,
-			lists[i].map((r): DiscoverItem => ({ ...r, mediaId: known.get(keyOf(r)) ?? null }))
-		])
-	) as Record<MediaType, DiscoverItem[]>;
+/** Trending works of one type. */
+export async function trending(db: Db, boss: PgBoss, type: MediaType) {
+	const list = (await discover(boss, { type })).filter((r) => !r.isAdult).slice(0, 18);
+	const known = await knownIds(db, list);
+	return list.map((r): DiscoverItem => ({ ...r, mediaId: known.get(keyOf(r)) ?? null }));
 }
 
 /**
