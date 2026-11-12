@@ -8,6 +8,11 @@ services:
       default: {}
       proxy:
         aliases: [vulu-app]
+  grafana:
+    networks:
+      default: {}
+      proxy:
+        aliases: [vulu-grafana]
 
 networks:
   proxy:

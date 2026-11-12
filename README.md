@@ -71,6 +71,22 @@ cp docker-compose.shared-proxy.yml /srv/vulu/docker-compose.override.yml # caddy
 
 Les autres projets rejoignent le réseau externe `proxy` de la même façon, sous un alias unique. Aucun autre conteneur ne publie de port (Docker contourne le pare-feu pour les ports publiés).
 
+#### Tableau de bord (Grafana)
+
+Optionnel, environ 160 Mo de RAM : Grafana lit la base avec un rôle en lecture seule (`grafana_reader`, sans accès aux sessions, comptes, jetons et intégrations) et affiche le tableau de bord `deploy/grafana/dashboards/vulu.json` (utilisateurs, ajouts, activité, imports). Les panneaux se modifient dans Grafana ; pour les garder, exporter le JSON dans ce fichier.
+
+1. DNS : `grafana.<domaine>` vers le serveur, et le bloc correspondant dans `/srv/proxy/Caddyfile` (puis recharger Caddy).
+2. Copier `deploy/grafana/` dans `/srv/vulu/deploy/grafana/` et la dernière version de `docker-compose.shared-proxy.yml` en `docker-compose.override.yml`.
+3. Dans `/srv/vulu/.env` : `COMPOSE_PROFILES=grafana`, `GRAFANA_DOMAIN`, `GRAFANA_ADMIN_PASSWORD` et `GRAFANA_DB_PASSWORD` (`openssl rand -hex 24` pour les deux). **Le mot de passe admin doit être défini avant le premier démarrage**, sinon c'est `admin`.
+4. Créer le rôle, puis démarrer :
+
+```bash
+docker compose exec -T postgres psql -U vulu -d vulu -v password="$(grep '^GRAFANA_DB_PASSWORD=' .env | cut -d= -f2-)" < deploy/grafana/readonly.sql
+docker compose up -d grafana
+```
+
+Connexion avec `admin` et `GRAFANA_ADMIN_PASSWORD`. Pour changer le mot de passe du rôle, relancer `readonly.sql`, puis `docker compose up -d --force-recreate grafana`.
+
 Chez netcup, les ports sortants 25, 465 et 587 sont bloqués : utiliser le port 2525 du relais SMTP (`smtp://user:password@smtp-relay.brevo.com:2525`).
 
 Mise à jour : pousser un tag (`git tag v0.2.0 && git push --tags`), attendre l'image, puis `docker compose pull && docker compose up -d` sur le serveur.

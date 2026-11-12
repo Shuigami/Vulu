@@ -1,0 +1,15 @@
+apiVersion: 1
+datasources:
+  - name: Vulu
+    uid: vulu
+    type: grafana-postgresql-datasource
+    url: postgres:5432
+    user: grafana_reader
+    isDefault: true
+    editable: false
+    jsonData:
+      database: vulu
+      sslmode: disable
+      postgresVersion: 1600
+    secureJsonData:
+      password: $GRAFANA_DB_PASSWORD
