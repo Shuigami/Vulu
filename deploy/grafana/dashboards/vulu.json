@@ -1,0 +1,388 @@
+{
+	"uid": "vulu-overview",
+	"title": "Vulu",
+	"timezone": "Europe/Paris",
+	"time": {
+		"from": "now-90d",
+		"to": "now"
+	},
+	"refresh": "",
+	"schemaVersion": 39,
+	"panels": [
+		{
+			"id": 1,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "stat",
+			"title": "Utilisateurs",
+			"gridPos": {
+				"x": 0,
+				"y": 0,
+				"w": 4,
+				"h": 4
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "table",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT count(*) FROM users"
+				}
+			],
+			"options": {
+				"reduceOptions": {
+					"calcs": ["lastNotNull"]
+				},
+				"colorMode": "none",
+				"graphMode": "none"
+			}
+		},
+		{
+			"id": 2,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "stat",
+			"title": "Nouveaux (30 j)",
+			"gridPos": {
+				"x": 4,
+				"y": 0,
+				"w": 4,
+				"h": 4
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "table",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT count(*) FROM users WHERE created_at > now() - interval '30 days'"
+				}
+			],
+			"options": {
+				"reduceOptions": {
+					"calcs": ["lastNotNull"]
+				},
+				"colorMode": "none",
+				"graphMode": "none"
+			}
+		},
+		{
+			"id": 3,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "stat",
+			"title": "Actifs (7 j)",
+			"gridPos": {
+				"x": 8,
+				"y": 0,
+				"w": 4,
+				"h": 4
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "table",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT count(DISTINCT user_id) FROM activity_events WHERE source <> 'import' AND occurred_at > now() - interval '7 days'"
+				}
+			],
+			"options": {
+				"reduceOptions": {
+					"calcs": ["lastNotNull"]
+				},
+				"colorMode": "none",
+				"graphMode": "none"
+			}
+		},
+		{
+			"id": 4,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "stat",
+			"title": "Entrées de bibliothèque",
+			"gridPos": {
+				"x": 12,
+				"y": 0,
+				"w": 4,
+				"h": 4
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "table",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT count(*) FROM library_entries"
+				}
+			],
+			"options": {
+				"reduceOptions": {
+					"calcs": ["lastNotNull"]
+				},
+				"colorMode": "none",
+				"graphMode": "none"
+			}
+		},
+		{
+			"id": 5,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "stat",
+			"title": "Ajouts (30 j)",
+			"gridPos": {
+				"x": 16,
+				"y": 0,
+				"w": 4,
+				"h": 4
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "table",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT count(*) FROM library_entries WHERE created_at > now() - interval '30 days'"
+				}
+			],
+			"options": {
+				"reduceOptions": {
+					"calcs": ["lastNotNull"]
+				},
+				"colorMode": "none",
+				"graphMode": "none"
+			}
+		},
+		{
+			"id": 6,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "stat",
+			"title": "Médias au catalogue",
+			"gridPos": {
+				"x": 20,
+				"y": 0,
+				"w": 4,
+				"h": 4
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "table",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT count(*) FROM media"
+				}
+			],
+			"options": {
+				"reduceOptions": {
+					"calcs": ["lastNotNull"]
+				},
+				"colorMode": "none",
+				"graphMode": "none"
+			}
+		},
+		{
+			"id": 7,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "timeseries",
+			"title": "Inscriptions par jour",
+			"gridPos": {
+				"x": 0,
+				"y": 4,
+				"w": 12,
+				"h": 8
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "time_series",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT date_trunc('day', created_at AT TIME ZONE 'Europe/Paris') AT TIME ZONE 'Europe/Paris' AS time, count(*) AS \"inscriptions\" FROM users WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY 1"
+				}
+			],
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"drawStyle": "bars",
+						"fillOpacity": 80,
+						"stacking": {
+							"mode": "normal"
+						}
+					}
+				},
+				"overrides": []
+			}
+		},
+		{
+			"id": 8,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "timeseries",
+			"title": "Ajouts à la bibliothèque par jour",
+			"gridPos": {
+				"x": 12,
+				"y": 4,
+				"w": 12,
+				"h": 8
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "time_series",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT date_trunc('day', e.created_at AT TIME ZONE 'Europe/Paris') AT TIME ZONE 'Europe/Paris' AS time, m.type::text AS metric, count(*) AS value FROM library_entries e JOIN media m ON m.id = e.media_id WHERE $__timeFilter(e.created_at) GROUP BY 1, 2 ORDER BY 1"
+				}
+			],
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"drawStyle": "bars",
+						"fillOpacity": 80,
+						"stacking": {
+							"mode": "normal"
+						}
+					}
+				},
+				"overrides": []
+			}
+		},
+		{
+			"id": 9,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "timeseries",
+			"title": "Activité par jour et par source",
+			"gridPos": {
+				"x": 0,
+				"y": 12,
+				"w": 24,
+				"h": 8
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "time_series",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT date_trunc('day', occurred_at AT TIME ZONE 'Europe/Paris') AT TIME ZONE 'Europe/Paris' AS time, source::text AS metric, count(*) AS value FROM activity_events WHERE $__timeFilter(occurred_at) GROUP BY 1, 2 ORDER BY 1"
+				}
+			],
+			"fieldConfig": {
+				"defaults": {
+					"custom": {
+						"drawStyle": "bars",
+						"fillOpacity": 80,
+						"stacking": {
+							"mode": "normal"
+						}
+					}
+				},
+				"overrides": []
+			}
+		},
+		{
+			"id": 10,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "barchart",
+			"title": "Bibliothèque par type",
+			"gridPos": {
+				"x": 0,
+				"y": 20,
+				"w": 8,
+				"h": 8
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "table",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT m.type::text AS type, count(*) AS entrées FROM library_entries e JOIN media m ON m.id = e.media_id GROUP BY 1 ORDER BY 2 DESC"
+				}
+			],
+			"options": {
+				"orientation": "horizontal",
+				"showValue": "always"
+			}
+		},
+		{
+			"id": 11,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "barchart",
+			"title": "Bibliothèque par statut",
+			"gridPos": {
+				"x": 8,
+				"y": 20,
+				"w": 8,
+				"h": 8
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "table",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT status::text AS statut, count(*) AS entrées FROM library_entries GROUP BY 1 ORDER BY 2 DESC"
+				}
+			],
+			"options": {
+				"orientation": "horizontal",
+				"showValue": "always"
+			}
+		},
+		{
+			"id": 12,
+			"datasource": {
+				"type": "grafana-postgresql-datasource",
+				"uid": "vulu"
+			},
+			"type": "table",
+			"title": "Imports et intégrations",
+			"gridPos": {
+				"x": 16,
+				"y": 20,
+				"w": 8,
+				"h": 8
+			},
+			"targets": [
+				{
+					"refId": "A",
+					"format": "table",
+					"rawQuery": true,
+					"editorMode": "code",
+					"rawSql": "SELECT 'import ' || source AS quoi, status::text AS état, count(*) AS nombre FROM import_jobs GROUP BY 1, 2 UNION ALL SELECT 'intégration ' || kind, CASE WHEN enabled THEN 'active' ELSE 'désactivée' END, count(*) FROM integrations GROUP BY 1, 2 ORDER BY 1, 2"
+				}
+			],
+			"options": {}
+		}
+	]
+}

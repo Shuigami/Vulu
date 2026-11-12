@@ -71,7 +71,32 @@ services:
     depends_on:
       - app
 
+  # Stats dashboard, opt-in: COMPOSE_PROFILES=grafana in .env (about 100 MB of RAM).
+  # Reads the database as grafana_reader (deploy/grafana/readonly.sql), never as vulu
+  grafana:
+    image: grafana/grafana-oss:13.0.2
+    restart: unless-stopped
+    profiles: [grafana]
+    environment:
+      GF_SERVER_ROOT_URL: https://${GRAFANA_DOMAIN:-localhost}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-}
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_NEWS_NEWS_FEED_ENABLED: 'false'
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:-}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      postgres: { condition: service_healthy }
+
 volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  grafana_data:

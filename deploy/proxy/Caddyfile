@@ -3,3 +3,13 @@ vulu.shuii.net {
 	encode zstd gzip
 	reverse_proxy vulu-app:3000
 }
+
+status.shuii.net {
+	encode zstd gzip
+	reverse_proxy uptime-kuma:3001
+}
+
+grafana.shuii.net {
+	encode zstd gzip
+	reverse_proxy vulu-grafana:3000
+}
