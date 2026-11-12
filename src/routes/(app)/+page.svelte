@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import type { TransitionConfig } from 'svelte/transition';
 	import { enhance } from '$app/forms';
@@ -34,6 +35,8 @@
 		string
 	>;
 	const scale = $derived(data.user.ratingScale);
+	// +1 reloads the page data: keep the first provider lists, or every shelf would load again
+	const { trending, discoveries } = untrack(() => data);
 	let trendType = $state<(typeof MEDIA_TYPES)[number]>('movie');
 	const shelf = (items: DiscoverItem[]) =>
 		items.map((r) => ({
@@ -129,27 +132,27 @@
 				{/each}
 			</div>
 		</div>
-		{#await data.trending[trendType]}
+		{#await trending[trendType]}
 			<ShelfSkeleton label="Chargement des tendances" />
-		{:then trending}
-			{#if trending?.length}
-				<MediaShelf items={shelf(trending)} label="Tendances : {typePlural[trendType]}" />
+		{:then list}
+			{#if list?.length}
+				<MediaShelf items={shelf(list)} label="Tendances : {typePlural[trendType]}" />
 			{:else}
 				<p class="text-muted">Tendances indisponibles pour le moment.</p>
 			{/if}
 		{/await}
 	</section>
 
-	{#await data.discoveries}
+	{#await discoveries}
 		<section aria-labelledby="discover" class="flex flex-col gap-5">
 			<h2 id="discover" class="h2">Découvertes pour toi</h2>
 			<ShelfSkeleton label="Chargement des découvertes" noteLines={2} />
 		</section>
-	{:then discoveries}
-		{#if discoveries?.length}
+	{:then list}
+		{#if list?.length}
 			<section aria-labelledby="discover" class="flex flex-col gap-5">
 				<h2 id="discover" class="h2">Découvertes pour toi</h2>
-				<MediaShelf items={shelf(discoveries)} label="Découvertes pour toi" />
+				<MediaShelf items={shelf(list)} label="Découvertes pour toi" />
 			</section>
 		{/if}
 	{/await}
