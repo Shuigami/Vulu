@@ -7,7 +7,7 @@
 </script>
 
 <ul
-	class="-mx-1 flex [scrollbar-width:thin] gap-3.5 overflow-x-auto px-1 pb-2"
+	class="-mx-2 flex [scrollbar-width:thin] gap-3.5 overflow-x-auto px-2 pb-2"
 	aria-label={label}
 	aria-busy="true"
 >
