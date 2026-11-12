@@ -5,9 +5,8 @@ import type { RequestHandler } from './$types';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Avatars show next to public activity, so any signed-in member may load them.
-export const GET: RequestHandler = async ({ params, locals }) => {
-	if (!locals.user) error(401);
+// Avatars show next to public activity, which signed-out visitors see too.
+export const GET: RequestHandler = async ({ params }) => {
 	if (!UUID.test(params.id)) error(404);
 	const avatar = await getAvatar(db, params.id);
 	if (!avatar) error(404);

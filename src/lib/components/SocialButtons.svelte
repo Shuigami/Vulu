@@ -7,7 +7,7 @@
 	const labels: Record<Provider, string> = { google: 'Google', github: 'GitHub' };
 
 	function signIn(provider: Provider) {
-		// Errors (e.g. NOT_INVITED) come back as ?error=… on the login page.
+		// Errors (e.g. a refused sign-in) come back as ?error=… on the login page.
 		return authClient.signIn.social({
 			provider,
 			callbackURL: redirectTo,

@@ -11,7 +11,7 @@
 	let { data }: PageProps = $props();
 	const p = $derived(data.profile);
 	const name = $derived(p.user.displayName || p.user.username);
-	const scale = $derived(data.user.ratingScale);
+	const scale = $derived(data.ratingScale);
 	const list = (which: 'followers' | 'following') =>
 		resolve('/(app)/u/[username]/[which]', { username: p.user.username, which });
 </script>

@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import { like } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDb } from '../db';
-import { invites, users } from '../db/schema';
+import { accounts, sessions, users } from '../db/schema';
 import type { Mail } from '../mail';
 import { createAuth } from '.';
 import { usernameBase } from './username';
@@ -19,32 +19,20 @@ const auth = createAuth(db, {
 // Every address of this run shares a unique domain, so cleanup never touches real data.
 const domain = `${randomUUID().slice(0, 8)}.test.vulu`;
 const email = (local: string) => `${local}@${domain}`;
-const invite = (address: string) => db.insert(invites).values({ email: address });
 const signUp = (body: { email: string; username?: string }) =>
 	auth.api.signUpEmail({ body: { password: 'correct horse battery', name: 'Test', ...body } });
 
 afterAll(async () => {
 	await db.delete(users).where(like(users.email, `%@${domain}`));
-	await db.delete(invites).where(like(invites.email, `%@${domain}`));
 	await db.$client.end();
 });
 
 describe('sign-up', () => {
-	it('rejects an e-mail that was not invited', async () => {
-		await expect(signUp({ email: email('stranger'), username: 'stranger' })).rejects.toMatchObject({
-			body: { code: 'NOT_INVITED' }
-		});
-	});
-
-	it('creates the user with the chosen username and marks the invite as used', async () => {
+	it('creates the user with the chosen username, no invite needed', async () => {
 		const address = email('alice');
-		await invite(address);
 		const username = `alice_${domain.slice(0, 8)}`;
 		const res = await signUp({ email: address, username });
 		expect(res.user).toMatchObject({ email: address, username });
-
-		const [row] = await db.select().from(invites).where(like(invites.email, address));
-		expect(row.usedAt).toBeInstanceOf(Date);
 
 		const signIn = await auth.api.signInEmail({
 			body: { email: address, password: 'correct horse battery' }
@@ -54,7 +42,6 @@ describe('sign-up', () => {
 
 	it('rejects an invalid username', async () => {
 		const address = email('bob');
-		await invite(address);
 		await expect(signUp({ email: address, username: 'no spaces!' })).rejects.toMatchObject({
 			body: { code: 'INVALID_USERNAME' }
 		});
@@ -64,15 +51,45 @@ describe('sign-up', () => {
 		const local = `carol${domain.slice(0, 8)}`;
 		const first = email(local);
 		const second = `${local}@other-${domain}`;
-		await invite(first);
-		await invite(second);
 
 		const a = await signUp({ email: first });
 		const b = await signUp({ email: second });
 		expect((a.user as { username: string }).username).toBe(local);
 		expect((b.user as { username: string }).username).toBe(`${local}_2`);
 		await db.delete(users).where(like(users.email, second));
-		await db.delete(invites).where(like(invites.email, second));
+	});
+});
+
+describe('account linking', () => {
+	it('drops the password and the sessions when Google is linked to a password account', async () => {
+		const address = email('linked');
+		const { user } = await signUp({ email: address, username: `linked_${domain.slice(0, 8)}` });
+		expect(await db.$count(sessions, eq(sessions.userId, user.id))).toBe(1);
+
+		// What the OAuth callback does when the e-mail already has an account
+		const ctx = await auth.$context;
+		await ctx.internalAdapter.linkAccount({
+			userId: user.id,
+			providerId: 'google',
+			accountId: `g-${domain}`
+		});
+
+		const left = await db
+			.select({ providerId: accounts.providerId })
+			.from(accounts)
+			.where(eq(accounts.userId, user.id));
+		expect(left).toEqual([{ providerId: 'google' }]);
+		expect(await db.$count(sessions, eq(sessions.userId, user.id))).toBe(0);
+		await expect(
+			auth.api.signInEmail({ body: { email: address, password: 'correct horse battery' } })
+		).rejects.toBeDefined();
+	});
+
+	it('trusts Google without a verified local e-mail', () => {
+		expect(auth.options.account?.accountLinking).toMatchObject({
+			trustedProviders: ['google'],
+			requireLocalEmailVerified: false
+		});
 	});
 });
 
@@ -97,7 +114,6 @@ describe('password reset', () => {
 
 	it('mails a one-hour link and sets the new password with its token', async () => {
 		const address = email('forgetful');
-		await invite(address);
 		await signUp({ email: address, username: `forget_${domain.slice(0, 8)}` });
 
 		await mailing.api.requestPasswordReset({

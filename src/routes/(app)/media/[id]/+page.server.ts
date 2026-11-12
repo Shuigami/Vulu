@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import { and, desc, eq, sum } from 'drizzle-orm';
 import { db } from '#lib/server/app.ts';
+import { requireUser, viewerId as viewerOf } from '#lib/server/guard.ts';
 import {
 	describeAirDate,
 	episodeLabel,
@@ -34,7 +35,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	const [entry] = await db
 		.select()
 		.from(libraryEntries)
-		.where(and(eq(libraryEntries.mediaId, id), eq(libraryEntries.userId, locals.user!.id)));
+		.where(and(eq(libraryEntries.mediaId, id), eq(libraryEntries.userId, viewerOf(locals))));
 	const externalIds = await db
 		.select({ provider: mediaExternalIds.provider, externalId: mediaExternalIds.externalId })
 		.from(mediaExternalIds)
@@ -44,7 +45,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		episode: episodeLabel(next),
 		...describeAirDate(next.airDate!)
 	};
-	const viewerId = locals.user!.id;
+	const viewerId = viewerOf(locals);
 	const mine = and(eq(activityEvents.mediaId, id), eq(activityEvents.userId, viewerId));
 	const [ratings, followed, reviews, journal, [time], lists] = await Promise.all([
 		ratingSummary(db, id, viewerId),
@@ -126,35 +127,35 @@ function parseEntryForm(form: FormData, ratingScale: number): EntryPatch | strin
 }
 
 export const actions: Actions = {
-	toggleList: async ({ params, request, locals }) => {
+	toggleList: async ({ params, request, locals, url }) => {
 		const form = await request.formData();
 		const listId = Number(form.get('listId'));
 		if (!Number.isInteger(listId)) return fail(400);
 		const mediaId = parseId(params.id);
 		const toggle = form.get('has') === 'true' ? removeFromList : addToList;
-		await toggle(db, locals.user!.id, listId, mediaId);
+		await toggle(db, requireUser(locals, url).id, listId, mediaId);
 	},
-	newList: async ({ params, request, locals }) => {
+	newList: async ({ params, request, locals, url }) => {
 		const input = parseListInput(await request.formData());
 		if (typeof input === 'string') return fail(400, { listError: input });
-		const listId = await createList(db, locals.user!.id, input);
-		await addToList(db, locals.user!.id, listId, parseId(params.id));
+		const listId = await createList(db, requireUser(locals, url).id, input);
+		await addToList(db, requireUser(locals, url).id, listId, parseId(params.id));
 	},
-	add: async ({ params, request, locals }) => {
+	add: async ({ params, request, locals, url }) => {
 		const status = (await request.formData()).get('status');
-		const entryId = await addToLibrary(db, locals.user!.id, parseId(params.id));
+		const entryId = await addToLibrary(db, requireUser(locals, url).id, parseId(params.id));
 		// Added straight as "in progress" or "completed": the usual rules fill in dates and progress
 		if (isEntryStatus(status) && status !== 'planned')
-			await updateEntry(db, locals.user!.id, entryId, { status });
+			await updateEntry(db, requireUser(locals, url).id, entryId, { status });
 	},
 
-	update: async ({ request, locals }) => {
+	update: async ({ request, locals, url }) => {
 		const form = await request.formData();
 		const entryId = Number(form.get('entryId'));
-		const parsed = parseEntryForm(form, locals.user!.ratingScale ?? 5);
+		const parsed = parseEntryForm(form, requireUser(locals, url).ratingScale ?? 5);
 		if (typeof parsed === 'string') return fail(400, { error: parsed });
 		// Only send what changed, so automatic rules (e.g. completing at the last episode) apply
-		const ok = await updateEntry(db, locals.user!.id, entryId, (current) =>
+		const ok = await updateEntry(db, requireUser(locals, url).id, entryId, (current) =>
 			Object.fromEntries(
 				Object.entries(parsed).filter(([k, v]) => current[k as keyof typeof current] !== v)
 			)
@@ -163,8 +164,8 @@ export const actions: Actions = {
 		return { saved: true };
 	},
 
-	remove: async ({ request, locals }) => {
+	remove: async ({ request, locals, url }) => {
 		const entryId = Number((await request.formData()).get('entryId'));
-		await removeEntry(db, locals.user!.id, entryId);
+		await removeEntry(db, requireUser(locals, url).id, entryId);
 	}
 };

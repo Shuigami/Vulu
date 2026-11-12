@@ -14,7 +14,7 @@
 		<h1 class="sr-only">Activité</h1>
 	</div>
 	{#if data.items.length}
-		<ActivityFeed items={data.items} scale={data.user.ratingScale} />
+		<ActivityFeed items={data.items} scale={data.ratingScale} />
 		{#if data.next}
 			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query on a resolved path -->
 			<a

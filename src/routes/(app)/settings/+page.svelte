@@ -95,7 +95,7 @@
 		<div class="flex items-center gap-4">
 			<Avatar
 				src={preview ?? data.avatarUrl}
-				name={data.displayName || data.user.username}
+				name={data.displayName || data.user!.username}
 				class="size-20 text-3xl"
 			/>
 			<div class="flex flex-wrap gap-2">
@@ -120,10 +120,10 @@
 				name="displayName"
 				value={data.displayName ?? ''}
 				maxlength="50"
-				placeholder={data.user.username}
+				placeholder={data.user!.username}
 				class="h-11 rounded-xl border border-line bg-surface px-3.5 text-ink outline-none focus:border-accent"
 			/>
-			<span class="text-[13px] text-muted">Ton identifiant reste @{data.user.username}.</span>
+			<span class="text-[13px] text-muted">Ton identifiant reste @{data.user!.username}.</span>
 		</label>
 		<div class="flex items-center gap-3">
 			<button class="btn-ink">Enregistrer</button>

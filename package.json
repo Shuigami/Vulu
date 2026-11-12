@@ -20,8 +20,7 @@
 		"worker:dev": "tsx watch --env-file-if-exists=.env src/worker/index.ts",
 		"db:up": "docker compose -f docker-compose.dev.yml up -d --wait",
 		"db:generate": "drizzle-kit generate",
-		"db:migrate": "drizzle-kit migrate",
-		"invite": "tsx --env-file-if-exists=.env src/lib/server/db/invite.ts"
+		"db:migrate": "drizzle-kit migrate"
 	},
 	"devDependencies": {
 		"@eslint/js": "^10.0.1",
