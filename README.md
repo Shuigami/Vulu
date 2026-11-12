@@ -17,7 +17,6 @@ pnpm install
 cp .env.example .env      # puis remplir les clés si besoin
 pnpm db:up                # PostgreSQL 16 dans Docker, port 5432
 pnpm db:migrate           # crée les tables
-pnpm invite toi@exemple.fr # l'inscription est sur invitation pendant la bêta
 ```
 
 Dans `.env`, `BETTER_AUTH_SECRET` doit faire au moins 32 caractères (`openssl rand -base64 32`). La connexion Google ou GitHub est facultative : renseigne les identifiants OAuth indiqués dans `.env.example` pour afficher les boutons correspondants.
@@ -55,11 +54,10 @@ La CI GitHub Actions lance les mêmes vérifications et applique les migrations 
 2. Copier `docker-compose.yml`, `Caddyfile` et `scripts/backup.sh` dans `/srv/vulu`.
 3. Créer `/srv/vulu/.env` à partir de `.env.example` : `VULU_DOMAIN`, `POSTGRES_PASSWORD`, `BETTER_AUTH_SECRET`, `TMDB_API_KEY`, etc. (`DATABASE_URL` et `BETTER_AUTH_URL` sont fixés par le compose). Les URL de rappel OAuth deviennent `https://<domaine>/api/auth/callback/google` (ou `github`).
 4. Si le paquet GHCR est privé : `docker login ghcr.io` avec un jeton `read:packages`.
-5. Lancer, puis inviter les premiers comptes :
+5. Lancer :
 
 ```bash
 docker compose pull && docker compose up -d
-docker compose exec app node --import tsx src/lib/server/db/invite.ts toi@example.com
 ```
 
 #### Serveur partagé avec d'autres projets

@@ -171,7 +171,7 @@ export const verifications = pgTable(
 	(t) => [index('verifications_identifier_idx').on(t.identifier)]
 );
 
-// Beta access: sign-up (password or OAuth) is only allowed for an invited e-mail.
+// Beta invitations. Unused since sign-up is open; kept for the existing rows.
 export const invites = pgTable('invites', {
 	email: citext().primaryKey(),
 	invitedBy: uuid().references(() => users.id, { onDelete: 'set null' }),

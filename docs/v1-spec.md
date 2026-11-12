@@ -99,4 +99,4 @@ Le SQL complet est fourni dans `schema.sql` (chargé et testé sur PostgreSQL 16
 
 - **Framework** : SvelteKit par défaut, Next.js si tu préfères rester sur React.
 - **Ouverture du code** : open source dès le début (pratique pour le modèle « auto-hébergeable + version hébergée payante ») ou privé pour l'instant.
-- **Inscriptions** : ouvertes à tous ou sur invitation pendant la bêta, pour rester dans l'usage non commercial des API le temps de valider le produit.
+- **Inscriptions** : ouvertes à tous (e-mail, Google ou GitHub). Le site se consulte sans compte ; il est demandé pour ajouter une œuvre ou toute autre action personnelle.

@@ -3,9 +3,9 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError } from 'better-auth/api';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { Db } from '../db';
-import { accounts, invites, sessions, users, verifications } from '../db/schema';
+import { accounts, sessions, users, verifications } from '../db/schema';
 import { createMailer, resetPasswordMail, type SendMail } from '../mail';
 import { availableUsername, USERNAME_RE, usernameBase } from './username';
 
@@ -22,7 +22,6 @@ export type AuthConfig = {
 
 /** Error codes returned to the client, translated in src/lib/auth-errors.ts. */
 export const AUTH_ERRORS = {
-	NOT_INVITED: 'NOT_INVITED',
 	INVALID_USERNAME: 'INVALID_USERNAME',
 	USERNAME_TAKEN: 'USERNAME_TAKEN'
 } as const;
@@ -46,7 +45,12 @@ export function createAuth(db: Db, config: AuthConfig) {
 			}
 		},
 		session: { modelName: 'sessions' },
-		account: { modelName: 'accounts' },
+		account: {
+			modelName: 'accounts',
+			// Signing in with Google (or GitHub, verified e-mail) on an existing password account links
+			// it. Local e-mails are not verified, so the password is dropped on link (account hook below).
+			accountLinking: { trustedProviders: ['google'], requireLocalEmailVerified: false }
+		},
 		verification: { modelName: 'verifications' },
 		advanced: { database: { generateId: 'uuid' } },
 		// shortcut: no e-mail verification yet, only password reset sends e-mails.
@@ -66,18 +70,28 @@ export function createAuth(db: Db, config: AuthConfig) {
 			...(config.github && { github: config.github })
 		},
 		databaseHooks: {
+			account: {
+				create: {
+					// The provider proved the e-mail is theirs: whoever set the password (maybe someone who
+					// signed up with this address first) loses access. "Mot de passe oublié" sets a new one.
+					after: async (account) => {
+						if (account.providerId === 'credential') return;
+						const removed = await db
+							.delete(accounts)
+							.where(
+								and(eq(accounts.userId, account.userId), eq(accounts.providerId, 'credential'))
+							)
+							.returning({ id: accounts.id });
+						// Runs before the new sign-in session is created
+						if (removed.length)
+							await db.delete(sessions).where(eq(sessions.userId, account.userId));
+					}
+				}
+			},
 			user: {
 				create: {
 					// Runs for every sign-up method (password, Google, GitHub).
 					before: async (user) => {
-						const email = user.email.toLowerCase();
-						if ((await db.$count(invites, eq(invites.email, email))) === 0) {
-							throw new APIError('FORBIDDEN', {
-								code: AUTH_ERRORS.NOT_INVITED,
-								message: 'This e-mail address has not been invited'
-							});
-						}
-
 						const requested = (user as { username?: unknown }).username;
 						let username: string;
 						if (typeof requested === 'string' && requested !== '') {
@@ -96,15 +110,12 @@ export function createAuth(db: Db, config: AuthConfig) {
 							username = requested;
 						} else {
 							// OAuth sign-up: no form, derive it from the e-mail (editable later).
-							username = await availableUsername(db, usernameBase(email.split('@')[0]));
+							username = await availableUsername(
+								db,
+								usernameBase(user.email.toLowerCase().split('@')[0])
+							);
 						}
 						return { data: { ...user, username } };
-					},
-					after: async (user) => {
-						await db
-							.update(invites)
-							.set({ usedAt: new Date() })
-							.where(eq(invites.email, user.email.toLowerCase()));
 					}
 				}
 			}

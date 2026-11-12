@@ -36,11 +36,10 @@
 <svelte:head><title>Inscription · Vulu</title></svelte:head>
 
 <h1 class="font-display text-[40px] font-extrabold tracking-tight">Inscription</h1>
-<p class="-mt-4 text-muted">Vulu est en bêta : l’inscription demande une invitation.</p>
 
 <form class="flex flex-col gap-3.5" onsubmit={submit}>
 	<label class="flex flex-col gap-1.5 text-sm font-medium">
-		E-mail invité
+		E-mail
 		<input name="email" type="email" autocomplete="email" required class="field" />
 	</label>
 	<label class="flex flex-col gap-1.5 text-sm font-medium">
