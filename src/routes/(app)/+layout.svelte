@@ -5,6 +5,7 @@
 	import { authClient } from '#lib/auth-client.ts';
 	import Avatar from '#lib/components/Avatar.svelte';
 	import MediaSkeleton from '#lib/components/MediaSkeleton.svelte';
+	import QuickAdd from '#lib/components/QuickAdd.svelte';
 	import SearchBox from '#lib/components/SearchBox.svelte';
 	import Toaster from '#lib/components/Toaster.svelte';
 	import { opening } from '#lib/opening.svelte.ts';
@@ -61,6 +62,9 @@
 		href === resolve('') ? page.url.pathname === href : page.url.pathname.startsWith(href);
 
 	let menu: HTMLDetailsElement | undefined = $state();
+	let quickAdd: QuickAdd | undefined = $state();
+	const plusIcon =
+		'<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 	// The account menu closes after navigating, on a click elsewhere, and on Escape
 	$effect(() => {
 		void page.url.pathname;
@@ -123,6 +127,18 @@
 			>
 		{/if}
 		<div class="ml-auto flex items-center gap-2 {searchUi.open ? 'max-md:hidden' : ''}">
+			{#if data.user}
+				<button
+					type="button"
+					aria-label="Ajouter une œuvre"
+					title="Ajouter une œuvre"
+					class="hidden size-10 cursor-pointer items-center justify-center rounded-full border border-line text-ink hover:bg-surface-2 md:flex"
+					onclick={() => quickAdd?.open()}
+				>
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup -->
+					{@html plusIcon}
+				</button>
+			{/if}
 			<button
 				type="button"
 				aria-label="Ouvrir la recherche"
@@ -212,6 +228,22 @@
 	</p>
 	<p class="mt-2"><a href={resolve('privacy')}>Confidentialité</a></p>
 </footer>
+
+{#if data.user}
+	<QuickAdd bind:this={quickAdd} />
+	<!-- Phones: floating button above the tab bar; media pages have their own action bar there -->
+	{#if page.route.id !== '/(app)/media/[id]'}
+		<button
+			type="button"
+			aria-label="Ajouter une œuvre"
+			class="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex size-13 cursor-pointer items-center justify-center rounded-full bg-accent text-bg shadow-xl md:hidden"
+			onclick={() => quickAdd?.open()}
+		>
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup -->
+			{@html plusIcon}
+		</button>
+	{/if}
+{/if}
 
 <nav
 	aria-label="Navigation principale"
