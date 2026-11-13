@@ -231,51 +231,65 @@
 
 {#if data.user}
 	<QuickAdd bind:this={quickAdd} />
-	<!-- Phones: floating button above the tab bar; media pages have their own action bar there -->
-	{#if page.route.id !== '/(app)/media/[id]'}
-		<button
-			type="button"
-			aria-label="Ajouter une œuvre"
-			class="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex size-13 cursor-pointer items-center justify-center rounded-full bg-accent text-on-accent shadow-xl md:hidden"
-			onclick={() => quickAdd?.open()}
-		>
-			<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup -->
-			{@html plusIcon}
-		</button>
-	{/if}
 {/if}
+
+{#snippet navLink(link: (typeof links)[number])}
+	{@const current = isCurrent(link.href)}
+	<a
+		href={link.href}
+		aria-current={current ? 'page' : undefined}
+		class="flex min-h-15 flex-col items-center justify-center gap-1 text-[11px] font-semibold no-underline {current
+			? 'text-ink'
+			: 'text-muted'}"
+	>
+		<svg
+			aria-hidden="true"
+			width="22"
+			height="22"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			class={current ? 'text-accent-ink' : ''}
+		>
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup defined above -->
+			{@html link.icon}
+		</svg>
+		{link.label}
+	</a>
+{/snippet}
 
 <nav
 	aria-label="Navigation principale"
-	class="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+	class="fixed inset-x-0 bottom-0 z-40 grid {data.user
+		? 'grid-cols-5'
+		: 'grid-cols-4'} border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
 >
-	{#each links as link (link.href)}
-		{@const current = isCurrent(link.href)}
-		<a
-			href={link.href}
-			aria-current={current ? 'page' : undefined}
-			class="flex min-h-15 flex-col items-center justify-center gap-1 text-[11px] font-semibold no-underline {current
-				? 'text-ink'
-				: 'text-muted'}"
+	{#each links.slice(0, 2) as link (link.href)}{@render navLink(link)}{/each}
+	{#if data.user}
+		<!-- Raised out of the bar, except on media pages where their action bar sits right above -->
+		<div
+			class="flex justify-center {page.route.id === '/(app)/media/[id]'
+				? 'items-center'
+				: 'items-start'}"
 		>
-			<svg
-				aria-hidden="true"
-				width="22"
-				height="22"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class={current ? 'text-accent-ink' : ''}
+			<button
+				type="button"
+				aria-label="Ajouter une œuvre"
+				class="flex cursor-pointer items-center justify-center rounded-full bg-accent text-on-accent ring-4 ring-bg {page
+					.route.id === '/(app)/media/[id]'
+					? 'size-11'
+					: '-mt-5 size-14 shadow-[0_8px_20px_-6px_rgb(0_0_0/0.5)]'}"
+				onclick={() => quickAdd?.open()}
 			>
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup defined above -->
-				{@html link.icon}
-			</svg>
-			{link.label}
-		</a>
-	{/each}
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup -->
+				{@html plusIcon}
+			</button>
+		</div>
+	{/if}
+	{#each links.slice(2) as link (link.href)}{@render navLink(link)}{/each}
 </nav>
 
 <Toaster />
