@@ -56,6 +56,27 @@
 	const unit = $derived(current ? unitOne[current.type] : null);
 	const mediaHref = (r: Result) => resolve('/(app)/media/[id]', { id: String(r.id) });
 
+	// Phone sheet: dragged down by its top bar, closes past a distance or on a quick flick
+	let drag: { y: number; t: number } | null = $state(null);
+	let dragY = $state(0);
+	function dragStart(e: PointerEvent) {
+		if ((e.target as Element).closest('button')) return;
+		drag = { y: e.clientY, t: e.timeStamp };
+		(e.currentTarget as Element).setPointerCapture(e.pointerId);
+	}
+	function dragMove(e: PointerEvent) {
+		if (drag) dragY = Math.max(0, e.clientY - drag.y);
+	}
+	function dragEnd(e: PointerEvent) {
+		if (!drag) return;
+		const flick = dragY > 30 && dragY / (e.timeStamp - drag.t) > 0.5;
+		drag = null;
+		if (!dialog || (dragY < 120 && !flick)) return void (dragY = 0);
+		if (matchMedia('(prefers-reduced-motion: reduce)').matches) return dialog.close();
+		dragY = dialog.offsetHeight; // slide out, then close
+		setTimeout(() => dialog?.close(), 300);
+	}
+
 	export function open() {
 		q = answered = '';
 		results = [];
@@ -224,18 +245,31 @@
 	bind:this={dialog}
 	aria-label="Ajouter une œuvre"
 	class="max-h-none max-w-none overflow-hidden border-line bg-surface p-0 text-ink backdrop:bg-black/60 motion-safe:transition-[translate,opacity] motion-safe:duration-300 motion-safe:ease-out max-md:fixed max-md:inset-x-0 max-md:top-12 max-md:bottom-0 max-md:m-0 max-md:h-auto max-md:w-full max-md:rounded-t-3xl max-md:border-t md:mx-auto md:mt-[7vh] md:h-[min(42rem,86vh)] md:w-[min(60rem,calc(100vw-4rem))] md:rounded-[1.25rem] md:border md:shadow-[0_32px_80px_-16px_rgb(0_0_0/0.6)] max-md:motion-safe:starting:open:translate-y-full md:motion-safe:starting:open:-translate-y-2 md:motion-safe:starting:open:opacity-0"
+	style:translate={dragY ? `0 ${dragY}px` : null}
+	style:transition={drag ? 'none' : null}
 	onclick={(e) => e.target === dialog && dialog.close()}
+	onclose={() => (dragY = 0)}
 >
 	<!-- Phones -->
 	<div class="flex h-full flex-col md:hidden">
-		<div aria-hidden="true" class="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-line"></div>
-		<div class="flex items-center justify-between px-4 pt-2">
-			<h2 class="font-display text-[22px] font-extrabold tracking-tight">Ajouter</h2>
-			<button
-				type="button"
-				class="min-h-11 cursor-pointer px-1 font-semibold text-muted hover:text-ink"
-				onclick={() => dialog?.close()}>Fermer</button
-			>
+		<!-- Drag handle: pull the sheet down to close it (pointer only, "Fermer" is the accessible way) -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="shrink-0 touch-none select-none"
+			onpointerdown={dragStart}
+			onpointermove={dragMove}
+			onpointerup={dragEnd}
+			onpointercancel={dragEnd}
+		>
+			<div aria-hidden="true" class="mx-auto mt-2.5 h-1.5 w-10 rounded-full bg-line"></div>
+			<div class="flex items-center justify-between px-4 pt-2">
+				<h2 class="font-display text-[22px] font-extrabold tracking-tight">Ajouter</h2>
+				<button
+					type="button"
+					class="min-h-11 cursor-pointer px-1 font-semibold text-muted hover:text-ink"
+					onclick={() => dialog?.close()}>Fermer</button
+				>
+			</div>
 		</div>
 		<div class="px-4 pt-2">
 			{@render searchField(
