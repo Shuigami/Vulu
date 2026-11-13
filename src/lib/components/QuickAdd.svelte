@@ -3,65 +3,98 @@
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
-	import { statusLabel, type EntryStatus, type MediaType } from '#lib/labels.ts';
+	import {
+		MEDIA_TYPES,
+		statusLabel,
+		typeLabel,
+		typePlural,
+		unitLabel,
+		type EntryStatus,
+		type MediaType
+	} from '#lib/labels.ts';
 	import { postAction, toast } from '#lib/toast.svelte.ts';
 
-	type Suggestion = {
+	type Entry = { status: EntryStatus; progress: number };
+	type Result = {
 		id: number;
 		type: MediaType;
 		title: string;
 		posterUrl: string | null;
 		year: number | null;
+		overview: string | null;
+		totalUnits: number | null;
+		entry: Entry | null;
 	};
 
 	const statuses: EntryStatus[] = ['planned', 'in_progress', 'completed'];
+	const unitOne: Record<MediaType, string | null> = {
+		movie: null,
+		tv: 'Épisode',
+		anime: 'Épisode',
+		manga: 'Chapitre',
+		book: 'Page'
+	};
 
 	let dialog: HTMLDialogElement | undefined = $state();
-	let input: HTMLInputElement | undefined = $state();
+	let inputs: HTMLInputElement[] = $state([]);
 	let q = $state('');
-	let status = $state<EntryStatus>('planned');
-	let suggestions = $state<Suggestion[]>([]);
-	/** The query the current suggestions answer: the empty state waits for a real answer. */
+	let type = $state<MediaType | null>(null);
+	let results = $state<Result[]>([]);
+	/** The query the results answer: the empty state waits for a real answer. */
 	let answered = $state('');
 	let loading = $state(false);
-	let active = $state(-1);
-	let rows = $state<Record<number, 'pending' | 'added'>>({});
+	let selected = $state(-1);
+	let status = $state<EntryStatus>('planned');
+	let progress = $state(0);
+	let pending = $state(false);
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let controller: AbortController | undefined;
 
 	const query = $derived(q.trim());
 	const providersQuery = $derived(new URLSearchParams({ q: query }).toString());
+	const current = $derived(selected >= 0 ? results[selected] : undefined);
+	const unit = $derived(current ? unitOne[current.type] : null);
+	const mediaHref = (r: Result) => resolve('/(app)/media/[id]', { id: String(r.id) });
 
 	export function open() {
 		q = answered = '';
-		suggestions = [];
-		rows = {};
-		active = -1;
+		results = [];
+		selected = -1;
 		dialog?.showModal();
-		input?.focus();
+		// Two layouts, one search field each: focus the one on screen
+		inputs.find((i) => i?.offsetParent)?.focus();
 	}
 
-	function suggest() {
+	function pick(i: number) {
+		if (i === selected) return;
+		selected = i;
+		status = 'planned';
+		progress = 0;
+	}
+
+	function search() {
 		clearTimeout(timer);
 		controller?.abort();
-		active = -1;
 		if (query.length < 2) {
-			suggestions = [];
+			results = [];
+			selected = -1;
 			loading = false;
 			return;
 		}
 		loading = true;
-		const asked = query;
+		const asked = new URLSearchParams(type ? { q: query, type } : { q: query }).toString();
 		timer = setTimeout(async () => {
 			controller = new AbortController();
 			try {
-				const res = await fetch(
-					`${resolve('search/suggest')}?${new URLSearchParams({ q: asked })}`,
-					{ signal: controller.signal }
-				);
+				const res = await fetch(`${resolve('search/quick')}?${asked}`, {
+					signal: controller.signal
+				});
 				if (res.ok) {
-					suggestions = await res.json();
+					results = await res.json();
 					answered = asked;
+					// Wide screens preview the first result; phones wait for a tap
+					selected = -1;
+					if (matchMedia('(min-width: 48rem)').matches && results.length) pick(0);
 				}
 				loading = false;
 			} catch {
@@ -71,19 +104,24 @@
 		}, 150);
 	}
 
-	async function add(s: Suggestion) {
-		if (rows[s.id]) return;
-		rows[s.id] = 'pending';
-		const media = resolve('/(app)/media/[id]', { id: String(s.id) });
-		const res = await postAction(`${media}?/add`, { status }).catch(() => null);
+	function setType(t: MediaType | null) {
+		type = t;
+		search();
+	}
+
+	async function add(r: Result, as: EntryStatus = status) {
+		if (pending || r.entry) return;
+		pending = true;
+		const n = as === 'in_progress' && r.type !== 'movie' ? progress : 0;
+		const res = await postAction(`${mediaHref(r)}?/add`, { status: as, progress: n }).catch(
+			() => null
+		);
 		const result = res?.ok ? await res.json() : null;
+		pending = false;
 		if (result?.type === 'success') {
-			rows[s.id] = 'added';
-			toast(`« ${s.title} » ajouté (${statusLabel[status].toLowerCase()})`);
-			return;
-		}
-		delete rows[s.id];
-		if (result?.type === 'redirect') {
+			r.entry = { status: as, progress: as === 'completed' ? (r.totalUnits ?? 0) : n };
+			toast(`« ${r.title} » ajouté (${statusLabel[as].toLowerCase()})`);
+		} else if (result?.type === 'redirect') {
 			dialog?.close();
 			await goto(result.location);
 		} else {
@@ -92,13 +130,13 @@
 	}
 
 	function onkeydown(e: KeyboardEvent) {
-		const n = suggestions.length;
+		const n = results.length;
 		if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && n) {
 			e.preventDefault();
-			active = e.key === 'ArrowDown' ? (active + 1) % n : (active - 1 + n) % n;
+			pick(e.key === 'ArrowDown' ? (selected + 1) % n : (selected - 1 + n) % n);
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
-			if (active >= 0) add(suggestions[active]);
+			if (current) add(current);
 			else if (query.length >= 2 && !n && !loading) {
 				dialog?.close();
 				// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved path plus a query string
@@ -106,24 +144,231 @@
 			}
 		}
 	}
+
+	const entryText = (r: Result) => {
+		const e = r.entry!;
+		const u = unitOne[r.type];
+		return e.status === 'in_progress' && u && e.progress
+			? `${statusLabel[e.status]} · ${u.toLowerCase()} ${e.progress}`
+			: statusLabel[e.status];
+	};
+	const meta = (r: Result) =>
+		[r.year, r.totalUnits && unitLabel[r.type] ? `${r.totalUnits} ${unitLabel[r.type]}` : null]
+			.filter(Boolean)
+			.join(' · ');
 </script>
 
-<!-- Anchored near the top, not centred: the panel does not jump as results arrive or as a
-	 phone keyboard opens. Closes on Escape (native) and on a click on the backdrop. -->
-<dialog
-	bind:this={dialog}
-	aria-labelledby="quick-add-title"
-	class="mx-auto mt-[max(1rem,12vh)] max-h-[calc(100dvh-2rem)] w-[min(34rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain card p-0 text-ink shadow-[0_24px_60px_-12px_rgb(0_0_0/0.45)] backdrop:bg-black/55 motion-safe:transition-[opacity,translate] motion-safe:duration-200 motion-safe:ease-out motion-safe:starting:open:-translate-y-2 motion-safe:starting:open:opacity-0"
-	onclick={(e) => e.target === dialog && dialog.close()}
->
-	<div class="flex flex-col gap-5 p-5 sm:p-6">
-		<div class="flex items-center justify-between gap-3">
-			<h2 id="quick-add-title" class="font-display text-xl font-bold tracking-tight">
-				Ajouter une œuvre
-			</h2>
+{#snippet searchField(i: number, cls: string)}
+	<label class="flex items-center gap-3 {cls}">
+		<svg
+			aria-hidden="true"
+			class="shrink-0 {query ? 'text-accent' : 'text-muted'}"
+			width="20"
+			height="20"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg
+		>
+		<input
+			bind:this={inputs[i]}
+			bind:value={q}
+			type="search"
+			autocomplete="off"
+			enterkeyhint="search"
+			placeholder="Quelle œuvre veux-tu ajouter ?"
+			aria-label="Chercher une œuvre"
+			class="min-w-0 flex-1 bg-transparent text-ink outline-none placeholder:text-muted"
+			oninput={search}
+			{onkeydown}
+		/>
+	</label>
+{/snippet}
+
+{#snippet typeChips(cls: string)}
+	<div class="flex gap-2 {cls}" role="group" aria-label="Type d’œuvre">
+		{#each [null, ...MEDIA_TYPES] as t (t)}
 			<button
 				type="button"
-				class="-mr-2 flex size-10 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface-2 hover:text-ink"
+				aria-pressed={type === t}
+				class="{type === t ? 'chip-on' : 'chip'} min-h-9 shrink-0 px-3.5"
+				onclick={() => setType(t)}>{t ? typePlural[t] : 'Tout'}</button
+			>
+		{/each}
+	</div>
+{/snippet}
+
+{#snippet emptyState()}
+	{#if query.length >= 2 && answered && !loading && !results.length}
+		<div class="flex flex-col items-start gap-3 p-2">
+			<p class="text-sm text-muted">Rien dans le catalogue Vulu pour « {query} ».</p>
+			<a
+				href="{resolve('search')}?{providersQuery}"
+				class="btn-ghost text-sm"
+				onclick={() => dialog?.close()}>Chercher chez TMDB, AniList et Open Library</a
+			>
+		</div>
+	{:else if !results.length}
+		<p class="p-2 text-sm text-muted">
+			{loading ? 'Recherche…' : 'Les œuvres déjà sur Vulu s’affichent ici pendant la saisie.'}
+		</p>
+	{/if}
+{/snippet}
+
+<!-- Phones: a sheet from the bottom, a poster grid, tap then pick a status.
+	 Wide screens: results on the left, the picked title previewed on the right.
+	 Closes on Escape (native) and on a click on the backdrop. -->
+<dialog
+	bind:this={dialog}
+	aria-label="Ajouter une œuvre"
+	class="max-h-none max-w-none overflow-hidden border-line bg-surface p-0 text-ink backdrop:bg-black/60 motion-safe:transition-[translate,opacity] motion-safe:duration-300 motion-safe:ease-out max-md:fixed max-md:inset-x-0 max-md:top-12 max-md:bottom-0 max-md:m-0 max-md:h-auto max-md:w-full max-md:rounded-t-3xl max-md:border-t md:mx-auto md:mt-[7vh] md:h-[min(42rem,86vh)] md:w-[min(60rem,calc(100vw-4rem))] md:rounded-[1.25rem] md:border md:shadow-[0_32px_80px_-16px_rgb(0_0_0/0.6)] max-md:motion-safe:starting:open:translate-y-full md:motion-safe:starting:open:-translate-y-2 md:motion-safe:starting:open:opacity-0"
+	onclick={(e) => e.target === dialog && dialog.close()}
+>
+	<!-- Phones -->
+	<div class="flex h-full flex-col md:hidden">
+		<div aria-hidden="true" class="mx-auto mt-2.5 h-1.5 w-10 shrink-0 rounded-full bg-line"></div>
+		<div class="flex items-center justify-between px-4 pt-2">
+			<h2 class="font-display text-[22px] font-extrabold tracking-tight">Ajouter</h2>
+			<button
+				type="button"
+				class="min-h-11 cursor-pointer px-1 font-semibold text-muted hover:text-ink"
+				onclick={() => dialog?.close()}>Fermer</button
+			>
+		</div>
+		<div class="px-4 pt-2">
+			{@render searchField(
+				0,
+				'h-12 rounded-2xl border border-line bg-bg px-3.5 text-base focus-within:border-accent'
+			)}
+		</div>
+		{@render typeChips('overflow-x-auto px-4 pt-3 pb-1 [scrollbar-width:none]')}
+		<div class="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pt-3 pb-4">
+			{#if results.length}
+				<ul
+					class="grid grid-cols-3 gap-3 motion-safe:transition-opacity {loading
+						? 'opacity-60'
+						: ''}"
+					aria-label="Résultats"
+				>
+					{#each results as r, i (r.id)}
+						<li>
+							<button
+								type="button"
+								aria-pressed={i === selected}
+								class="flex w-full cursor-pointer flex-col gap-1.5 text-left"
+								onclick={() => pick(i)}
+							>
+								<span
+									class="relative block rounded-[10px] outline-2 outline-offset-2 {i === selected
+										? 'outline-accent'
+										: 'outline-transparent'}"
+								>
+									<Poster
+										src={r.posterUrl}
+										title={r.title}
+										type={r.type}
+										class="w-full rounded-[10px]"
+									/>
+									{#if i === selected}
+										<span
+											class="absolute top-1.5 right-1.5 grid size-6.5 place-items-center rounded-full bg-accent text-on-accent"
+											><svg
+												aria-hidden="true"
+												width="14"
+												height="14"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="3"
+												stroke-linecap="round"
+												stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg
+											></span
+										>
+									{/if}
+									{#if r.entry}
+										<span
+											class="absolute bottom-1.5 left-1.5 rounded-md bg-black/80 px-1.5 py-0.5 text-[11px] font-semibold text-[#7fd4b5]"
+											>{statusLabel[r.entry.status]}</span
+										>
+									{/if}
+								</span>
+								<span class="truncate text-[13px] leading-tight font-semibold">{r.title}</span>
+								<span class="-mt-1 text-xs text-muted"
+									>{typeLabel[r.type]}{r.year ? ` · ${r.year}` : ''}</span
+								>
+							</button>
+						</li>
+					{/each}
+				</ul>
+				<p class="pt-4 text-[13px] text-muted">
+					Pas trouvé ? <a
+						href="{resolve('search')}?{providersQuery}"
+						onclick={() => dialog?.close()}>Chercher chez TMDB, AniList et Open Library</a
+					>
+				</p>
+			{:else}
+				{@render emptyState()}
+			{/if}
+		</div>
+		{#if current}
+			<div
+				class="flex shrink-0 flex-col gap-3 border-t border-line bg-surface-2/60 px-4 pt-3.5 pb-[max(1rem,env(safe-area-inset-bottom))]"
+			>
+				<div class="flex items-center gap-3">
+					<Poster
+						src={current.posterUrl}
+						title={current.title}
+						type={current.type}
+						class="w-9 shrink-0 rounded-md"
+					/>
+					<span class="flex min-w-0 flex-col">
+						<span class="truncate font-bold">{current.title}</span>
+						<span class="text-xs text-muted"
+							>{typeLabel[current.type]}{current.year ? ` · ${current.year}` : ''}</span
+						>
+					</span>
+				</div>
+				{#if current.entry}
+					<div class="flex items-center justify-between gap-3">
+						<span class="text-sm font-semibold text-success"
+							>Dans ta bibliothèque · {entryText(current)}</span
+						>
+						<a
+							href={mediaHref(current)}
+							class="btn-ghost shrink-0 text-sm"
+							onclick={() => dialog?.close()}>Ouvrir la fiche</a
+						>
+					</div>
+				{:else}
+					<div class="grid grid-cols-3 gap-2">
+						{#each statuses as s (s)}
+							<button
+								type="button"
+								disabled={pending}
+								class="{s === 'in_progress' ? 'btn-accent' : 'btn-ghost'} min-h-12 px-2"
+								onclick={() => current && add(current, s)}>{statusLabel[s]}</button
+							>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
+	</div>
+
+	<!-- Wide screens -->
+	<div class="flex h-full flex-col max-md:hidden">
+		<div class="flex items-center gap-3 border-b border-line pr-3 pl-6">
+			{@render searchField(1, 'h-17 flex-1 text-[19px] font-medium')}
+			{#if answered && results.length}
+				<span class="text-xs text-muted"
+					>{results.length} résultat{results.length > 1 ? 's' : ''}</span
+				>
+			{/if}
+			<button
+				type="button"
+				class="flex size-10 cursor-pointer items-center justify-center rounded-full text-muted hover:bg-surface-2 hover:text-ink"
 				aria-label="Fermer"
 				onclick={() => dialog?.close()}
 				><svg
@@ -138,145 +383,176 @@
 				></button
 			>
 		</div>
-
-		<div class="flex flex-col gap-3">
-			<!-- Same field as the header search -->
-			<label
-				class="flex h-12 items-center gap-2.5 rounded-xl border border-line bg-surface px-3.5 focus-within:border-accent"
-			>
-				<svg
-					aria-hidden="true"
-					class="shrink-0 text-muted"
-					width="18"
-					height="18"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg
-				>
-				<input
-					bind:this={input}
-					bind:value={q}
-					type="search"
-					autocomplete="off"
-					enterkeyhint="search"
-					placeholder="Film, série, anime, manga, livre…"
-					aria-label="Chercher une œuvre"
-					role="combobox"
-					aria-expanded={suggestions.length > 0}
-					aria-controls="quick-add-results"
-					aria-autocomplete="list"
-					aria-activedescendant={active >= 0 ? `quick-add-${active}` : undefined}
-					class="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-muted"
-					oninput={suggest}
-					{onkeydown}
-				/>
-			</label>
-			<fieldset class="flex flex-wrap items-center gap-2">
-				<legend class="mb-2 text-[13px] text-muted">Ajouter comme</legend>
-				{#each statuses as s (s)}
-					<label
-						class="min-h-9 cursor-pointer px-3.5 has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-accent {status ===
-						s
-							? 'chip-on'
-							: 'chip'}"
+		{@render typeChips('flex-wrap border-b border-line px-6 py-3')}
+		<div class="flex min-h-0 flex-1">
+			<div class="flex w-95 shrink-0 flex-col overflow-y-auto border-r border-line p-2.5">
+				{#if results.length}
+					<ul
+						role="listbox"
+						aria-label="Résultats"
+						class="flex flex-col gap-0.5 motion-safe:transition-opacity {loading
+							? 'opacity-60'
+							: ''}"
 					>
-						<input
-							type="radio"
-							name="quick-add-status"
-							value={s}
-							bind:group={status}
-							class="sr-only"
-						/>
-						{statusLabel[s]}
-					</label>
-				{/each}
-			</fieldset>
-		</div>
-
-		<div class="-mx-2 -mb-2 border-t border-line pt-3">
-			{#if suggestions.length}
-				<ul
-					id="quick-add-results"
-					role="listbox"
-					aria-label="Résultats"
-					class="flex flex-col motion-safe:transition-opacity {loading ? 'opacity-60' : ''}"
-				>
-					{#each suggestions as s, i (s.id)}
-						{@const row = rows[s.id]}
-						<li
-							id="quick-add-{i}"
-							role="option"
-							aria-selected={i === active}
-							class="flex items-center gap-3 rounded-xl p-2 {i === active ? 'bg-surface-2' : ''}"
-							onmouseenter={() => (active = i)}
-						>
-							<Poster
-								src={s.posterUrl}
-								title={s.title}
-								type={s.type}
-								class="w-10 shrink-0 rounded-md"
-							/>
-							<a
-								href={resolve('/(app)/media/[id]', { id: String(s.id) })}
-								class="flex min-w-0 flex-1 flex-col gap-1 text-ink no-underline"
-								tabindex="-1"
-								onclick={() => dialog?.close()}
-							>
-								<span class="truncate text-sm font-semibold">{s.title}</span>
-								<span class="flex items-center gap-2 text-xs text-muted"
-									><TypeTag type={s.type} />{s.year ?? ''}</span
-								>
-							</a>
-							{#if row === 'added'}
-								<span
-									class="flex min-h-9 min-w-24 items-center justify-center gap-1.5 text-[13px] font-semibold text-success"
-									><svg
-										aria-hidden="true"
-										width="16"
-										height="16"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2.4"
-										stroke-linecap="round"
-										stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg
-									>Ajouté</span
-								>
-							{:else}
+						{#each results as r, i (r.id)}
+							<li role="option" aria-selected={i === selected}>
 								<button
 									type="button"
-									class="btn-ghost min-h-9 min-w-24 px-3.5 text-sm"
-									aria-label="Ajouter {s.title}"
-									disabled={row === 'pending'}
-									onclick={() => add(s)}>{row === 'pending' ? 'Ajout…' : 'Ajouter'}</button
+									tabindex="-1"
+									class="flex w-full cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2 text-left {i ===
+									selected
+										? 'bg-surface-2'
+										: 'hover:bg-surface-2/60'}"
+									onclick={() => pick(i)}
 								>
+									<Poster
+										src={r.posterUrl}
+										title={r.title}
+										type={r.type}
+										class="w-10 shrink-0 rounded-md"
+									/>
+									<span class="flex min-w-0 flex-1 flex-col gap-1">
+										<span class="truncate text-sm font-semibold">{r.title}</span>
+										<span class="flex items-center gap-2 text-xs text-muted"
+											><TypeTag type={r.type} />{r.year ?? ''}</span
+										>
+									</span>
+									{#if r.entry}
+										<span class="text-xs font-semibold text-success">Dans ta biblio</span>
+									{/if}
+								</button>
+							</li>
+						{/each}
+					</ul>
+					<p class="mt-auto px-2.5 pt-3 pb-1 text-[13px] text-muted">
+						Pas trouvé ? <a
+							href="{resolve('search')}?{providersQuery}"
+							onclick={() => dialog?.close()}>Chercher chez TMDB, AniList et Open Library</a
+						>
+					</p>
+				{:else}
+					{@render emptyState()}
+				{/if}
+			</div>
+
+			<div class="flex min-w-0 flex-1 flex-col gap-5 overflow-y-auto px-8 pt-6 pb-6">
+				{#if current}
+					<div class="flex gap-6">
+						<Poster
+							src={current.posterUrl}
+							title={current.title}
+							type={current.type}
+							class="w-36 shrink-0 rounded-xl"
+						/>
+						<div class="flex min-w-0 flex-col items-start gap-2.5">
+							<TypeTag type={current.type} />
+							<h2
+								class="font-display text-3xl leading-[1.05] font-extrabold tracking-tight text-balance"
+							>
+								{current.title}
+							</h2>
+							{#if meta(current)}<p class="text-sm text-muted">{meta(current)}</p>{/if}
+							{#if current.overview}
+								<p class="line-clamp-3 max-w-[46ch] text-sm leading-relaxed text-ink/80">
+									{current.overview}
+								</p>
 							{/if}
-						</li>
-					{/each}
-				</ul>
-				<p class="px-2 pt-2 pb-2 text-[13px] text-muted">
-					Pas trouvé ? <a
-						href="{resolve('search')}?{providersQuery}"
-						onclick={() => dialog?.close()}>Chercher chez TMDB, AniList et Open Library</a
-					>
-				</p>
-			{:else if query.length >= 2 && answered === query && !loading}
-				<div class="flex flex-col items-start gap-3 px-2 pt-1 pb-2">
-					<p class="text-sm text-muted">Rien dans le catalogue Vulu pour « {query} ».</p>
-					<a
-						href="{resolve('search')}?{providersQuery}"
-						class="btn-ghost text-sm"
-						onclick={() => dialog?.close()}>Chercher chez TMDB, AniList et Open Library</a
-					>
-				</div>
-			{:else}
-				<p class="px-2 pt-1 pb-2 text-sm text-muted">
-					{loading ? 'Recherche…' : 'Les œuvres déjà sur Vulu s’affichent ici pendant la saisie.'}
-				</p>
-			{/if}
+						</div>
+					</div>
+
+					{#if current.entry}
+						<div
+							class="mt-auto flex items-center justify-between gap-4 rounded-2xl bg-surface-2 p-4"
+						>
+							<span class="text-sm"
+								><span class="font-semibold text-success">Dans ta bibliothèque</span>
+								<span class="text-muted">· {entryText(current)}</span></span
+							>
+							<a
+								href={mediaHref(current)}
+								class="btn-ghost shrink-0 text-sm"
+								onclick={() => dialog?.close()}>Ouvrir la fiche</a
+							>
+						</div>
+					{:else}
+						<fieldset class="flex flex-col">
+							<legend class="mb-2.5 text-[13px] text-muted">Statut</legend>
+							<div class="grid grid-cols-3 gap-1.5 rounded-2xl border border-line bg-bg p-1.5">
+								{#each statuses as s (s)}
+									<label
+										class="flex min-h-11 cursor-pointer items-center justify-center rounded-xl text-sm has-focus-visible:outline-2 has-focus-visible:outline-accent {status ===
+										s
+											? 'bg-surface-2 font-bold text-ink shadow-[inset_0_1px_0_rgb(255_255_255/0.06),0_4px_10px_-4px_rgb(0_0_0/0.6)]'
+											: 'font-semibold text-muted hover:text-ink'}"
+									>
+										<input
+											type="radio"
+											name="quick-add-status"
+											value={s}
+											bind:group={status}
+											class="sr-only"
+										/>
+										{statusLabel[s]}
+									</label>
+								{/each}
+							</div>
+						</fieldset>
+
+						{#if status === 'in_progress' && unit}
+							<div class="flex items-center justify-between gap-4">
+								<label for="quick-add-progress" class="text-sm text-muted">Progression</label>
+								<div class="flex items-center gap-1 rounded-xl border border-line p-1">
+									<button
+										type="button"
+										aria-label="{unit} précédent"
+										class="flex h-9 w-10 cursor-pointer items-center justify-center rounded-lg bg-surface-2 text-lg font-bold disabled:opacity-40"
+										disabled={progress <= 0}
+										onclick={() => (progress = Math.max(0, progress - 1))}>−</button
+									>
+									<span class="flex items-center gap-1.5 px-2 text-sm tabular-nums">
+										{unit}
+										<input
+											id="quick-add-progress"
+											type="number"
+											min="0"
+											max={current.totalUnits ?? undefined}
+											bind:value={progress}
+											class="w-14 [appearance:textfield] rounded-md bg-transparent text-center text-base font-bold text-ink outline-none focus:bg-surface-2 [&::-webkit-inner-spin-button]:appearance-none"
+										/>
+										{#if current.totalUnits}<span class="text-muted">/ {current.totalUnits}</span
+											>{/if}
+									</span>
+									<button
+										type="button"
+										aria-label="{unit} suivant"
+										class="flex h-9 w-10 cursor-pointer items-center justify-center rounded-lg bg-surface-2 text-lg font-bold disabled:opacity-40"
+										disabled={!!current.totalUnits && progress >= current.totalUnits}
+										onclick={() => (progress += 1)}>+</button
+									>
+								</div>
+							</div>
+						{/if}
+
+						<div class="mt-auto flex justify-end gap-2.5">
+							<a href={mediaHref(current)} class="btn-ghost text-sm" onclick={() => dialog?.close()}
+								>Voir la fiche</a
+							>
+							<button
+								type="button"
+								class="btn-accent"
+								disabled={pending}
+								onclick={() => current && add(current)}
+								>{pending ? 'Ajout…' : 'Ajouter à ma bibliothèque'}
+								<kbd class="font-sans text-on-accent/60" aria-hidden="true">↵</kbd></button
+							>
+						</div>
+					{/if}
+				{:else}
+					<div class="m-auto max-w-[28ch] text-center text-sm text-muted">
+						Choisis une œuvre à gauche pour la voir ici et l’ajouter.
+					</div>
+				{/if}
+			</div>
 		</div>
 	</div>
 </dialog>
