@@ -77,11 +77,24 @@
 		setTimeout(() => dialog?.close(), 300);
 	}
 
+	// The page behind must not scroll; overflow: hidden alone does not stop touch scrolling on
+	// every mobile browser, so the body is pinned in place and the position restored on close
+	let scrollY = 0;
+	function lockScroll() {
+		scrollY = window.scrollY;
+		Object.assign(document.body.style, { position: 'fixed', top: `-${scrollY}px`, width: '100%' });
+	}
+	function unlockScroll() {
+		Object.assign(document.body.style, { position: '', top: '', width: '' });
+		window.scrollTo(0, scrollY);
+	}
+
 	export function open() {
 		q = answered = '';
 		results = [];
 		selected = -1;
 		dialog?.showModal();
+		lockScroll();
 		// Two layouts, one search field each: focus the one on screen
 		inputs.find((i) => i?.offsetParent)?.focus();
 	}
@@ -248,7 +261,10 @@
 	style:translate={dragY ? `0 ${dragY}px` : null}
 	style:transition={drag ? 'none' : null}
 	onclick={(e) => e.target === dialog && dialog.close()}
-	onclose={() => (dragY = 0)}
+	onclose={() => {
+		dragY = 0;
+		unlockScroll();
+	}}
 >
 	<!-- Phones -->
 	<div class="flex h-full flex-col md:hidden">

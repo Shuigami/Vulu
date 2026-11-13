@@ -87,12 +87,7 @@
 	/* Same width with or without a scrollbar, so centred content never shifts between pages */
 	html {
 		scrollbar-gutter: stable;
-	}
-	/* The page behind a modal dialog does not scroll */
-	html:has(dialog[open]:modal) {
-		overflow: hidden;
-	}
-	body {
+	}	body {
 		@apply bg-bg font-sans text-[15px] leading-normal text-ink antialiased;
 		/* viewport-fit=cover: keep content clear of the notch in landscape */
 		padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
