@@ -49,7 +49,7 @@
 	/** Provider results are being fetched, after the local ones. */
 	let remoteLoading = $state(false);
 	let selected = $state(-1);
-	let status = $state<EntryStatus>('planned');
+	let status = $state<EntryStatus>('completed');
 	let progress = $state(0);
 	let pending = $state(false);
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -110,7 +110,7 @@
 	function pick(i: number) {
 		if (i === selected) return;
 		selected = i;
-		status = 'planned';
+		status = 'completed';
 		progress = 0;
 	}
 
@@ -440,7 +440,7 @@
 							<button
 								type="button"
 								disabled={pending}
-								class="{s === 'in_progress' ? 'btn-accent' : 'btn-ghost'} min-h-12 px-2"
+								class="{s === 'completed' ? 'btn-accent' : 'btn-ghost'} min-h-12 px-2"
 								onclick={() => current && add(current, s)}>{statusLabel[s]}</button
 							>
 						{/each}
