@@ -154,7 +154,9 @@
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
 
 	{#if data.entries.length}
-		<ul class="grid [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] gap-x-5 gap-y-7">
+		<ul
+			class="grid [grid-template-columns:repeat(auto-fill,minmax(100px,1fr))] gap-x-3 gap-y-5 sm:[grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] sm:gap-x-5 sm:gap-y-7"
+		>
 			{#each data.entries as e (e.id)}
 				{@const unit = unitLabel[e.type]}
 				{@const progress = bumped[e.id] ?? e.progress}
