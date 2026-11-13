@@ -88,6 +88,10 @@
 	html {
 		scrollbar-gutter: stable;
 	}
+	/* The page behind a modal dialog does not scroll */
+	html:has(dialog[open]:modal) {
+		overflow: hidden;
+	}
 	body {
 		@apply bg-bg font-sans text-[15px] leading-normal text-ink antialiased;
 		/* viewport-fit=cover: keep content clear of the notch in landscape */
