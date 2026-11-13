@@ -122,8 +122,7 @@
 			method="get"
 			role="search"
 			class="flex flex-wrap items-center gap-3"
-			data-sveltekit-keepfocus
-			data-sveltekit-noscroll
+			data-sveltekit-reset="false"
 		>
 			{#if data.type}<input type="hidden" name="type" value={data.type} />{/if}
 			{#if data.status}<input type="hidden" name="status" value={data.status} />{/if}

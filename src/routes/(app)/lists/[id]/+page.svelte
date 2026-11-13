@@ -30,6 +30,16 @@
 		const query = params.toString();
 		return `${resolve('/(app)/lists/[id]', { id: String(list.id) })}${query ? `?${query}` : ''}`;
 	};
+
+	// Results as you type, like the header search: re-submits the GET form (the load searches)
+	let typingTimer: ReturnType<typeof setTimeout> | undefined;
+	function searchAsYouType(e: Event & { currentTarget: HTMLInputElement }) {
+		const input = e.currentTarget;
+		clearTimeout(typingTimer);
+		const query = input.value.trim();
+		if (query.length === 1) return;
+		typingTimer = setTimeout(() => input.form?.requestSubmit(), 250);
+	}
 </script>
 
 <svelte:head><title>{list.name} · Vulu</title></svelte:head>
@@ -131,18 +141,20 @@
 				method="get"
 				role="search"
 				class="flex gap-2"
-				data-sveltekit-keepfocus
-				data-sveltekit-noscroll
+				data-sveltekit-reset="false"
+				data-sveltekit-replacestate
 			>
 				{#if data.sort !== 'position'}<input type="hidden" name="sort" value={data.sort} />{/if}
 				{#if data.type}<input type="hidden" name="type" value={data.type} />{/if}
 				<input
 					type="search"
 					name="q"
-					value={data.q}
+					defaultValue={data.q}
 					placeholder="Ajouter une œuvre : film, série, anime, manga, livre…"
 					aria-label="Chercher une œuvre à ajouter"
+					autocomplete="off"
 					class="field min-w-0 flex-1 text-sm"
+					oninput={searchAsYouType}
 				/>
 				<button class="btn-ghost">Chercher</button>
 			</form>
@@ -198,20 +210,20 @@
 						href={typeHref(null)}
 						class={!data.type ? 'chip-on' : 'chip'}
 						aria-current={!data.type ? 'page' : undefined}
-						data-sveltekit-noscroll>Tous</a
+						data-sveltekit-reset="false">Tous</a
 					>
 					{#each presentTypes as t (t)}
 						<a
 							href={typeHref(t)}
 							class={data.type === t ? 'chip-on' : 'chip'}
 							aria-current={data.type === t ? 'page' : undefined}
-							data-sveltekit-noscroll>{typePlural[t]}</a
+							data-sveltekit-reset="false">{typePlural[t]}</a
 						>
 					{/each}
 				</nav>
 				<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			{/if}
-			<form method="get" class="ml-auto flex" data-sveltekit-noscroll>
+			<form method="get" class="ml-auto flex" data-sveltekit-reset="false">
 				{#if data.q}<input type="hidden" name="q" value={data.q} />{/if}
 				{#if data.type}<input type="hidden" name="type" value={data.type} />{/if}
 				<label class="flex items-center gap-2 text-sm text-muted">
