@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
+	import StarRating from '#lib/components/StarRating.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import {
 		MEDIA_TYPES,
@@ -51,6 +52,8 @@
 	let selected = $state(-1);
 	let status = $state<EntryStatus>('completed');
 	let progress = $state(0);
+	/** Half-stars, 0 = not rated; not sent for "planned". */
+	let rating = $state(0);
 	let pending = $state(false);
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	let controller: AbortController | undefined;
@@ -112,6 +115,7 @@
 		selected = i;
 		status = 'completed';
 		progress = 0;
+		rating = 0;
 	}
 
 	function search() {
@@ -155,6 +159,9 @@
 		}, 150);
 	}
 
+	// Tapping the current rating again clears it
+	const rate = (h: number) => (rating = h === rating ? 0 : h);
+
 	function setType(t: MediaType | null) {
 		type = t;
 		search();
@@ -169,7 +176,11 @@
 		const res =
 			r.id === null
 				? null
-				: await postAction(`${mediaHref(r)}?/add`, { status: as, progress: n }).catch(() => null);
+				: await postAction(`${mediaHref(r)}?/add`, {
+						status: as,
+						progress: n,
+						score: as !== 'planned' && rating ? rating * 10 : ''
+					}).catch(() => null);
 		const result = res?.ok ? await res.json() : null;
 		pending = false;
 		if (result?.type === 'success') {
@@ -416,12 +427,15 @@
 						type={current.type}
 						class="w-9 shrink-0 rounded-md"
 					/>
-					<span class="flex min-w-0 flex-col">
+					<span class="flex min-w-0 flex-1 flex-col">
 						<span class="truncate font-bold">{current.title}</span>
 						<span class="text-xs text-muted"
 							>{typeLabel[current.type]}{current.year ? ` · ${current.year}` : ''}</span
 						>
 					</span>
+					{#if !current.entry}
+						<StarRating rated={rating} onrate={rate} size={28} />
+					{/if}
 				</div>
 				{#if current.entry}
 					<div class="flex items-center justify-between gap-3">
@@ -618,6 +632,13 @@
 										onclick={() => (progress += 1)}>+</button
 									>
 								</div>
+							</div>
+						{/if}
+
+						{#if status !== 'planned'}
+							<div class="flex items-center justify-between gap-4">
+								<span class="text-sm text-muted">Ma note</span>
+								<StarRating rated={rating} onrate={rate} />
 							</div>
 						{/if}
 

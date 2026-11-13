@@ -145,6 +145,8 @@ export const actions: Actions = {
 		const form = await request.formData();
 		const status = form.get('status');
 		const progress = Number(form.get('progress') ?? 0);
+		// Quick add: an optional score out of 100
+		const score = Number(form.get('score') || NaN);
 		const entryId = await addToLibrary(db, requireUser(locals, url).id, parseId(params.id));
 		// Added straight as "in progress" or "completed": the usual rules fill in dates and progress
 		if (isEntryStatus(status) && status !== 'planned') {
@@ -152,6 +154,7 @@ export const actions: Actions = {
 			// Quick add sets where the user is; the rules cap it at the total
 			if (status === 'in_progress' && Number.isInteger(progress) && progress > 0)
 				patch.progress = Math.min(progress, 1_000_000);
+			if (Number.isInteger(score) && score > 0 && score <= 100) patch.score = score;
 			await updateEntry(db, requireUser(locals, url).id, entryId, patch);
 		}
 	},
