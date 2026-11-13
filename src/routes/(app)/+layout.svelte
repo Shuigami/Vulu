@@ -5,6 +5,7 @@
 	import { authClient } from '#lib/auth-client.ts';
 	import Avatar from '#lib/components/Avatar.svelte';
 	import MediaSkeleton from '#lib/components/MediaSkeleton.svelte';
+	import QuickAdd from '#lib/components/QuickAdd.svelte';
 	import SearchBox from '#lib/components/SearchBox.svelte';
 	import Toaster from '#lib/components/Toaster.svelte';
 	import { opening } from '#lib/opening.svelte.ts';
@@ -61,6 +62,9 @@
 		href === resolve('') ? page.url.pathname === href : page.url.pathname.startsWith(href);
 
 	let menu: HTMLDetailsElement | undefined = $state();
+	let quickAdd: QuickAdd | undefined = $state();
+	const plusIcon =
+		'<svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
 	// The account menu closes after navigating, on a click elsewhere, and on Escape
 	$effect(() => {
 		void page.url.pathname;
@@ -123,6 +127,18 @@
 			>
 		{/if}
 		<div class="ml-auto flex items-center gap-2 {searchUi.open ? 'max-md:hidden' : ''}">
+			{#if data.user}
+				<button
+					type="button"
+					aria-label="Ajouter une œuvre"
+					title="Ajouter une œuvre"
+					class="hidden size-10 cursor-pointer items-center justify-center rounded-full bg-accent text-on-accent hover:brightness-110 md:flex"
+					onclick={() => quickAdd?.open()}
+				>
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup -->
+					{@html plusIcon}
+				</button>
+			{/if}
 			<button
 				type="button"
 				aria-label="Ouvrir la recherche"
@@ -213,37 +229,67 @@
 	<p class="mt-2"><a href={resolve('privacy')}>Confidentialité</a></p>
 </footer>
 
+{#if data.user}
+	<QuickAdd bind:this={quickAdd} />
+{/if}
+
+{#snippet navLink(link: (typeof links)[number])}
+	{@const current = isCurrent(link.href)}
+	<a
+		href={link.href}
+		aria-current={current ? 'page' : undefined}
+		class="flex min-h-15 flex-col items-center justify-center gap-1 text-[11px] font-semibold no-underline {current
+			? 'text-ink'
+			: 'text-muted'}"
+	>
+		<svg
+			aria-hidden="true"
+			width="22"
+			height="22"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			class={current ? 'text-accent-ink' : ''}
+		>
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup defined above -->
+			{@html link.icon}
+		</svg>
+		{link.label}
+	</a>
+{/snippet}
+
 <nav
 	aria-label="Navigation principale"
-	class="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+	class="fixed inset-x-0 bottom-0 z-40 grid {data.user
+		? 'grid-cols-5'
+		: 'grid-cols-4'} border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
 >
-	{#each links as link (link.href)}
-		{@const current = isCurrent(link.href)}
-		<a
-			href={link.href}
-			aria-current={current ? 'page' : undefined}
-			class="flex min-h-15 flex-col items-center justify-center gap-1 text-[11px] font-semibold no-underline {current
-				? 'text-ink'
-				: 'text-muted'}"
+	{#each links.slice(0, 2) as link (link.href)}{@render navLink(link)}{/each}
+	{#if data.user}
+		<!-- Raised out of the bar, except on media pages where their action bar sits right above -->
+		<div
+			class="flex justify-center {page.route.id === '/(app)/media/[id]'
+				? 'items-center'
+				: 'items-start'}"
 		>
-			<svg
-				aria-hidden="true"
-				width="22"
-				height="22"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				class={current ? 'text-accent-ink' : ''}
+			<button
+				type="button"
+				aria-label="Ajouter une œuvre"
+				class="flex cursor-pointer items-center justify-center rounded-full bg-accent text-on-accent ring-4 ring-bg {page
+					.route.id === '/(app)/media/[id]'
+					? 'size-11'
+					: '-mt-5 size-14 shadow-[0_8px_20px_-6px_rgb(0_0_0/0.5)]'}"
+				onclick={() => quickAdd?.open()}
 			>
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup defined above -->
-				{@html link.icon}
-			</svg>
-			{link.label}
-		</a>
-	{/each}
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup -->
+				{@html plusIcon}
+			</button>
+		</div>
+	{/if}
+	{#each links.slice(2) as link (link.href)}{@render navLink(link)}{/each}
 </nav>
 
 <Toaster />

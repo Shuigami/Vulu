@@ -8,6 +8,7 @@
 	import Poster from '#lib/components/Poster.svelte';
 	import RatingHistogram from '#lib/components/RatingHistogram.svelte';
 	import Progress from '#lib/components/Progress.svelte';
+	import StarRating from '#lib/components/StarRating.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import {
 		ENTRY_STATUSES,
@@ -120,9 +121,7 @@
 	// Typed in the field or set from the stars, in the user's scale (null when not rated)
 	let score = $derived<number | null>(entry?.score == null ? null : toScale(entry.score, scale));
 	// Stars count in halves: 1 to 10 half-stars
-	let hovered = $state(0);
 	const rated = $derived(score == null ? 0 : Math.round((score / scale) * 10));
-	const halves = $derived(hovered || rated);
 	async function rate(h: number) {
 		// Clicking the current rating again clears it
 		score = h === rated ? null : toScale(h * 10, scale);
@@ -401,49 +400,7 @@
 					<div class="flex flex-col gap-1">
 						<span class="{zoneLabel} max-sm:sr-only">Ma note</span>
 						<div class="flex items-center">
-							<div
-								class="flex text-line"
-								role="group"
-								aria-label="Note en étoiles"
-								onmouseleave={() => (hovered = 0)}
-							>
-								{#each [1, 2, 3, 4, 5] as i (i)}
-									{@const fill = Math.min(2, Math.max(0, halves - 2 * (i - 1)))}
-									<!-- Star i: a grey star, the accent star clipped to 0, 50 or 100 %, and two
-										 invisible half buttons on top (left = i - 0.5, right = i) -->
-									<span class="relative block size-[30px] p-0.5">
-										{#each [false, true] as accent (accent)}
-											<span
-												class="absolute inset-0.5 overflow-hidden {accent ? 'text-accent' : ''}"
-												style:width={accent ? `calc((100% - 4px) * ${fill / 2})` : undefined}
-												><svg
-													aria-hidden="true"
-													viewBox="0 0 24 24"
-													fill="currentColor"
-													class="size-[26px] max-w-none"
-													><polygon
-														points="12 2 15.1 8.3 22 9.3 17 14.1 18.2 21 12 17.8 5.8 21 7 14.1 2 9.3 8.9 8.3"
-													></polygon></svg
-												></span
-											>
-										{/each}
-										{#each [2 * i - 1, 2 * i] as h (h)}
-											<button
-												type="button"
-												class="absolute inset-y-0 w-1/2 cursor-pointer rounded {h % 2
-													? 'left-0'
-													: 'right-0'}"
-												aria-label="{String(h / 2).replace('.', ',')} étoile{h >= 4
-													? 's'
-													: ''} sur 5"
-												aria-pressed={h === rated}
-												onmouseenter={() => (hovered = h)}
-												onclick={() => rate(h)}
-											></button>
-										{/each}
-									</span>
-								{/each}
-							</div>
+							<StarRating {rated} onrate={rate} />
 							<!-- The stars are the only control; the score travels in the user's scale -->
 							<input type="hidden" name="score" value={score ?? ''} />
 						</div>
