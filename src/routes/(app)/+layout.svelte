@@ -236,7 +236,7 @@
 		<button
 			type="button"
 			aria-label="Ajouter une œuvre"
-			class="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex size-13 cursor-pointer items-center justify-center rounded-full bg-accent text-bg shadow-xl md:hidden"
+			class="fixed right-4 bottom-[calc(4.75rem+env(safe-area-inset-bottom))] z-40 flex size-13 cursor-pointer items-center justify-center rounded-full bg-accent text-on-accent shadow-xl md:hidden"
 			onclick={() => quickAdd?.open()}
 		>
 			<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup -->
