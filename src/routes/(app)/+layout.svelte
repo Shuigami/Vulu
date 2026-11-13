@@ -132,7 +132,7 @@
 					type="button"
 					aria-label="Ajouter une œuvre"
 					title="Ajouter une œuvre"
-					class="hidden size-10 cursor-pointer items-center justify-center rounded-full border border-line text-ink hover:bg-surface-2 md:flex"
+					class="hidden size-10 cursor-pointer items-center justify-center rounded-full bg-accent text-on-accent hover:brightness-110 md:flex"
 					onclick={() => quickAdd?.open()}
 				>
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -- static icon markup -->
