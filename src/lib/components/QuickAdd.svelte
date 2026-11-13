@@ -16,7 +16,10 @@
 
 	type Entry = { status: EntryStatus; progress: number };
 	type Result = {
-		id: number;
+		/** Null for a provider result not yet in the catalogue: imported when added. */
+		id: number | null;
+		provider?: string;
+		externalId?: string;
 		type: MediaType;
 		title: string;
 		posterUrl: string | null;
@@ -43,6 +46,8 @@
 	/** The query the results answer: the empty state waits for a real answer. */
 	let answered = $state('');
 	let loading = $state(false);
+	/** Provider results are being fetched, after the local ones. */
+	let remoteLoading = $state(false);
 	let selected = $state(-1);
 	let status = $state<EntryStatus>('planned');
 	let progress = $state(0);
@@ -55,6 +60,9 @@
 	const current = $derived(selected >= 0 ? results[selected] : undefined);
 	const unit = $derived(current ? unitOne[current.type] : null);
 	const mediaHref = (r: Result) => resolve('/(app)/media/[id]', { id: String(r.id) });
+	const key = (r: Result) => (r.externalId ? `${r.provider}:${r.externalId}` : r.id);
+	/** Same threshold as the main search (LOCAL_ENOUGH in search.ts). */
+	const LOCAL_ENOUGH = 5;
 
 	// Phone sheet: dragged down by its top bar, closes past a distance or on a quick flick
 	let drag: { y: number; t: number } | null = $state(null);
@@ -109,6 +117,7 @@
 	function search() {
 		clearTimeout(timer);
 		controller?.abort();
+		remoteLoading = false;
 		if (query.length < 2) {
 			results = [];
 			selected = -1;
@@ -117,23 +126,31 @@
 		}
 		loading = true;
 		const asked = new URLSearchParams(type ? { q: query, type } : { q: query }).toString();
+		const wide = () => matchMedia('(min-width: 48rem)').matches;
 		timer = setTimeout(async () => {
-			controller = new AbortController();
+			const signal = (controller = new AbortController()).signal;
 			try {
-				const res = await fetch(`${resolve('search/quick')}?${asked}`, {
-					signal: controller.signal
-				});
+				const res = await fetch(`${resolve('search/quick')}?${asked}`, { signal });
 				if (res.ok) {
 					results = await res.json();
 					answered = asked;
 					// Wide screens preview the first result; phones wait for a tap
 					selected = -1;
-					if (matchMedia('(min-width: 48rem)').matches && results.length) pick(0);
+					if (wide() && results.length) pick(0);
 				}
 				loading = false;
+				// Few local results: ask the providers too (slower, through the worker), then append
+				if (!res.ok || results.length >= LOCAL_ENOUGH) return;
+				remoteLoading = true;
+				const remote = await fetch(`${resolve('search/quick')}?${asked}&remote`, { signal });
+				if (remote.ok) {
+					results = [...results, ...(await remote.json())];
+					if (wide() && selected < 0 && results.length) pick(0);
+				}
+				remoteLoading = false;
 			} catch {
 				// Aborted by a newer keystroke (which keeps loading on), or offline
-				if (!controller.signal.aborted) loading = false;
+				if (!signal.aborted) loading = remoteLoading = false;
 			}
 		}, 150);
 	}
@@ -147,9 +164,12 @@
 		if (pending || r.entry) return;
 		pending = true;
 		const n = as === 'in_progress' && r.type !== 'movie' ? progress : 0;
-		const res = await postAction(`${mediaHref(r)}?/add`, { status: as, progress: n }).catch(
-			() => null
-		);
+		// A provider result is imported into the catalogue first (the worker fetches it)
+		if (r.id === null) r.id = await importResult(r);
+		const res =
+			r.id === null
+				? null
+				: await postAction(`${mediaHref(r)}?/add`, { status: as, progress: n }).catch(() => null);
 		const result = res?.ok ? await res.json() : null;
 		pending = false;
 		if (result?.type === 'success') {
@@ -161,6 +181,18 @@
 		} else {
 			toast('L’ajout a échoué, réessaie.');
 		}
+	}
+
+	/** Imports a provider result through the search page's `open` action; returns its catalogue id. */
+	async function importResult(r: Result) {
+		const res = await postAction(`${resolve('search')}?/open`, {
+			type: r.type,
+			provider: r.provider ?? '',
+			externalId: r.externalId ?? ''
+		}).catch(() => null);
+		const result = res?.ok ? await res.json() : null;
+		const id = result?.type === 'redirect' ? /\/media\/(\d+)/.exec(result.location)?.[1] : null;
+		return id ? Number(id) : null;
 	}
 
 	function onkeydown(e: KeyboardEvent) {
@@ -235,20 +267,36 @@
 {/snippet}
 
 {#snippet emptyState()}
-	{#if query.length >= 2 && answered && !loading && !results.length}
+	{#if query.length >= 2 && answered && !loading && !remoteLoading && !results.length}
 		<div class="flex flex-col items-start gap-3 p-2">
-			<p class="text-sm text-muted">Rien dans le catalogue Vulu pour « {query} ».</p>
+			<p class="text-sm text-muted">Rien trouvé pour « {query} ».</p>
 			<a
 				href="{resolve('search')}?{providersQuery}"
 				class="btn-ghost text-sm"
-				onclick={() => dialog?.close()}>Chercher chez TMDB, AniList et Open Library</a
+				onclick={() => dialog?.close()}>Ouvrir la recherche complète</a
 			>
 		</div>
 	{:else if !results.length}
 		<p class="p-2 text-sm text-muted">
-			{loading ? 'Recherche…' : 'Les œuvres déjà sur Vulu s’affichent ici pendant la saisie.'}
+			{loading
+				? 'Recherche…'
+				: remoteLoading
+					? 'Recherche chez TMDB, AniList et Open Library…'
+					: 'Tape le titre d’un film, d’une série, d’un anime, d’un manga ou d’un livre.'}
 		</p>
 	{/if}
+{/snippet}
+
+{#snippet notFound(cls: string)}
+	<p class={cls}>
+		{#if remoteLoading}
+			Recherche chez TMDB, AniList et Open Library…
+		{:else}
+			Pas trouvé ? <a href="{resolve('search')}?{providersQuery}" onclick={() => dialog?.close()}
+				>Ouvrir la recherche complète</a
+			>
+		{/if}
+	</p>
 {/snippet}
 
 <!-- Phones: a sheet from the bottom, a poster grid, tap then pick a status.
@@ -302,7 +350,7 @@
 						: ''}"
 					aria-label="Résultats"
 				>
-					{#each results as r, i (r.id)}
+					{#each results as r, i (key(r))}
 						<li>
 							<button
 								type="button"
@@ -352,12 +400,7 @@
 						</li>
 					{/each}
 				</ul>
-				<p class="pt-4 text-[13px] text-muted">
-					Pas trouvé ? <a
-						href="{resolve('search')}?{providersQuery}"
-						onclick={() => dialog?.close()}>Chercher chez TMDB, AniList et Open Library</a
-					>
-				</p>
+				{@render notFound('pt-4 text-[13px] text-muted')}
 			{:else}
 				{@render emptyState()}
 			{/if}
@@ -444,7 +487,7 @@
 							? 'opacity-60'
 							: ''}"
 					>
-						{#each results as r, i (r.id)}
+						{#each results as r, i (key(r))}
 							<li role="option" aria-selected={i === selected}>
 								<button
 									type="button"
@@ -474,12 +517,7 @@
 							</li>
 						{/each}
 					</ul>
-					<p class="mt-auto px-2.5 pt-3 pb-1 text-[13px] text-muted">
-						Pas trouvé ? <a
-							href="{resolve('search')}?{providersQuery}"
-							onclick={() => dialog?.close()}>Chercher chez TMDB, AniList et Open Library</a
-						>
-					</p>
+					{@render notFound('mt-auto px-2.5 pt-3 pb-1 text-[13px] text-muted')}
 				{:else}
 					{@render emptyState()}
 				{/if}
@@ -584,9 +622,13 @@
 						{/if}
 
 						<div class="mt-auto flex justify-end gap-2.5">
-							<a href={mediaHref(current)} class="btn-ghost text-sm" onclick={() => dialog?.close()}
-								>Voir la fiche</a
-							>
+							{#if current.id !== null}
+								<a
+									href={mediaHref(current)}
+									class="btn-ghost text-sm"
+									onclick={() => dialog?.close()}>Voir la fiche</a
+								>
+							{/if}
 							<button
 								type="button"
 								class="btn-accent"
