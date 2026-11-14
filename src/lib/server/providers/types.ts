@@ -16,6 +16,8 @@ export type SearchResult = {
 	isAdult: boolean;
 	/** How many users rated it, when the provider says (TMDB): tells homonyms apart. */
 	votes?: number;
+	/** TMDB: a Japanese animated film, which AniList owns (imports look it up there). */
+	anime?: boolean;
 };
 
 export type SearchOptions = { year?: number; english?: boolean };

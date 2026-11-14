@@ -29,6 +29,7 @@ type SearchItem = {
 	adult?: boolean;
 	genre_ids?: number[];
 	origin_country?: string[]; // tv
+	original_language?: string;
 	vote_count?: number;
 };
 type SeasonSummary = {
@@ -93,7 +94,10 @@ const toResults = (items: SearchItem[] | undefined, type: MediaType) =>
 			year: yearOf(r.release_date ?? r.first_air_date),
 			posterUrl: image(r.poster_path, 'w342'),
 			isAdult: r.adult ?? false,
-			votes: r.vote_count
+			votes: r.vote_count,
+			// Films have no origin country in search results: the language tells
+			...(r.original_language === 'ja' &&
+				!!r.genre_ids?.includes(ANIMATION_GENRE) && { anime: true })
 		}));
 
 export function createTmdbClient(opts: {

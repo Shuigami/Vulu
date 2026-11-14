@@ -134,7 +134,16 @@ describe('runImport with title and year', () => {
 				result('movie', t('Box'), 2020, 1500) // festival a year earlier: the one
 			],
 			[t('Onion')]: [result('movie', `${t('Onion')}: A Mystery`, 2022, 7000)],
-			[t('Lupin')]: [result('movie', `${t('Lupin')}'s Daughter`, 2021, 8)]
+			[t('Lupin')]: [result('movie', `${t('Lupin')}'s Daughter`, 2021, 8)],
+			// A Japanese animated film: AniList knows it by its original title only
+			[t('Spirited')]: [
+				{
+					...result('movie', t('Spirited'), 2001, 900),
+					originalTitle: `千と千尋 ${run}`,
+					anime: true
+				}
+			],
+			[t('Unknown anime')]: [{ ...result('movie', t('Unknown anime'), 2001, 50), anime: true }]
 		};
 		const shows: Record<string, unknown[]> = {
 			[t('Lupin')]: [result('tv', t('Lupin'), 2021, 2000)]
@@ -155,9 +164,24 @@ describe('runImport with title and year', () => {
 				})
 			}
 		});
+		const lookups: string[] = [];
+		const anilist = {
+			animeSeasons: async (title: string, _year: number, movie: boolean) => {
+				lookups.push(title);
+				if (title !== `千と千尋 ${run}` || !movie) return null;
+				return [
+					{
+						media: { type: 'anime', title: `Anime ${run}`, status: 'finished', totalUnits: 1 },
+						externalIds: [{ provider: 'anilist', externalId: `test-${run}-anime` }],
+						titles: []
+					}
+				];
+			}
+		};
 		const providers = {
 			movie: client('movie', movies),
-			tv: client('tv', shows)
+			tv: client('tv', shows),
+			anilist
 		} as unknown as Providers;
 		const entry = parseLetterboxd({ 'watched.csv': files['watched.csv'] })[0].entry;
 		const row = (name: string, year: number) => ({
@@ -170,9 +194,18 @@ describe('runImport with title and year', () => {
 			importId: 0,
 			userId,
 			source: 'letterboxd',
-			items: [row('Box', 2021), row('Onion', 2022), row('Lupin', 2021), row('Nothing', 2000)]
+			items: [
+				row('Box', 2021),
+				row('Onion', 2022),
+				row('Lupin', 2021),
+				row('Nothing', 2000),
+				row('Spirited', 2001),
+				row('Unknown anime', 2001)
+			]
 		});
-		expect(stats).toMatchObject({ imported: 3, unmatched: 1 });
+		// An anime AniList does not know stays unmatched rather than landing in "Films"
+		expect(stats).toMatchObject({ imported: 4, unmatched: 2 });
+		expect(lookups).toEqual([t('Spirited'), `千と千尋 ${run}`, t('Unknown anime')]);
 		expect(calls[0]).toEqual({ year: 2021, english: true });
 		const rows = await db
 			.select({ title: media.title, type: media.type, progress: libraryEntries.progress })
@@ -180,6 +213,7 @@ describe('runImport with title and year', () => {
 			.innerJoin(media, eq(media.id, libraryEntries.mediaId))
 			.where(eq(libraryEntries.userId, userId));
 		expect(rows.map((r) => `${r.type}:${r.title.replace(`test-${run}-`, '')}`).sort()).toEqual([
+			`anime:Anime ${run}`.replace(`test-${run}-`, ''),
 			'movie:movie-Box-2020-1500',
 			'movie:movie-Onion-2022-7000',
 			'tv:tv-Lupin-2021-2000'

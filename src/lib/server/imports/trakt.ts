@@ -2,8 +2,8 @@
 // (TMDB) and be duplicated by an AniList or MyAnimeList import.
 import type { Db } from '../db';
 import type { AniListClient } from '../providers/anilist';
-import { cached, DAY } from '../providers/cache';
 import type { TraktItem } from '../providers/trakt';
+import { findAnime } from './anime';
 import type { ImportItem } from './types';
 
 /**
@@ -28,15 +28,7 @@ export async function resolveTraktAnime(
 		// AniList allows 30 requests a minute: this step takes minutes, show where it is
 		await onProgress?.(done++, total);
 		const movie = item.type === 'movie';
-		const key = `anilist:seasons:${movie ? 'movie' : 'tv'}:${anime.year}:${anime.title.toLowerCase()}`;
-		let seasons = null;
-		try {
-			seasons = await cached(db, key, 7 * DAY, () =>
-				anilist.animeSeasons(anime.title, anime.year, movie)
-			);
-		} catch (err) {
-			console.error(`[import] AniList lookup for ${item.label}`, err); // left unmatched
-		}
+		const seasons = await findAnime(db, anilist, [anime.title], anime.year, movie);
 		const row = { ...item, type: 'anime' as const, ref: undefined };
 		if (!seasons) {
 			out.push(row);

@@ -6,6 +6,7 @@ import type { Db } from '../db';
 import { activityEvents, importJobs, libraryEntries, media } from '../db/schema';
 import { cached, DAY } from '../providers/cache';
 import type { MediaType, SearchResult } from '../providers/types';
+import { findAnime } from './anime';
 import type { ImportItem, ImportedEntry, ImportSource, Unmatched } from './types';
 
 /** Case, accents and punctuation aside ("Amélie" = "amelie", "Spider-Man" = "Spider Man"). */
@@ -47,7 +48,13 @@ async function findByTitle(
 	let hit = mostRated(works.filter(same));
 	if (!hit && type === 'movie') hit = mostRated((await near('tv')).filter(same));
 	hit ??= mostRated(works.filter((r) => norm(r.title).startsWith(`${q} `)));
-	return hit ? importMedia(db, providers, hit.type, hit.externalId) : null;
+	if (!hit) return null;
+	// A Japanese animated film: imported from AniList, which owns anime (unmatched if not there)
+	if (hit.anime && providers.anilist) {
+		const found = await findAnime(db, providers.anilist, [title, hit.originalTitle], year, true);
+		return found ? upsertMedia(db, found[0]) : null;
+	}
+	return importMedia(db, providers, hit.type, hit.externalId);
 }
 
 type Stats = { total: number; imported: number; kept: number; unmatched: number };
