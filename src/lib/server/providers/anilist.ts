@@ -1,5 +1,6 @@
 // AniList GraphQL API (anime, manga). Public queries need no key.
-// https://docs.anilist.co — rate limit ~90 requests/minute.
+// https://docs.anilist.co — rate limit 90 requests/minute, lowered to 30 while AniList is degraded
+// (X-RateLimit-Limit says 30 in 2026).
 import type { ImportItem } from '../imports/types';
 import { createRateLimiter, fetchJson, ProviderError, type Fetch, type RateLimiter } from './http';
 import {
@@ -151,7 +152,7 @@ export function createAniListClient(
 	opts: { fetch?: Fetch; limiter?: RateLimiter } = {}
 ): AniListClient {
 	const fetch = opts.fetch ?? globalThis.fetch;
-	const limiter = opts.limiter ?? createRateLimiter(85);
+	const limiter = opts.limiter ?? createRateLimiter(30);
 
 	async function query<T>(gql: string, variables: Record<string, unknown>): Promise<T | null> {
 		const res = await fetchJson<{

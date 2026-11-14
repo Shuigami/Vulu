@@ -14,14 +14,19 @@ import type { ImportItem } from './types';
 export async function resolveTraktAnime(
 	db: Db,
 	anilist: AniListClient,
-	items: TraktItem[]
+	items: TraktItem[],
+	onProgress?: (done: number, total: number) => Promise<unknown>
 ): Promise<ImportItem[]> {
 	const out: ImportItem[] = [];
+	const total = items.filter((i) => i.anime).length;
+	let done = 0;
 	for (const { anime, ...item } of items) {
 		if (!anime) {
 			out.push(item);
 			continue;
 		}
+		// AniList allows 30 requests a minute: this step takes minutes, show where it is
+		await onProgress?.(done++, total);
 		const movie = item.type === 'movie';
 		const key = `anilist:seasons:${movie ? 'movie' : 'tv'}:${anime.year}:${anime.title.toLowerCase()}`;
 		let seasons = null;

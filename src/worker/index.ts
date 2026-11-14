@@ -109,6 +109,8 @@ await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
 			.update(importJobs)
 			.set({ status: 'failed', error, finishedAt: new Date() })
 			.where(eq(importJobs.id, importId));
+	// Fetching and matching can take minutes before runImport starts: running already
+	await db.update(importJobs).set({ status: 'running' }).where(eq(importJobs.id, importId));
 
 	let items: ImportItem[];
 	if (job.data.source === 'anilist') {
@@ -133,7 +135,12 @@ await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
 			}
 		} else library = await trakt.userLibrary(job.data.userName);
 		if (!library) return void (await fail('trakt_user_not_found'));
-		items = await resolveTraktAnime(db, providers.anilist!, library);
+		items = await resolveTraktAnime(db, providers.anilist!, library, (done, total) =>
+			db
+				.update(importJobs)
+				.set({ stats: { anime: { done, total } } })
+				.where(eq(importJobs.id, importId))
+		);
 	} else if (job.data.source === 'mal') {
 		items = await resolveMal(providers.anilist!, job.data.items);
 	} else {

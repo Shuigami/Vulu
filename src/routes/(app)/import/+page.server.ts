@@ -33,7 +33,13 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			status: j.status,
 			error: j.error,
 			createdAt: j.createdAt.toISOString(),
-			stats: j.stats as { total?: number; imported?: number; kept?: number; unmatched?: number },
+			stats: j.stats as {
+				total?: number;
+				imported?: number;
+				kept?: number;
+				unmatched?: number;
+				anime?: { done: number; total: number }; // Trakt: matching anime on AniList first
+			},
 			unmatched: j.unmatched as Unmatched[]
 		}))
 	};

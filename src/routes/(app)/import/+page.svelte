@@ -206,7 +206,20 @@
 					<span class="font-medium">{sourceLabel[job.source] ?? job.source}</span>
 					· {dateFormat.format(new Date(job.createdAt))} · {statusText[job.status]}
 				</p>
-				{#if job.status === 'running' && job.stats.total}
+				{#if job.status === 'running' && job.stats.anime && !job.stats.total}
+					<div class="mt-2 flex max-w-md items-center gap-3">
+						<div class="flex-1">
+							<Progress
+								value={job.stats.anime.done}
+								max={job.stats.anime.total}
+								label="Animes rattachés à AniList"
+							/>
+						</div>
+						<span class="text-[13px] text-muted tabular-nums">
+							Animes : {job.stats.anime.done} / {job.stats.anime.total}
+						</span>
+					</div>
+				{:else if job.status === 'running' && job.stats.total}
 					{@const done =
 						(job.stats.imported ?? 0) + (job.stats.kept ?? 0) + (job.stats.unmatched ?? 0)}
 					<div class="mt-2 flex max-w-md items-center gap-3">
