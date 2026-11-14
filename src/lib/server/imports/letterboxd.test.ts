@@ -149,7 +149,7 @@ describe('runImport with title and year', () => {
 					return list[Object.keys(list).find((k) => k.toLowerCase() === q) ?? ''] ?? [];
 				},
 				get: async (id: string): Promise<ProviderMedia> => ({
-					media: { type: type as 'movie', title: id, status: 'finished' },
+					media: { type: type as 'movie', title: id, status: 'finished', totalUnits: 3 },
 					externalIds: [{ provider: 'tmdb', externalId: id }],
 					titles: []
 				})
@@ -175,7 +175,7 @@ describe('runImport with title and year', () => {
 		expect(stats).toMatchObject({ imported: 3, unmatched: 1 });
 		expect(calls[0]).toEqual({ year: 2021, english: true });
 		const rows = await db
-			.select({ title: media.title, type: media.type })
+			.select({ title: media.title, type: media.type, progress: libraryEntries.progress })
 			.from(libraryEntries)
 			.innerJoin(media, eq(media.id, libraryEntries.mediaId))
 			.where(eq(libraryEntries.userId, userId));
@@ -184,5 +184,6 @@ describe('runImport with title and year', () => {
 			'movie:movie-Onion-2022-7000',
 			'tv:tv-Lupin-2021-2000'
 		]);
+		expect(rows.find((r) => r.type === 'tv')?.progress).toBe(3); // completed show: every episode
 	});
 });

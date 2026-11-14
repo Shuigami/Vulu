@@ -94,8 +94,13 @@ export async function saveImportedEntry(
 			})
 			.from(media)
 			.where(eq(media.id, mediaId));
-		// Sources can overshoot (rewatches counted as plays): never above the known total
-		const progress = m.total ? Math.min(imported.progress, m.total) : imported.progress;
+		// Sources can overshoot (rewatches counted as plays): never above the known total.
+		// Completed without a count (Letterboxd shows): every unit seen, as updateEntry would do.
+		const progress = !m.total
+			? imported.progress
+			: imported.status === 'completed' && !imported.progress
+				? m.total
+				: Math.min(imported.progress, m.total);
 		// A finished work whose every unit was seen is completed, even if the source says otherwise
 		const done =
 			imported.status === 'in_progress' &&
