@@ -380,7 +380,9 @@ describe('trending and recommendations', () => {
 	it('TMDB: trending and recommendations without Japanese animation', async () => {
 		const items = [
 			{ id: 1, name: 'Severance', first_air_date: '2022-02-18', poster_path: '/s.jpg' },
-			{ id: 2, name: 'Frieren', origin_country: ['JP'], genre_ids: [16], poster_path: null }
+			{ id: 2, name: 'Frieren', origin_country: ['JP'], genre_ids: [16], poster_path: null },
+			// Films carry no origin country: their language tells
+			{ id: 3, title: 'Totoro', original_language: 'ja', genre_ids: [16], poster_path: null }
 		];
 		const { fetch, calls } = fakeFetch([['api.themoviedb.org', () => json({ results: items })]]);
 		const tmdb = createTmdbClient({ apiKey: 'k', fetch, limiter: noWait });
@@ -398,9 +400,17 @@ describe('trending and recommendations', () => {
 			}
 		]);
 		expect(await tmdb.recommendations!('95396', 'tv')).toHaveLength(1);
+		// Imports keep them, flagged, to look them up on AniList
+		const kept = await tmdb.search('x', 'tv', { keepAnime: true });
+		expect(kept.map((r) => [r.externalId, r.anime ?? false])).toEqual([
+			['1', false],
+			['2', true],
+			['3', true]
+		]);
 		expect(calls.map((c) => new URL(c.url).pathname)).toEqual([
 			'/3/trending/tv/week',
-			'/3/tv/95396/recommendations'
+			'/3/tv/95396/recommendations',
+			'/3/search/tv'
 		]);
 	});
 

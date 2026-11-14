@@ -61,7 +61,7 @@ export async function searchProvider(
 	const q = normalize(query);
 	if (!q) return [];
 	const { name, client } = providers[type];
-	const key = `${name}:search:${type}:${q}${opts.year ? `:${opts.year}` : ''}${opts.english ? ':en' : ''}`;
+	const key = `${name}:search:${type}:${q}${opts.year ? `:${opts.year}` : ''}${opts.english ? ':en' : ''}${opts.keepAnime ? ':anime' : ''}`;
 	return (await cached(db, key, DAY, () => client.search(q, type, opts))) ?? [];
 }
 

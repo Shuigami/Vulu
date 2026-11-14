@@ -16,11 +16,11 @@ export type SearchResult = {
 	isAdult: boolean;
 	/** How many users rated it, when the provider says (TMDB): tells homonyms apart. */
 	votes?: number;
-	/** TMDB: a Japanese animated film, which AniList owns (imports look it up there). */
+	/** TMDB, with `keepAnime`: Japanese animation, which AniList owns (imports look it up there). */
 	anime?: boolean;
 };
 
-export type SearchOptions = { year?: number; english?: boolean };
+export type SearchOptions = { year?: number; english?: boolean; keepAnime?: boolean };
 
 /** Everything needed to insert or refresh a media in the catalogue. */
 export type ProviderMedia = {
@@ -55,7 +55,8 @@ export interface ProviderClient {
 	readonly types: readonly MediaType[];
 	/**
 	 * `year` narrows the search and `english` gives English titles, where the provider supports
-	 * it (TMDB): imports from English-titled sources match on them.
+	 * it (TMDB): imports from English-titled sources match on them. TMDB leaves anime out (AniList
+	 * owns them) unless `keepAnime`, for imports that look them up on AniList.
 	 */
 	search(query: string, type: MediaType, opts?: SearchOptions): Promise<SearchResult[]>;
 	/** Null when the provider does not know this id. */

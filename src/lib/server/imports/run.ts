@@ -40,7 +40,11 @@ async function findByTitle(
 ): Promise<number | null> {
 	const near = async (t: MediaType) =>
 		(
-			await searchProvider(db, providers, t, title, { year: year ?? undefined, english: true })
+			await searchProvider(db, providers, t, title, {
+				year: year ?? undefined,
+				english: true,
+				keepAnime: true
+			})
 		).filter((r) => year === null || (r.year !== null && Math.abs(r.year - year) <= 1));
 	const q = norm(title);
 	const same = (r: SearchResult) => [r.title, r.originalTitle].some((t) => t && norm(t) === q);
@@ -49,9 +53,11 @@ async function findByTitle(
 	if (!hit && type === 'movie') hit = mostRated((await near('tv')).filter(same));
 	hit ??= mostRated(works.filter((r) => norm(r.title).startsWith(`${q} `)));
 	if (!hit) return null;
-	// A Japanese animated film: imported from AniList, which owns anime (unmatched if not there)
+	// Japanese animation: imported from AniList, which owns anime (unmatched if not there); a show
+	// becomes its first season, the source giving no episode count to spread
 	if (hit.anime && providers.anilist) {
-		const found = await findAnime(db, providers.anilist, [title, hit.originalTitle], year, true);
+		const titles = [title, hit.originalTitle];
+		const found = await findAnime(db, providers.anilist, titles, year, hit.type === 'movie');
 		return found ? upsertMedia(db, found[0]) : null;
 	}
 	return importMedia(db, providers, hit.type, hit.externalId);

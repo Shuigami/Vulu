@@ -51,4 +51,26 @@ describe('searchMedia', () => {
 			expect(results.find((r) => r.id === frieren.id)?.score).toBe(1);
 		});
 	});
+
+	it('leaves out Japanese animation imported from TMDB, not other animation', async () => {
+		await inRollback(async (tx) => {
+			const film = (originalLanguage: string) =>
+				tx
+					.insert(media)
+					.values({
+						type: 'movie',
+						title: 'Zorblax Totoro',
+						extra: { genres: ['Animation', 'Famille'], originalLanguage }
+					})
+					.returning({ id: media.id });
+			const [[ja], [en]] = await Promise.all([film('ja'), film('en')]);
+			await tx.insert(mediaTitles).values([
+				{ mediaId: ja.id, title: 'Zorblax Totoro', locale: 'fr' },
+				{ mediaId: en.id, title: 'Zorblax Totoro', locale: 'fr' }
+			]);
+			const ids = (await searchMedia(tx, 'zorblax totoro')).map((r) => r.id);
+			expect(ids).toContain(en.id);
+			expect(ids).not.toContain(ja.id);
+		});
+	});
 });

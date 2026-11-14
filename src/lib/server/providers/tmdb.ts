@@ -78,13 +78,18 @@ const STATUS: Record<string, ProviderMedia['media']['status']> = {
 };
 
 const ANIMATION_GENRE = 16;
-/** Japanese animated series: AniList is the source of truth for anime (docs/v1-spec.md). */
+/**
+ * Japanese animation, series and films: AniList is the source of truth for anime
+ * (docs/v1-spec.md). Films have no origin country in results: their language tells.
+ */
 const isAnime = (r: SearchItem) =>
-	!!r.origin_country?.includes('JP') && !!r.genre_ids?.includes(ANIMATION_GENRE);
+	(!!r.origin_country?.includes('JP') || r.original_language === 'ja') &&
+	!!r.genre_ids?.includes(ANIMATION_GENRE);
 
-const toResults = (items: SearchItem[] | undefined, type: MediaType) =>
+/** Anime are left out, or kept and flagged for imports that look them up on AniList. */
+const toResults = (items: SearchItem[] | undefined, type: MediaType, keepAnime = false) =>
 	(items ?? [])
-		.filter((r) => !isAnime(r))
+		.filter((r) => keepAnime || !isAnime(r))
 		.map((r): SearchResult => ({
 			provider: 'tmdb',
 			externalId: String(r.id),
@@ -95,9 +100,7 @@ const toResults = (items: SearchItem[] | undefined, type: MediaType) =>
 			posterUrl: image(r.poster_path, 'w342'),
 			isAdult: r.adult ?? false,
 			votes: r.vote_count,
-			// Films have no origin country in search results: the language tells
-			...(r.original_language === 'ja' &&
-				!!r.genre_ids?.includes(ANIMATION_GENRE) && { anime: true })
+			...(isAnime(r) && { anime: true })
 		}));
 
 export function createTmdbClient(opts: {
@@ -131,7 +134,7 @@ export function createTmdbClient(opts: {
 	return {
 		types: ['movie', 'tv'],
 
-		async search(q, type, { year, english } = {}) {
+		async search(q, type, { year, english, keepAnime } = {}) {
 			const res = await get<{ results: SearchItem[] }>(`/search/${kind(type)}`, {
 				query: q,
 				include_adult: 'false',
@@ -139,7 +142,7 @@ export function createTmdbClient(opts: {
 				...(year && { [type === 'movie' ? 'year' : 'first_air_date_year']: String(year) }),
 				...(english && { language: 'en-US' })
 			});
-			return toResults(res?.results, type);
+			return toResults(res?.results, type, keepAnime);
 		},
 
 		async trending(type) {

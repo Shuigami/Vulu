@@ -206,7 +206,7 @@ describe('runImport with title and year', () => {
 		// An anime AniList does not know stays unmatched rather than landing in "Films"
 		expect(stats).toMatchObject({ imported: 4, unmatched: 2 });
 		expect(lookups).toEqual([t('Spirited'), `千と千尋 ${run}`, t('Unknown anime')]);
-		expect(calls[0]).toEqual({ year: 2021, english: true });
+		expect(calls[0]).toEqual({ year: 2021, english: true, keepAnime: true });
 		const rows = await db
 			.select({ title: media.title, type: media.type, progress: libraryEntries.progress })
 			.from(libraryEntries)
