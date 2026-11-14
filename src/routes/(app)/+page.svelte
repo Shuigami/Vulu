@@ -48,11 +48,11 @@
 
 <svelte:head><title>Accueil · Vulu</title></svelte:head>
 
-<div class="flex flex-col gap-14">
+<div class="flex flex-col gap-8 sm:gap-10">
 	<h1 class="sr-only">Accueil</h1>
 
 	{#if data.user}
-		<section aria-labelledby="resume" class="flex flex-col gap-5">
+		<section aria-labelledby="resume" class="flex flex-col gap-3 sm:gap-4">
 			<h2 id="resume" class="h2">Reprendre</h2>
 			{#if data.entries.length}
 				<ul
@@ -122,7 +122,7 @@
 		</section>
 	{/if}
 
-	<section aria-labelledby="trending" class="flex flex-col gap-5">
+	<section aria-labelledby="trending" class="flex flex-col gap-3 sm:gap-4">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<h2 id="trending" class="h2">Tendances de la semaine</h2>
 			<div class="scroll-row" role="group" aria-label="Type de tendances">
@@ -148,13 +148,13 @@
 	</section>
 
 	{#await discoveries}
-		<section aria-labelledby="discover" class="flex flex-col gap-5">
+		<section aria-labelledby="discover" class="flex flex-col gap-3 sm:gap-4">
 			<h2 id="discover" class="h2">Découvertes pour toi</h2>
 			<ShelfSkeleton label="Chargement des découvertes" noteLines={2} />
 		</section>
 	{:then list}
 		{#if list?.length}
-			<section aria-labelledby="discover" class="flex flex-col gap-5">
+			<section aria-labelledby="discover" class="flex flex-col gap-3 sm:gap-4">
 				<h2 id="discover" class="h2">Découvertes pour toi</h2>
 				<MediaShelf items={shelf(list)} label="Découvertes pour toi" />
 			</section>
@@ -162,7 +162,7 @@
 	{/await}
 
 	{#if data.popular.length}
-		<section aria-labelledby="popular" class="flex flex-col gap-5">
+		<section aria-labelledby="popular" class="flex flex-col gap-3 sm:gap-4">
 			<h2 id="popular" class="h2">Populaire sur Vulu</h2>
 			<MediaShelf
 				items={data.popular.map((p) => ({
@@ -176,7 +176,7 @@
 	{/if}
 
 	{#if data.user}
-		<section aria-labelledby="week" class="flex flex-col gap-5">
+		<section aria-labelledby="week" class="flex flex-col gap-3 sm:gap-4">
 			<div class="flex items-baseline justify-between gap-4">
 				<h2 id="week" class="h2">Cette semaine</h2>
 				<a href={resolve('calendar')} class="text-sm font-semibold">Tout le calendrier →</a>
