@@ -216,6 +216,57 @@ describe('Trakt', () => {
 		expect(await client.animeSeasons('Show', 1990, false)).toBeNull();
 	});
 
+	it('retries AniList with simpler titles, then any format', async () => {
+		const queries: [string, string[]][] = [];
+		const fetch: Fetch = async (_url, init) => {
+			const { variables } = JSON.parse(String(init?.body));
+			queries.push([variables.q, variables.formats]);
+			const found = variables.q === 'Naruto Shippuden' && variables.formats.includes('OVA');
+			const media = found
+				? [
+						{
+							id: 9,
+							type: 'ANIME',
+							format: 'OVA',
+							title: { romaji: 'N' },
+							startDate: { year: 2007 }
+						}
+					]
+				: [];
+			return json({ data: { Page: { media } } });
+		};
+		const seasons = await createAniListClient({ fetch, limiter: noWait }).animeSeasons(
+			'Naruto Shippūden: The Movie',
+			2007,
+			false
+		);
+		expect(seasons).toHaveLength(1); // an OVA: no sequels followed
+		// Each simpler title in the series formats, then again in any format; the prefix before
+		// ":" equals the title without "the Movie", so it is tried once
+		const series = ['TV', 'TV_SHORT', 'ONA'];
+		const titles = [
+			'Naruto Shippūden: The Movie',
+			'Naruto Shippuden: The Movie',
+			'Naruto Shippuden'
+		];
+		expect(queries).toEqual([
+			...titles.map((q) => [q, series]),
+			...titles.map((q) => [q, [...series, 'MOVIE', 'OVA', 'SPECIAL']])
+		]);
+
+		queries.length = 0;
+		await createAniListClient({ fetch, limiter: noWait }).animeSeasons(
+			'Fate/Grand Order the Movie: Camelot',
+			2020,
+			true
+		);
+		expect(queries.slice(0, 3).map(([q]) => q)).toEqual([
+			'Fate/Grand Order the Movie: Camelot',
+			'Fate/Grand Order: Camelot',
+			'Fate/Grand Order'
+		]);
+	});
+
 	it('reads every page of a list', async () => {
 		const movie = (n: number) => ({ plays: 1, last_watched_at: null, movie: work(`M${n}`, n) });
 		const pages: string[] = [];

@@ -146,6 +146,8 @@ export type AniListClient = ProviderClient & {
 };
 
 const SERIES_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
+// Every format but music videos (a null format_in makes AniList answer 500)
+const ANY_FORMATS = [...SERIES_FORMATS, 'MOVIE', 'OVA', 'SPECIAL'];
 const MAX_SEASONS = 30;
 
 export function createAniListClient(
@@ -245,20 +247,47 @@ export function createAniListClient(
 
 		async animeSeasons(title, year, movie) {
 			const fields = `${DETAIL_FIELDS} relations { edges { relationType node { id format } } }`;
-			const data = await query<{ Page: { media: AniMedia[] } }>(
-				`query ($q: String, $formats: [MediaFormat]) {
-					Page(perPage: 10) { media(search: $q, type: ANIME, format_in: $formats, sort: SEARCH_MATCH) { ${fields} } }
-				}`,
-				{ q: title, formats: movie ? ['MOVIE'] : SERIES_FORMATS }
-			);
-			let m = data?.Page.media.find(
-				(r) =>
-					year === null || (r.startDate?.year != null && Math.abs(r.startDate.year - year) <= 1)
-			);
+			const find = async (q: string, formats: string[], keep?: (r: AniMedia) => boolean) => {
+				const data = await query<{ Page: { media: AniMedia[] } }>(
+					`query ($q: String, $formats: [MediaFormat]) {
+						Page(perPage: 10) { media(search: $q, type: ANIME, format_in: $formats, sort: SEARCH_MATCH) { ${fields} } }
+					}`,
+					{ q, formats }
+				);
+				return data?.Page.media.find(
+					(r) =>
+						(keep?.(r) ?? true) &&
+						(year === null || (r.startDate?.year != null && Math.abs(r.startDate.year - year) <= 1))
+				);
+			};
+			// AniList's search misses some English titles: retry without accents ("Shippūden"),
+			// without "the Movie", then the part before ":" or "!" ("Food Wars! Shokugeki no Soma"),
+			// and last in any format (OVAs, a "film" AniList lists as TV). Only on failure.
+			const plain = title.normalize('NFD').replace(/\p{M}/gu, '');
+			const noMovie = plain.replace(/[\s:-]*\bthe movie\b/i, '').trim();
+			const queries = [...new Set([title, plain, noMovie])];
+			const prefix = noMovie.split(/[:!]/)[0].trim();
+			const norm = (s: string) =>
+				s
+					.normalize('NFD')
+					.replace(/\p{M}/gu, '')
+					.toLowerCase()
+					.replace(/[^\p{L}\p{N}]+/gu, ' ')
+					.trim();
+			// A franchise name ("Fate/Grand Order") finds other works: only an entry of that exact name
+			const named = (r: AniMedia) =>
+				[r.title.english, r.title.romaji, ...(r.synonyms ?? [])].some(
+					(t) => !!t && norm(t) === norm(prefix)
+				);
+			let m: AniMedia | undefined;
+			for (const formats of [movie ? ['MOVIE'] : SERIES_FORMATS, ANY_FORMATS]) {
+				for (const q of queries) m ??= await find(q, formats);
+				if (!m && prefix && !queries.includes(prefix)) m = await find(prefix, formats, named);
+			}
 			const seasons: ProviderMedia[] = [];
 			while (m && seasons.length < MAX_SEASONS) {
 				seasons.push(toProviderMedia(m));
-				if (movie) break;
+				if (movie || !SERIES_FORMATS.includes(m.format ?? '')) break; // films, OVAs: one entry
 				const next = m.relations?.edges.find(
 					(e) => e.relationType === 'SEQUEL' && SERIES_FORMATS.includes(e.node.format ?? '')
 				);
