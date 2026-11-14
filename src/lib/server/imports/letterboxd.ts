@@ -113,7 +113,7 @@ export function parseLetterboxd(files: LetterboxdFiles): ImportItem[] {
 
 	for (const r of rows('watchlist.csv')) film(r);
 	for (const r of rows('watched.csv')) seen(r, null); // its Date is when it was logged
-	const logs = new Map<object, number>();
+	const logs = new Map<ImportItem['entry'], number>();
 	for (const r of rows('diary.csv')) {
 		const e = seen(r, day(r['Watched Date']) ?? day(r.Date));
 		if (e) logs.set(e, (logs.get(e) ?? 0) + 1);
