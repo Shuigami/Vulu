@@ -5,6 +5,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import ActivityFeed from '#lib/components/ActivityFeed.svelte';
+	import Marquee from '#lib/components/Marquee.svelte';
 	import MediaShelf from '#lib/components/MediaShelf.svelte';
 	import Poster from '#lib/components/Poster.svelte';
 	import Progress from '#lib/components/Progress.svelte';
@@ -62,11 +63,15 @@
 					{#each data.entries as e (e.id)}
 						{@const unit = unitLabel[e.type]}
 						{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
-						<!-- The whole card opens the work (the title link covers it), except the +1 button -->
+						<!-- The whole card opens the work (a link covers it), except the +1 button. The link is
+						     not the title: the scrolling title's transform would shrink its click area. -->
 						<li
 							animate:glide
 							class="group relative flex w-[min(340px,85vw)] shrink-0 snap-start gap-4 card p-3.5 tile-frame"
 						>
+							<a {href} class="absolute inset-0 rounded-2xl"
+								><span class="sr-only">{e.title}</span></a
+							>
 							<!-- self-start: cards share the row's height, the poster keeps its 2:3 -->
 							<Poster
 								src={e.posterUrl}
@@ -74,13 +79,16 @@
 								type={e.type}
 								class="w-21 self-start rounded-[10px]"
 							/>
-							<div class="flex min-w-0 flex-1 flex-col gap-1.5">
+							<div class="flex min-w-0 flex-1 flex-col gap-1">
 								<div><TypeTag type={e.type} /></div>
-								<a
-									{href}
-									class="text-[17px] leading-tight font-semibold text-ink no-underline group-hover:underline after:absolute after:inset-0 after:rounded-2xl"
-									>{e.title}</a
-								>
+								<!-- One line, scrolling when too long: every card fits the poster's height -->
+								<div aria-hidden="true">
+									<Marquee
+										class="text-[17px] leading-tight font-semibold text-ink group-hover:underline"
+									>
+										{e.title}
+									</Marquee>
+								</div>
 								<p class="text-[13px] text-muted">
 									{e.year ?? ''}{e.score !== null ? ` · ★ ${toScale(e.score, scale)}/${scale}` : ''}
 								</p>
