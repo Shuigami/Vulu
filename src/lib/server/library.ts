@@ -193,11 +193,18 @@ export async function removeEntry(db: Db, userId: string, entryId: number) {
 		.where(and(eq(libraryEntries.id, entryId), eq(libraryEntries.userId, userId)));
 }
 
-export const LIBRARY_SORTS = ['updated', 'added', 'title', 'score'] as const;
+export const LIBRARY_SORTS = ['updated', 'seen', 'added', 'title', 'score'] as const;
 export type LibrarySort = (typeof LIBRARY_SORTS)[number];
 
 const sortOrder = {
 	updated: [sql`${libraryEntries.updatedAt} desc`],
+	// Last time a unit was seen or the work finished; imports date these at the original viewing
+	seen: [
+		sql`(select max(${activityEvents.occurredAt}) from ${activityEvents}
+			where ${activityEvents.userId} = ${libraryEntries.userId}
+			and ${activityEvents.mediaId} = ${libraryEntries.mediaId}
+			and ${activityEvents.kind} in ('episode', 'chapter', 'volume', 'pages', 'completed')) desc nulls last`
+	],
 	added: [sql`${libraryEntries.createdAt} desc`],
 	title: [sql`lower(${media.title})`],
 	score: [sql`${libraryEntries.score} desc nulls last`, sql`lower(${media.title})`]

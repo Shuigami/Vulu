@@ -154,6 +154,14 @@ describe('library entries in the database', () => {
 		expect(byTitle.map((e) => e.mediaId)).toEqual([mediaId, other.id]);
 		const page2 = await listEntries(db, userId, { sort: 'title', limit: 1, offset: 1 });
 		expect(page2).toMatchObject([{ mediaId: other.id, total: 2 }]);
+
+		// Last seen: a viewing counts (even an old one), a rating does not
+		await db.insert(activityEvents).values([
+			{ userId, mediaId: other.id, kind: 'completed', occurredAt: new Date('2020-01-01') },
+			{ userId, mediaId, kind: 'rated', amount: 80 }
+		]);
+		const bySeen = await listEntries(db, userId, { sort: 'seen' });
+		expect(bySeen.map((e) => e.mediaId)).toEqual([other.id, mediaId]);
 	});
 
 	it('filters favorites and counts entries per status', async () => {
