@@ -14,7 +14,11 @@ export type SearchResult = {
 	year: number | null;
 	posterUrl: string | null;
 	isAdult: boolean;
+	/** How many users rated it, when the provider says (TMDB): tells homonyms apart. */
+	votes?: number;
 };
+
+export type SearchOptions = { year?: number; english?: boolean };
 
 /** Everything needed to insert or refresh a media in the catalogue. */
 export type ProviderMedia = {
@@ -47,7 +51,11 @@ export type ProviderEpisodes = {
 
 export interface ProviderClient {
 	readonly types: readonly MediaType[];
-	search(query: string, type: MediaType): Promise<SearchResult[]>;
+	/**
+	 * `year` narrows the search and `english` gives English titles, where the provider supports
+	 * it (TMDB): imports from English-titled sources match on them.
+	 */
+	search(query: string, type: MediaType, opts?: SearchOptions): Promise<SearchResult[]>;
 	/** Null when the provider does not know this id. */
 	get(externalId: string, type: MediaType): Promise<ProviderMedia | null>;
 	/** Only for types with episodes (tv, anime). Null when the provider does not know this id. */

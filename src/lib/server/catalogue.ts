@@ -20,6 +20,7 @@ import type {
 	ProviderClient,
 	ProviderEpisodes,
 	ProviderMedia,
+	SearchOptions,
 	SearchResult
 } from './providers/types';
 
@@ -54,12 +55,14 @@ export async function searchProvider(
 	db: Db,
 	providers: Providers,
 	type: MediaType,
-	query: string
+	query: string,
+	opts: SearchOptions = {}
 ): Promise<SearchResult[]> {
 	const q = normalize(query);
 	if (!q) return [];
 	const { name, client } = providers[type];
-	return (await cached(db, `${name}:search:${type}:${q}`, DAY, () => client.search(q, type))) ?? [];
+	const key = `${name}:search:${type}:${q}${opts.year ? `:${opts.year}` : ''}${opts.english ? ':en' : ''}`;
+	return (await cached(db, key, DAY, () => client.search(q, type, opts))) ?? [];
 }
 
 /** Trending works of a type, or recommendations for one work with `externalId` (cached a day). */

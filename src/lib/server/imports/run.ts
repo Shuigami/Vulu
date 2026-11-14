@@ -5,7 +5,50 @@ import { importMedia, searchProvider, upsertMedia, type Providers } from '../cat
 import type { Db } from '../db';
 import { activityEvents, importJobs, libraryEntries, media } from '../db/schema';
 import { cached, DAY } from '../providers/cache';
+import type { MediaType, SearchResult } from '../providers/types';
 import type { ImportItem, ImportedEntry, ImportSource, Unmatched } from './types';
+
+/** Case, accents and punctuation aside ("Amélie" = "amelie", "Spider-Man" = "Spider Man"). */
+const norm = (s: string) =>
+	s
+		.normalize('NFD')
+		.replace(/\p{M}/gu, '')
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, ' ')
+		.trim();
+const mostRated = (list: SearchResult[]) =>
+	list.reduce<SearchResult | undefined>(
+		(best, r) => (!best || (r.votes ?? 0) > (best.votes ?? 0) ? r : best),
+		undefined
+	);
+
+/**
+ * Finds a work from an English title and a year (Letterboxd). Searches that year in English and
+ * keeps results within a year (sources date films by festival or theatrical release), then takes
+ * the most rated of: films of the same title, else shows of the same title (miniseries are on
+ * Letterboxd), else films whose title starts with it ("Glass Onion: A Knives Out Mystery").
+ * Relevance or an exact year alone pick obscure namesakes ("Black Box" 2021 is Boîte noire).
+ * No match leaves the row unmatched rather than guessing.
+ */
+async function findByTitle(
+	db: Db,
+	providers: Providers,
+	type: MediaType,
+	title: string,
+	year: number | null
+): Promise<number | null> {
+	const near = async (t: MediaType) =>
+		(
+			await searchProvider(db, providers, t, title, { year: year ?? undefined, english: true })
+		).filter((r) => year === null || (r.year !== null && Math.abs(r.year - year) <= 1));
+	const q = norm(title);
+	const same = (r: SearchResult) => [r.title, r.originalTitle].some((t) => t && norm(t) === q);
+	const works = await near(type);
+	let hit = mostRated(works.filter(same));
+	if (!hit && type === 'movie') hit = mostRated((await near('tv')).filter(same));
+	hit ??= mostRated(works.filter((r) => norm(r.title).startsWith(`${q} `)));
+	return hit ? importMedia(db, providers, hit.type, hit.externalId) : null;
+}
 
 type Stats = { total: number; imported: number; kept: number; unmatched: number };
 
@@ -25,16 +68,8 @@ async function resolve(db: Db, providers: Providers, item: ImportItem): Promise<
 	if (item.ref && providers[item.type].name === item.ref.provider) {
 		return importMedia(db, providers, item.type, item.ref.externalId);
 	}
-	// Title and year only (Letterboxd): the most relevant result within a year, since sources date
-	// films differently (festival premiere vs release). An exact-year rule picks obscure namesakes.
-	if (item.search) {
-		const { title, year } = item.search;
-		const results = await searchProvider(db, providers, item.type, title);
-		const hit = results.find(
-			(r) => year === null || (r.year !== null && Math.abs(r.year - year) <= 1)
-		);
-		return hit ? importMedia(db, providers, item.type, hit.externalId) : null;
-	}
+	if (item.search)
+		return findByTitle(db, providers, item.type, item.search.title, item.search.year);
 	return null;
 }
 

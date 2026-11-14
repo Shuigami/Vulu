@@ -111,61 +111,78 @@ describe('runImport with title and year', () => {
 		await db.$client.end();
 	});
 
-	it('picks the most relevant search result within a year', async () => {
+	it('matches the same title within a year, then a show, then a longer title', async () => {
 		[{ id: userId }] = await db
 			.insert(users)
 			.values({ email: `lbx-${run}@test.vulu`, username: `lbx_${run}` })
 			.returning({ id: users.id });
-		const result = (id: string, year: number) => ({
+		const t = (name: string) => `${name} ${run}`;
+		const result = (type: string, title: string, year: number, votes: number) => ({
 			provider: 'tmdb',
-			externalId: `test-${run}-${id}`,
-			type: 'movie',
-			title: `Film ${run}`,
-			year
+			externalId: `test-${run}-${type}-${title.split(' ')[0]}-${year}-${votes}`,
+			type,
+			title,
+			year,
+			votes
+		});
+		// What TMDB answers per (English) query, whatever the year asked
+		const movies: Record<string, unknown[]> = {
+			[t('Box')]: [
+				result('movie', t('Box'), 2021, 5), // most relevant, but obscure
+				result('movie', t('Box'), 1984, 9999), // famous, wrong decade
+				result('movie', t('Box Story'), 2021, 8000), // other title
+				result('movie', t('Box'), 2020, 1500) // festival a year earlier: the one
+			],
+			[t('Onion')]: [result('movie', `${t('Onion')}: A Mystery`, 2022, 7000)],
+			[t('Lupin')]: [result('movie', `${t('Lupin')}'s Daughter`, 2021, 8)]
+		};
+		const shows: Record<string, unknown[]> = {
+			[t('Lupin')]: [result('tv', t('Lupin'), 2021, 2000)]
+		};
+		const calls: unknown[] = [];
+		const client = (type: string, list: Record<string, unknown[]>) => ({
+			name: 'tmdb',
+			client: {
+				types: [type],
+				search: async (q: string, _type: string, opts: unknown) => {
+					calls.push(opts);
+					return list[Object.keys(list).find((k) => k.toLowerCase() === q) ?? ''] ?? [];
+				},
+				get: async (id: string): Promise<ProviderMedia> => ({
+					media: { type: type as 'movie', title: id, status: 'finished' },
+					externalIds: [{ provider: 'tmdb', externalId: id }],
+					titles: []
+				})
+			}
 		});
 		const providers = {
-			movie: {
-				name: 'tmdb',
-				client: {
-					types: ['movie'],
-					search: async (q: string) =>
-						q.includes('remake')
-							? [result('1990', 1990), result('1991', 1991)] // most relevant first, a year off
-							: [result('1984', 1984), result('2021', 2021)],
-					get: async (id: string): Promise<ProviderMedia> => ({
-						media: {
-							type: 'movie',
-							title: `Film ${run} ${id.split('-').pop()}`,
-							status: 'finished'
-						},
-						externalIds: [{ provider: 'tmdb', externalId: id }],
-						titles: []
-					})
-				}
-			}
+			movie: client('movie', movies),
+			tv: client('tv', shows)
 		} as unknown as Providers;
 		const entry = parseLetterboxd({ 'watched.csv': files['watched.csv'] })[0].entry;
+		const row = (name: string, year: number) => ({
+			label: name,
+			type: 'movie' as const,
+			search: { title: t(name), year },
+			entry
+		});
 		const stats = await runImport(db, providers, {
 			importId: 0,
 			userId,
 			source: 'letterboxd',
-			items: [
-				{ label: 'Same year', type: 'movie', search: { title: `Film ${run}`, year: 2021 }, entry },
-				{
-					label: 'Off by one',
-					type: 'movie',
-					search: { title: `Film ${run} remake`, year: 1991 },
-					entry
-				},
-				{ label: 'No match', type: 'movie', search: { title: `Film ${run}`, year: 2000 }, entry }
-			]
+			items: [row('Box', 2021), row('Onion', 2022), row('Lupin', 2021), row('Nothing', 2000)]
 		});
-		expect(stats).toMatchObject({ imported: 2, unmatched: 1 });
-		const titles = await db
-			.select({ title: media.title })
+		expect(stats).toMatchObject({ imported: 3, unmatched: 1 });
+		expect(calls[0]).toEqual({ year: 2021, english: true });
+		const rows = await db
+			.select({ title: media.title, type: media.type })
 			.from(libraryEntries)
 			.innerJoin(media, eq(media.id, libraryEntries.mediaId))
 			.where(eq(libraryEntries.userId, userId));
-		expect(titles.map((t) => t.title).sort()).toEqual([`Film ${run} 1990`, `Film ${run} 2021`]);
+		expect(rows.map((r) => `${r.type}:${r.title.replace(`test-${run}-`, '')}`).sort()).toEqual([
+			'movie:movie-Box-2020-1500',
+			'movie:movie-Onion-2022-7000',
+			'tv:tv-Lupin-2021-2000'
+		]);
 	});
 });
