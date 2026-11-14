@@ -17,7 +17,10 @@ const PAGE = 250; // largest page Trakt serves
 const MAX_PAGES = 200; // 50 000 items per list, far beyond any real profile
 
 type Ids = { trakt: number; slug?: string; tmdb?: number | null };
-type Work = { title: string; year: number | null; ids: Ids };
+type Work = { title: string; year: number | null; ids: Ids; genres?: string[] };
+
+/** Trakt tags anime with the "anime" genre: AniList owns them, they are matched there later. */
+export type TraktItem = ImportItem & { anime?: { title: string; year: number | null } };
 type Watched = { plays: number; last_watched_at: string | null; movie?: Work; show?: Work };
 type Rated = { rating: number; movie?: Work; show?: Work };
 type Listed = { movie?: Work; show?: Work };
@@ -41,10 +44,17 @@ export function createTraktClient(opts: {
 	};
 
 	/** Every page of a list; null when the profile is unknown. */
-	async function getAll<T>(path: string, auth: Record<string, string>): Promise<T[] | null> {
+	/** `full` adds genres (to spot anime); kept off for the long episode history. */
+	async function getAll<T>(
+		path: string,
+		auth: Record<string, string>,
+		full = true
+	): Promise<T[] | null> {
 		const all: T[] = [];
+		const extended = full ? '&extended=full' : '';
 		for (let page = 1; page <= MAX_PAGES; page++) {
-			const items = await fetchJson<T[]>('trakt', `${BASE}${path}?page=${page}&limit=${PAGE}`, {
+			const url = `${BASE}${path}?page=${page}&limit=${PAGE}${extended}`;
+			const items = await fetchJson<T[]>('trakt', url, {
 				fetch,
 				limiter,
 				headers: { ...headers, ...auth }
@@ -106,7 +116,7 @@ export function createTraktClient(opts: {
 		 * The user's library as import rows; null when the profile is private or unknown.
 		 * With an access token, `userName` is "me" and private profiles are readable.
 		 */
-		async userLibrary(userName: string, accessToken?: string): Promise<ImportItem[] | null> {
+		async userLibrary(userName: string, accessToken?: string): Promise<TraktItem[] | null> {
 			const user = encodeURIComponent(userName);
 			const auth: Record<string, string> = accessToken
 				? { Authorization: `Bearer ${accessToken}` }
@@ -121,7 +131,7 @@ export function createTraktClient(opts: {
 					getAll<Rated>(`/users/${user}/ratings/movies`, auth),
 					getAll<Rated>(`/users/${user}/ratings/shows`, auth),
 					// watched/shows no longer lists seasons: count episodes from the history instead
-					getAll<HistoryEpisode>(`/users/${user}/history/episodes`, auth)
+					getAll<HistoryEpisode>(`/users/${user}/history/episodes`, auth, false)
 				]);
 			} catch (err) {
 				// Private profiles answer 401/403 without OAuth
@@ -141,7 +151,7 @@ export function createTraktClient(opts: {
 				seen.get(key)!.add(`${h.episode.season}x${h.episode.number}`);
 			}
 
-			const items = new Map<string, ImportItem>();
+			const items = new Map<string, TraktItem>();
 			/** One row per title; later sources (watched, ratings) refine earlier ones (watchlist). */
 			const row = (type: 'movie' | 'tv', w: Work) => {
 				const key = keyOf(type, w);
@@ -153,6 +163,7 @@ export function createTraktClient(opts: {
 						...(w.ids.tmdb && {
 							ref: { provider: 'tmdb' as const, externalId: String(w.ids.tmdb) }
 						}),
+						...(w.genres?.includes('anime') && { anime: { title: w.title, year: w.year } }),
 						entry: {
 							status: 'planned',
 							progress: 0,

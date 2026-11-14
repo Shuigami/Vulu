@@ -4,12 +4,13 @@ import { afterAll, describe, expect, it } from 'vitest';
 import type { Providers } from '../catalogue';
 import { createDb } from '../db';
 import { libraryEntries, media, users } from '../db/schema';
-import type { AniListClient } from '../providers/anilist';
+import { createAniListClient, type AniListClient } from '../providers/anilist';
 import type { Fetch } from '../providers/http';
 import { createTraktClient } from '../providers/trakt';
 import type { ProviderMedia } from '../providers/types';
 import { parseMal, readMalFile, resolveMal } from './mal';
 import { runImport } from './run';
+import { resolveTraktAnime } from './trakt';
 
 const noWait = async () => {};
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
@@ -131,7 +132,7 @@ describe('Trakt', () => {
 			],
 			// As served today: no seasons, plays include rewatches
 			'/watched/shows': [
-				{ plays: 5, last_watched_at: null, show: work('Show', 20) },
+				{ plays: 5, last_watched_at: null, show: { ...work('Show', 20), genres: ['anime'] } },
 				{ plays: 3, last_watched_at: null, show: work('No history', 21) }
 			],
 			'/history/episodes': [
@@ -147,8 +148,10 @@ describe('Trakt', () => {
 			'/ratings/shows': [{ rating: 9, show: work('No id', null) }]
 		};
 		const headers: Record<string, string>[] = [];
+		const urls: string[] = [];
 		const fetch: Fetch = async (url, init) => {
 			headers.push(init?.headers as Record<string, string>);
+			urls.push(String(url));
 			const { pathname } = new URL(String(url));
 			const path = Object.keys(routes).find((p) => pathname.endsWith(p))!;
 			return json(routes[path]);
@@ -166,10 +169,51 @@ describe('Trakt', () => {
 			entry: { status: 'completed', completedOn: '2024-05-01', repeatCount: 1, score: 70 }
 		});
 		expect(byLabel['Show (2020)'].entry).toMatchObject({ status: 'in_progress', progress: 2 });
+		expect(byLabel['Show (2020)'].anime).toEqual({ title: 'Show', year: 2020 });
+		expect(byLabel['Seen (2020)'].anime).toBeUndefined();
+		// Genres (extended=full) on the lists, not on the long episode history
+		expect(urls.find((u) => u.includes('/watched/shows'))).toContain('extended=full');
+		expect(urls.find((u) => u.includes('/history/episodes'))).not.toContain('extended');
 		expect(byLabel['No history (2020)'].entry.progress).toBe(3); // falls back to plays
 		expect(byLabel['Rated only (2020)'].entry).toMatchObject({ status: 'completed', score: 80 });
 		expect(byLabel['No id (2020)'].ref).toBeUndefined();
 		expect(items).toHaveLength(6);
+	});
+
+	it('finds an anime on AniList, then its TV sequels in order', async () => {
+		const ani = (id: number, year: number, format: string, sequel?: [number, string]) => ({
+			id,
+			idMal: null,
+			type: 'ANIME',
+			format,
+			status: 'FINISHED',
+			title: { romaji: `A${id}`, english: null, native: null },
+			startDate: { year, month: 1, day: 1 },
+			episodes: 12,
+			relations: {
+				edges: sequel
+					? [{ relationType: 'SEQUEL', node: { id: sequel[0], format: sequel[1] } }]
+					: []
+			}
+		});
+		const bodies: { query: string; variables: Record<string, unknown> }[] = [];
+		const fetch: Fetch = async (_url, init) => {
+			const body = JSON.parse(String(init?.body));
+			bodies.push(body);
+			if (body.variables.q) {
+				// Most relevant first, but from another decade; the 2020 one is the match
+				return json({
+					data: { Page: { media: [ani(1, 2010, 'TV'), ani(2, 2020, 'TV', [3, 'TV'])] } }
+				});
+			}
+			const media = { 3: ani(3, 2022, 'TV', [4, 'MOVIE']) }[body.variables.id as number];
+			return json({ data: { Media: media ?? null } });
+		};
+		const client = createAniListClient({ fetch, limiter: noWait });
+		const seasons = await client.animeSeasons('Show', 2021, false);
+		expect(seasons?.map((m) => m.externalIds[0].externalId)).toEqual(['2', '3']); // the film is not a season
+		expect(bodies[0].variables.formats).toEqual(['TV', 'TV_SHORT', 'ONA']);
+		expect(await client.animeSeasons('Show', 1990, false)).toBeNull();
 	});
 
 	it('reads every page of a list', async () => {
@@ -311,5 +355,95 @@ describe('runImport with provider ids', () => {
 		const statusOf = (t: string) => rows.find((r) => r.title.endsWith(t))?.status;
 		expect(statusOf('ended')).toBe('completed');
 		expect(statusOf('airing')).toBe('in_progress'); // more episodes to come
+	});
+
+	it('imports Trakt anime as their AniList seasons, spreading the episodes seen', async () => {
+		const season = (n: number, episodes: number): ProviderMedia => ({
+			media: {
+				type: 'anime',
+				title: `Anime ${run} S${n}`,
+				status: 'finished',
+				totalUnits: episodes
+			},
+			externalIds: [{ provider: 'anilist', externalId: `test-${run}-s${n}` }],
+			titles: []
+		});
+		const film: ProviderMedia = {
+			media: { type: 'anime', title: `Film ${run}`, status: 'finished', totalUnits: 1 },
+			externalIds: [{ provider: 'anilist', externalId: `test-${run}-film` }],
+			titles: []
+		};
+		const anilist = {
+			animeSeasons: async (title: string, _year: number | null, movie: boolean) =>
+				title.startsWith('Unknown')
+					? null
+					: movie
+						? [film]
+						: [season(1, 24), season(2, 23), season(3, 12)]
+		} as unknown as AniListClient;
+		const entry = (status: 'in_progress' | 'completed', progress: number) => ({
+			status,
+			progress,
+			progressSecondary: 0,
+			score: 90,
+			startedOn: null,
+			completedOn: null,
+			repeatCount: 0,
+			review: null,
+			notes: null
+		});
+		const items = await resolveTraktAnime(db, anilist, [
+			{
+				label: 'Show',
+				type: 'tv',
+				ref: { provider: 'tmdb', externalId: '1' },
+				anime: { title: `Show ${run}`, year: 2020 },
+				entry: entry('in_progress', 30)
+			},
+			{
+				label: 'Film',
+				type: 'movie',
+				anime: { title: `Film ${run}`, year: 2001 },
+				entry: entry('completed', 0)
+			},
+			{
+				label: 'Lost',
+				type: 'tv',
+				anime: { title: `Unknown ${run}`, year: 2020 },
+				entry: entry('in_progress', 3)
+			}
+		]);
+		// 30 episodes: all of season 1 (24), 6 of season 2, season 3 not started
+		expect(items.map((i) => [i.label, i.type, i.entry.progress, !!i.ref])).toEqual([
+			[`Anime ${run} S1`, 'anime', 24, false],
+			[`Anime ${run} S2`, 'anime', 6, false],
+			[`Film ${run}`, 'anime', 0, false],
+			['Lost', 'anime', 3, false]
+		]);
+
+		// Same user as the test above (cleaned up in afterAll); its rows are told apart by title
+		const stats = await runImport(db, {} as Providers, {
+			importId: 0,
+			userId,
+			source: 'trakt',
+			items
+		});
+		expect(stats).toMatchObject({ imported: 3, unmatched: 1 });
+		const rows = await db
+			.select({
+				title: media.title,
+				status: libraryEntries.status,
+				progress: libraryEntries.progress,
+				score: libraryEntries.score
+			})
+			.from(libraryEntries)
+			.innerJoin(media, eq(media.id, libraryEntries.mediaId))
+			.where(eq(libraryEntries.userId, userId));
+		const anime = rows.filter((r) => !r.title.startsWith('Show'));
+		expect(anime.sort((a, b) => a.title.localeCompare(b.title))).toEqual([
+			{ title: `Anime ${run} S1`, status: 'completed', progress: 24, score: 90 },
+			{ title: `Anime ${run} S2`, status: 'in_progress', progress: 6, score: 90 },
+			{ title: `Film ${run}`, status: 'completed', progress: 1, score: 90 }
+		]);
 	});
 });

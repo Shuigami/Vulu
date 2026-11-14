@@ -26,6 +26,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { importJobs } from '../lib/server/db/schema';
 import { resolveMal } from '../lib/server/imports/mal';
+import { resolveTraktAnime } from '../lib/server/imports/trakt';
 import { runImport } from '../lib/server/imports/run';
 import type { ImportItem } from '../lib/server/imports/types';
 import { purgeExpired } from '../lib/server/providers/cache';
@@ -132,7 +133,7 @@ await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
 			}
 		} else library = await trakt.userLibrary(job.data.userName);
 		if (!library) return void (await fail('trakt_user_not_found'));
-		items = library;
+		items = await resolveTraktAnime(db, providers.anilist!, library);
 	} else if (job.data.source === 'mal') {
 		items = await resolveMal(providers.anilist!, job.data.items);
 	} else {

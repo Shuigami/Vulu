@@ -35,6 +35,7 @@ type AniMedia = {
 	genres: string[] | null;
 	isAdult: boolean;
 	studios: { nodes: { name: string }[] } | null;
+	relations?: { edges: { relationType: string; node: { id: number; format: string | null } }[] };
 };
 
 const FIELDS = `id idMal type format status title { romaji english native } synonyms
@@ -136,7 +137,15 @@ export type AniListClient = ProviderClient & {
 	userList(userName: string, type: 'anime' | 'manga'): Promise<ImportItem[] | null>;
 	/** AniList media for MyAnimeList ids (50 per request); ids AniList does not know are absent. */
 	byMalIds(ids: number[], type: 'anime' | 'manga'): Promise<Map<number, ProviderMedia>>;
+	/**
+	 * An anime found by title and year (within one), then its TV sequels in order: AniList has one
+	 * entry per season where TMDB/Trakt have one show. A film is alone. Null when not found.
+	 */
+	animeSeasons(title: string, year: number | null, movie: boolean): Promise<ProviderMedia[] | null>;
 };
+
+const SERIES_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
+const MAX_SEASONS = 30;
 
 export function createAniListClient(
 	opts: { fetch?: Fetch; limiter?: RateLimiter } = {}
@@ -231,6 +240,35 @@ export function createAniListClient(
 				}
 			}
 			return found;
+		},
+
+		async animeSeasons(title, year, movie) {
+			const fields = `${DETAIL_FIELDS} relations { edges { relationType node { id format } } }`;
+			const data = await query<{ Page: { media: AniMedia[] } }>(
+				`query ($q: String, $formats: [MediaFormat]) {
+					Page(perPage: 10) { media(search: $q, type: ANIME, format_in: $formats, sort: SEARCH_MATCH) { ${fields} } }
+				}`,
+				{ q: title, formats: movie ? ['MOVIE'] : SERIES_FORMATS }
+			);
+			let m = data?.Page.media.find(
+				(r) =>
+					year === null || (r.startDate?.year != null && Math.abs(r.startDate.year - year) <= 1)
+			);
+			const seasons: ProviderMedia[] = [];
+			while (m && seasons.length < MAX_SEASONS) {
+				seasons.push(toProviderMedia(m));
+				if (movie) break;
+				const next = m.relations?.edges.find(
+					(e) => e.relationType === 'SEQUEL' && SERIES_FORMATS.includes(e.node.format ?? '')
+				);
+				if (!next) break;
+				const sequel = await query<{ Media: AniMedia | null }>(
+					`query ($id: Int) { Media(id: $id, type: ANIME) { ${fields} } }`,
+					{ id: next.node.id }
+				);
+				m = sequel?.Media ?? undefined;
+			}
+			return seasons.length ? seasons : null;
 		},
 
 		async userList(userName, type) {
