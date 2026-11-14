@@ -1,7 +1,7 @@
 // Runs a library import in the worker: resolves each row to a catalogue media, then adds it
 // to the user's library. Existing entries are kept as they are (V1 choice).
 import { eq } from 'drizzle-orm';
-import { importMedia, upsertMedia, type Providers } from '../catalogue';
+import { importMedia, searchProvider, upsertMedia, type Providers } from '../catalogue';
 import type { Db } from '../db';
 import { activityEvents, importJobs, libraryEntries, media } from '../db/schema';
 import { cached, DAY } from '../providers/cache';
@@ -24,6 +24,15 @@ async function resolve(db: Db, providers: Providers, item: ImportItem): Promise<
 	// Provider id given by the source (Trakt gives TMDB ids): import it from that provider
 	if (item.ref && providers[item.type].name === item.ref.provider) {
 		return importMedia(db, providers, item.type, item.ref.externalId);
+	}
+	// Title and year only (Letterboxd): the same year, else one year off (release dates vary by country)
+	if (item.search) {
+		const { title, year } = item.search;
+		const results = await searchProvider(db, providers, item.type, title);
+		const hit =
+			results.find((r) => year === null || r.year === year) ??
+			results.find((r) => year !== null && r.year !== null && Math.abs(r.year - year) === 1);
+		return hit ? importMedia(db, providers, item.type, hit.externalId) : null;
 	}
 	return null;
 }

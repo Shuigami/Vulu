@@ -11,6 +11,7 @@
 	const sourceLabel: Record<string, string> = {
 		anilist: 'AniList',
 		goodreads: 'Goodreads',
+		letterboxd: 'Letterboxd',
 		mal: 'MyAnimeList',
 		trakt: 'Trakt'
 	};
@@ -96,6 +97,34 @@
 		</label>
 		<button disabled={sending !== null || active} class="mt-auto btn-accent">
 			Importer depuis Goodreads
+		</button>
+	</form>
+
+	<form
+		method="post"
+		action="?/letterboxd"
+		enctype="multipart/form-data"
+		use:enhance={submit('letterboxd')}
+		class="flex flex-col gap-3 card p-5"
+	>
+		<h2 class="h2">Letterboxd</h2>
+		<p class="text-sm text-muted">
+			Sur Letterboxd : Settings, puis Import &amp; Export, puis Export your data. Envoie le fichier
+			ZIP obtenu (ou ses fichiers CSV). Films vus, notes, journal et watchlist.
+		</p>
+		<label class="flex flex-col gap-1.5 text-[13px] text-muted">
+			Fichier d’export
+			<input
+				name="file"
+				type="file"
+				accept=".zip,.csv"
+				multiple
+				required
+				class="text-sm text-ink file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface-2 file:px-3 file:py-2 file:text-ink"
+			/>
+		</label>
+		<button disabled={sending !== null || active} class="mt-auto btn-accent">
+			Importer depuis Letterboxd
 		</button>
 	</form>
 

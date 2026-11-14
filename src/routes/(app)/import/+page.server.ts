@@ -5,6 +5,7 @@ import { requireUser } from '#lib/server/guard.ts';
 import { importJobs } from '#lib/server/db/schema.ts';
 import { TRAKT_CLIENT_ID } from '$app/env/private';
 import { parseGoodreads } from '#lib/server/imports/goodreads.ts';
+import { parseLetterboxd, readLetterboxdFiles } from '#lib/server/imports/letterboxd.ts';
 import { parseMal, readMalFile, type MalItem } from '#lib/server/imports/mal.ts';
 import type { ImportItem, ImportSource, Unmatched } from '#lib/server/imports/types.ts';
 import { QUEUES, type LibraryImportJob } from '#lib/server/jobs.ts';
@@ -88,6 +89,24 @@ export const actions: Actions = {
 		if (!items.length) return fail(400, { error: 'Aucun livre trouvé dans ce fichier.' });
 		if (items.length > MAX_ROWS) return fail(400, { error: `Trop de lignes (${MAX_ROWS} max).` });
 		return start(requireUser(locals, url).id, 'goodreads', { items });
+	},
+
+	letterboxd: async ({ request, locals, url }) => {
+		const files = (await request.formData())
+			.getAll('file')
+			.filter((f): f is File => f instanceof File && f.size > 0);
+		if (!files.length) return fail(400, { error: 'Choisis l’export Letterboxd (fichier ZIP).' });
+		if (files.reduce((size, f) => size + f.size, 0) > MAX_FILE_BYTES)
+			return fail(400, { error: 'Fichier trop volumineux (5 Mo max).' });
+		let items;
+		try {
+			items = parseLetterboxd(await readLetterboxdFiles(files));
+		} catch (err) {
+			return fail(400, { error: (err as Error).message });
+		}
+		if (!items.length) return fail(400, { error: 'Aucun film trouvé dans ce fichier.' });
+		if (items.length > MAX_ROWS) return fail(400, { error: `Trop de lignes (${MAX_ROWS} max).` });
+		return start(requireUser(locals, url).id, 'letterboxd', { items });
 	},
 
 	mal: async ({ request, locals, url }) => {
