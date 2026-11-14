@@ -55,14 +55,18 @@
 		<section aria-labelledby="resume" class="flex flex-col gap-2.5 sm:gap-4">
 			<h2 id="resume" class="h2">Reprendre</h2>
 			{#if data.entries.length}
+				<!-- One scrollable row, like the shelves below; the padding keeps card shadows visible -->
 				<ul
-					class="grid [grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-4"
+					class="-mx-2 -mt-2 flex snap-x scroll-px-2 [scrollbar-width:thin] gap-4 overflow-x-auto px-2 pt-2 pb-2"
 				>
 					{#each data.entries as e (e.id)}
 						{@const unit = unitLabel[e.type]}
 						{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
 						<!-- The whole card opens the work (the title link covers it), except the +1 button -->
-						<li animate:glide class="group relative flex gap-4 card p-3.5 tile-frame">
+						<li
+							animate:glide
+							class="group relative flex w-[min(340px,85vw)] shrink-0 snap-start gap-4 card p-3.5 tile-frame"
+						>
 							<Poster src={e.posterUrl} title={e.title} type={e.type} class="w-21 rounded-[10px]" />
 							<div class="flex min-w-0 flex-1 flex-col gap-1.5">
 								<div><TypeTag type={e.type} /></div>
