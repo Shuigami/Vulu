@@ -1,0 +1,47 @@
+// Trakt anime -> AniList, the source of truth for anime: otherwise they would land in "Séries"
+// (TMDB) and be duplicated by an AniList or MyAnimeList import.
+import type { Db } from '../db';
+import type { AniListClient } from '../providers/anilist';
+import type { TraktItem } from '../providers/trakt';
+import { findAnime } from './anime';
+import type { ImportItem } from './types';
+
+/**
+ * Replaces each anime row with its AniList entries. A show's episodes seen (Trakt counts them
+ * across TMDB seasons) fill AniList's seasons in order, so "47 episodes of Jujutsu Kaisen" gives
+ * season 1 (24) and season 2 (23). Rows AniList does not know stay, unmatched, as anime.
+ */
+export async function resolveTraktAnime(
+	db: Db,
+	anilist: AniListClient,
+	items: TraktItem[],
+	onProgress?: (done: number, total: number) => Promise<unknown>
+): Promise<ImportItem[]> {
+	const out: ImportItem[] = [];
+	const total = items.filter((i) => i.anime).length;
+	let done = 0;
+	for (const { anime, ...item } of items) {
+		if (!anime) {
+			out.push(item);
+			continue;
+		}
+		// AniList allows 30 requests a minute: this step takes minutes, show where it is
+		await onProgress?.(done++, total);
+		const movie = item.type === 'movie';
+		const seasons = await findAnime(db, anilist, [anime.title], anime.year, movie);
+		const row = { ...item, type: 'anime' as const, ref: undefined };
+		if (!seasons) {
+			out.push(row);
+			continue;
+		}
+		let left = item.entry.progress;
+		for (const [i, media] of seasons.entries()) {
+			if (i > 0 && left <= 0) break; // later seasons not started
+			const total = media.media.totalUnits;
+			const progress = movie ? 0 : total ? Math.min(left, total) : left;
+			left -= progress;
+			out.push({ ...row, label: media.media.title, media, entry: { ...item.entry, progress } });
+		}
+	}
+	return out;
+}

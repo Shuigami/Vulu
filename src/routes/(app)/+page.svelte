@@ -5,6 +5,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import ActivityFeed from '#lib/components/ActivityFeed.svelte';
+	import Marquee from '#lib/components/Marquee.svelte';
 	import MediaShelf from '#lib/components/MediaShelf.svelte';
 	import Poster from '#lib/components/Poster.svelte';
 	import Progress from '#lib/components/Progress.svelte';
@@ -48,29 +49,46 @@
 
 <svelte:head><title>Accueil · Vulu</title></svelte:head>
 
-<div class="flex flex-col gap-14">
+<div class="flex flex-col gap-3 sm:gap-10">
 	<h1 class="sr-only">Accueil</h1>
 
 	{#if data.user}
-		<section aria-labelledby="resume" class="flex flex-col gap-5">
+		<section aria-labelledby="resume" class="flex flex-col gap-2.5 sm:gap-4">
 			<h2 id="resume" class="h2">Reprendre</h2>
 			{#if data.entries.length}
+				<!-- One scrollable row, like the shelves below; the padding keeps card shadows visible -->
 				<ul
-					class="grid [grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))] gap-4"
+					class="-mx-2 -mt-2 flex snap-x scroll-px-2 [scrollbar-width:thin] gap-4 overflow-x-auto px-2 pt-2 pb-2"
 				>
 					{#each data.entries as e (e.id)}
 						{@const unit = unitLabel[e.type]}
 						{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
-						<!-- The whole card opens the work (the title link covers it), except the +1 button -->
-						<li animate:glide class="group relative flex gap-4 card p-3.5 tile-frame">
-							<Poster src={e.posterUrl} title={e.title} type={e.type} class="w-21 rounded-[10px]" />
-							<div class="flex min-w-0 flex-1 flex-col gap-1.5">
+						<!-- The whole card opens the work (a link covers it), except the +1 button. The link is
+						     not the title: the scrolling title's transform would shrink its click area. -->
+						<li
+							animate:glide
+							class="group relative flex w-[min(340px,85vw)] shrink-0 snap-start gap-4 card p-3.5 tile-frame"
+						>
+							<a {href} class="absolute inset-0 rounded-2xl"
+								><span class="sr-only">{e.title}</span></a
+							>
+							<!-- self-start: cards share the row's height, the poster keeps its 2:3 -->
+							<Poster
+								src={e.posterUrl}
+								title={e.title}
+								type={e.type}
+								class="w-21 self-start rounded-[10px]"
+							/>
+							<div class="flex min-w-0 flex-1 flex-col gap-1">
 								<div><TypeTag type={e.type} /></div>
-								<a
-									{href}
-									class="text-[17px] leading-tight font-semibold text-ink no-underline group-hover:underline after:absolute after:inset-0 after:rounded-2xl"
-									>{e.title}</a
-								>
+								<!-- One line, scrolling when too long: every card fits the poster's height -->
+								<div aria-hidden="true">
+									<Marquee
+										class="text-[17px] leading-tight font-semibold text-ink group-hover:underline"
+									>
+										{e.title}
+									</Marquee>
+								</div>
 								<p class="text-[13px] text-muted">
 									{e.year ?? ''}{e.score !== null ? ` · ★ ${toScale(e.score, scale)}/${scale}` : ''}
 								</p>
@@ -122,7 +140,7 @@
 		</section>
 	{/if}
 
-	<section aria-labelledby="trending" class="flex flex-col gap-5">
+	<section aria-labelledby="trending" class="flex flex-col gap-2.5 sm:gap-4">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<h2 id="trending" class="h2">Tendances de la semaine</h2>
 			<div class="scroll-row" role="group" aria-label="Type de tendances">
@@ -148,13 +166,13 @@
 	</section>
 
 	{#await discoveries}
-		<section aria-labelledby="discover" class="flex flex-col gap-5">
+		<section aria-labelledby="discover" class="flex flex-col gap-2.5 sm:gap-4">
 			<h2 id="discover" class="h2">Découvertes pour toi</h2>
 			<ShelfSkeleton label="Chargement des découvertes" noteLines={2} />
 		</section>
 	{:then list}
 		{#if list?.length}
-			<section aria-labelledby="discover" class="flex flex-col gap-5">
+			<section aria-labelledby="discover" class="flex flex-col gap-2.5 sm:gap-4">
 				<h2 id="discover" class="h2">Découvertes pour toi</h2>
 				<MediaShelf items={shelf(list)} label="Découvertes pour toi" />
 			</section>
@@ -162,7 +180,7 @@
 	{/await}
 
 	{#if data.popular.length}
-		<section aria-labelledby="popular" class="flex flex-col gap-5">
+		<section aria-labelledby="popular" class="flex flex-col gap-2.5 sm:gap-4">
 			<h2 id="popular" class="h2">Populaire sur Vulu</h2>
 			<MediaShelf
 				items={data.popular.map((p) => ({
@@ -176,7 +194,7 @@
 	{/if}
 
 	{#if data.user}
-		<section aria-labelledby="week" class="flex flex-col gap-5">
+		<section aria-labelledby="week" class="flex flex-col gap-2.5 sm:gap-4">
 			<div class="flex items-baseline justify-between gap-4">
 				<h2 id="week" class="h2">Cette semaine</h2>
 				<a href={resolve('calendar')} class="text-sm font-semibold">Tout le calendrier →</a>

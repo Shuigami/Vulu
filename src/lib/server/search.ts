@@ -13,7 +13,8 @@ export const LOCAL_ENOUGH = 5;
  * Accent- and case-insensitive fuzzy search over all known titles of a media.
  * Uses word similarity (`<%`), so a query can match part of a longer title;
  * the expression matches media_titles_trgm_idx so the GIN index is used.
- * Adult media are excluded (V1 choice).
+ * Adult media are excluded (V1 choice), and so is Japanese animation imported from TMDB before
+ * anime went to AniList: the AniList entry is the one to show.
  */
 export function searchMedia(
 	db: Pick<Db, 'select'>,
@@ -38,6 +39,8 @@ export function searchMedia(
 			and(
 				sql`${q} <% ${title}`,
 				eq(media.isAdult, false),
+				sql`not (${media.type} in ('movie', 'tv') and ${media.extra}->>'originalLanguage' = 'ja'
+					and ${media.extra}->'genres' @> '["Animation"]')`,
 				opts.type ? eq(media.type, opts.type) : undefined
 			)
 		)

@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import Progress from '#lib/components/Progress.svelte';
 	import { typeLabel } from '#lib/labels.ts';
 	import type { PageProps } from './$types';
 
@@ -11,6 +12,7 @@
 	const sourceLabel: Record<string, string> = {
 		anilist: 'AniList',
 		goodreads: 'Goodreads',
+		letterboxd: 'Letterboxd',
 		mal: 'MyAnimeList',
 		trakt: 'Trakt'
 	};
@@ -23,7 +25,14 @@
 	const errorText: Record<string, string> = {
 		anilist_user_not_found: 'Profil AniList introuvable ou privé.',
 		trakt_user_not_found: 'Profil Trakt introuvable ou privé.',
-		trakt_not_configured: 'L’import Trakt n’est pas configuré sur ce serveur.'
+		trakt_not_configured: 'L’import Trakt n’est pas configuré sur ce serveur.',
+		trakt_auth_failed: 'La connexion à Trakt a échoué ou expiré, réessaie.'
+	};
+	// Back from the Trakt sign-in (import/trakt callback)
+	const traktText: Record<string, string> = {
+		denied: 'Connexion à Trakt annulée.',
+		busy: 'Un import est déjà en cours, attends qu’il se termine.',
+		unavailable: 'Le service d’import est indisponible, réessaie plus tard.'
 	};
 	const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -31,7 +40,7 @@
 	const active = $derived(data.jobs.some((j) => j.status === 'pending' || j.status === 'running'));
 	$effect(() => {
 		if (!active) return;
-		const timer = setInterval(() => invalidateAll(), 4000);
+		const timer = setInterval(() => invalidateAll(), 2000);
 		return () => clearInterval(timer);
 	});
 
@@ -52,7 +61,12 @@
 <p class="text-muted">Les œuvres déjà présentes dans ta bibliothèque Vulu ne sont pas modifiées.</p>
 
 {#if form?.error}<p role="alert" class="mt-3 text-sm text-danger">{form.error}</p>{/if}
-{#if form?.started}<p role="status" class="mt-3 text-sm text-success">Import lancé.</p>{/if}
+{#if data.traktResult && traktText[data.traktResult]}
+	<p role="alert" class="mt-3 text-sm text-danger">{traktText[data.traktResult]}</p>
+{/if}
+{#if form?.started || data.traktResult === 'started'}
+	<p role="status" class="mt-3 text-sm text-success">Import lancé.</p>
+{/if}
 
 <div class="mt-7 grid gap-4 sm:grid-cols-2">
 	<form
@@ -101,6 +115,34 @@
 
 	<form
 		method="post"
+		action="?/letterboxd"
+		enctype="multipart/form-data"
+		use:enhance={submit('letterboxd')}
+		class="flex flex-col gap-3 card p-5"
+	>
+		<h2 class="h2">Letterboxd</h2>
+		<p class="text-sm text-muted">
+			Sur Letterboxd : Settings, puis Import &amp; Export, puis Export your data. Envoie le fichier
+			ZIP obtenu (ou ses fichiers CSV). Films vus, notes, journal et watchlist.
+		</p>
+		<label class="flex flex-col gap-1.5 text-[13px] text-muted">
+			Fichier d’export
+			<input
+				name="file"
+				type="file"
+				accept=".zip,.csv"
+				multiple
+				required
+				class="text-sm text-ink file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface-2 file:px-3 file:py-2 file:text-ink"
+			/>
+		</label>
+		<button disabled={sending !== null || active} class="mt-auto btn-accent">
+			Importer depuis Letterboxd
+		</button>
+	</form>
+
+	<form
+		method="post"
 		action="?/mal"
 		enctype="multipart/form-data"
 		use:enhance={submit('mal')}
@@ -126,26 +168,33 @@
 		</button>
 	</form>
 
-	<form
-		method="post"
-		action="?/trakt"
-		use:enhance={submit('trakt')}
-		class="flex flex-col gap-3 card p-5"
-	>
+	<div class="flex flex-col gap-3 card p-5">
 		<h2 class="h2">Trakt</h2>
-		<p class="text-sm text-muted">Films et séries vus, notes et watchlist de ton profil public.</p>
+		<p class="text-sm text-muted">Films et séries vus, notes et watchlist.</p>
 		{#if data.traktEnabled}
-			<label class="flex flex-col gap-1.5 text-[13px] text-muted">
-				Pseudo Trakt
-				<input name="userName" required autocomplete="off" class="field" />
-			</label>
-			<button disabled={sending !== null || active} class="mt-auto btn-accent">
-				Importer depuis Trakt
-			</button>
+			<form
+				method="post"
+				action="?/trakt"
+				use:enhance={submit('trakt')}
+				class="flex flex-col gap-3"
+			>
+				<label class="flex flex-col gap-1.5 text-[13px] text-muted">
+					Pseudo Trakt (profil public)
+					<input name="userName" required autocomplete="off" class="field" />
+				</label>
+				<button disabled={sending !== null || active} class="btn-accent">
+					Importer depuis Trakt
+				</button>
+			</form>
+			<!-- No enhance: the action redirects to trakt.tv -->
+			<form method="post" action="?/traktConnect" class="mt-auto flex flex-col gap-2">
+				<p class="text-sm text-muted">Profil privé : connecte-toi à Trakt pour l’importer.</p>
+				<button disabled={sending !== null || active} class="btn">Se connecter à Trakt</button>
+			</form>
 		{:else}
 			<p class="text-sm text-accent-ink">Pas encore disponible sur ce serveur.</p>
 		{/if}
-	</form>
+	</div>
 </div>
 
 {#if data.jobs.length}
@@ -157,7 +206,29 @@
 					<span class="font-medium">{sourceLabel[job.source] ?? job.source}</span>
 					· {dateFormat.format(new Date(job.createdAt))} · {statusText[job.status]}
 				</p>
-				{#if job.status === 'done'}
+				{#if job.status === 'running' && job.stats.anime && !job.stats.total}
+					<div class="mt-2 flex max-w-md items-center gap-3">
+						<div class="flex-1">
+							<Progress
+								value={job.stats.anime.done}
+								max={job.stats.anime.total}
+								label="Animes rattachés à AniList"
+							/>
+						</div>
+						<span class="text-[13px] text-muted tabular-nums">
+							Animes : {job.stats.anime.done} / {job.stats.anime.total}
+						</span>
+					</div>
+				{:else if job.status === 'running' && job.stats.total}
+					{@const done =
+						(job.stats.imported ?? 0) + (job.stats.kept ?? 0) + (job.stats.unmatched ?? 0)}
+					<div class="mt-2 flex max-w-md items-center gap-3">
+						<div class="flex-1">
+							<Progress value={done} max={job.stats.total} label="Avancement de l’import" />
+						</div>
+						<span class="text-[13px] text-muted tabular-nums">{done} / {job.stats.total}</span>
+					</div>
+				{:else if job.status === 'done'}
 					<p class="text-muted">
 						{job.stats.imported ?? 0} ajoutée(s), {job.stats.kept ?? 0} déjà présente(s), {job.stats
 							.unmatched ?? 0} non retrouvée(s) sur {job.stats.total ?? 0}.

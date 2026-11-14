@@ -47,6 +47,7 @@
 	};
 	const sorts = [
 		{ value: 'updated', label: 'Activité récente' },
+		{ value: 'seen', label: 'Vu / lu récemment' },
 		{ value: 'added', label: 'Date d’ajout' },
 		{ value: 'title', label: 'Titre' },
 		{ value: 'score', label: 'Note' }
