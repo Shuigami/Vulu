@@ -49,7 +49,7 @@
 
 <svelte:head><title>Accueil · Vulu</title></svelte:head>
 
-<div class="flex flex-col gap-6 sm:gap-10">
+<div class="flex flex-col gap-4 sm:gap-10">
 	<h1 class="sr-only">Accueil</h1>
 
 	{#if data.user}
