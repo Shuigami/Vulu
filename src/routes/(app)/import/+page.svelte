@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import Progress from '#lib/components/Progress.svelte';
 	import { typeLabel } from '#lib/labels.ts';
 	import type { PageProps } from './$types';
 
@@ -39,7 +40,7 @@
 	const active = $derived(data.jobs.some((j) => j.status === 'pending' || j.status === 'running'));
 	$effect(() => {
 		if (!active) return;
-		const timer = setInterval(() => invalidateAll(), 4000);
+		const timer = setInterval(() => invalidateAll(), 2000);
 		return () => clearInterval(timer);
 	});
 
@@ -205,7 +206,16 @@
 					<span class="font-medium">{sourceLabel[job.source] ?? job.source}</span>
 					· {dateFormat.format(new Date(job.createdAt))} · {statusText[job.status]}
 				</p>
-				{#if job.status === 'done'}
+				{#if job.status === 'running' && job.stats.total}
+					{@const done =
+						(job.stats.imported ?? 0) + (job.stats.kept ?? 0) + (job.stats.unmatched ?? 0)}
+					<div class="mt-2 flex max-w-md items-center gap-3">
+						<div class="flex-1">
+							<Progress value={done} max={job.stats.total} label="Avancement de l’import" />
+						</div>
+						<span class="text-[13px] text-muted tabular-nums">{done} / {job.stats.total}</span>
+					</div>
+				{:else if job.status === 'done'}
 					<p class="text-muted">
 						{job.stats.imported ?? 0} ajoutée(s), {job.stats.kept ?? 0} déjà présente(s), {job.stats
 							.unmatched ?? 0} non retrouvée(s) sur {job.stats.total ?? 0}.

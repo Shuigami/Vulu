@@ -152,11 +152,19 @@ export async function runImport(
 	providers: Providers,
 	job: { importId: number; userId: string; source: ImportSource; items: ImportItem[] }
 ): Promise<Stats> {
-	await db.update(importJobs).set({ status: 'running' }).where(eq(importJobs.id, job.importId));
 	const stats: Stats = { total: job.items.length, imported: 0, kept: 0, unmatched: 0 };
 	const unmatched: Unmatched[] = [];
+	// Running counts let the import page draw a progress bar; at most one write per second
+	const saveProgress = () =>
+		db.update(importJobs).set({ status: 'running', stats }).where(eq(importJobs.id, job.importId));
+	await saveProgress();
+	let savedAt = Date.now();
 	try {
 		for (const item of job.items) {
+			if (Date.now() - savedAt >= 1000) {
+				await saveProgress();
+				savedAt = Date.now();
+			}
 			let mediaId: number | null = null;
 			try {
 				mediaId = await resolve(db, providers, item);
