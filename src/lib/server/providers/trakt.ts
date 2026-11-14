@@ -1,15 +1,26 @@
 // Trakt API (import source only): watched movies and shows, ratings and watchlist of a public
-// profile. Needs a Trakt application's client id (https://trakt.tv/oauth/applications).
+// profile, or of a private one through OAuth (authorization code with PKCE, exchanged here, then
+// revoked). Needs a Trakt application's client id (https://trakt.tv/oauth/applications), no secret.
 // Docs: https://trakt.docs.apiary.io — 1000 GET requests per 5 minutes, 250 items per page.
 import type { ImportItem } from '../imports/types';
-import { createRateLimiter, fetchJson, ProviderError, type Fetch, type RateLimiter } from './http';
+import {
+	createRateLimiter,
+	fetchJson,
+	ProviderError,
+	USER_AGENT,
+	type Fetch,
+	type RateLimiter
+} from './http';
 
 const BASE = 'https://api.trakt.tv';
 const PAGE = 250; // largest page Trakt serves
 const MAX_PAGES = 200; // 50 000 items per list, far beyond any real profile
 
 type Ids = { trakt: number; slug?: string; tmdb?: number | null };
-type Work = { title: string; year: number | null; ids: Ids };
+type Work = { title: string; year: number | null; ids: Ids; genres?: string[] };
+
+/** Trakt tags anime with the "anime" genre: AniList owns them, they are matched there later. */
+export type TraktItem = ImportItem & { anime?: { title: string; year: number | null } };
 type Watched = { plays: number; last_watched_at: string | null; movie?: Work; show?: Work };
 type Rated = { rating: number; movie?: Work; show?: Work };
 type Listed = { movie?: Work; show?: Work };
@@ -33,13 +44,20 @@ export function createTraktClient(opts: {
 	};
 
 	/** Every page of a list; null when the profile is unknown. */
-	async function getAll<T>(path: string): Promise<T[] | null> {
+	/** `full` adds genres (to spot anime); kept off for the long episode history. */
+	async function getAll<T>(
+		path: string,
+		auth: Record<string, string>,
+		full = true
+	): Promise<T[] | null> {
 		const all: T[] = [];
+		const extended = full ? '&extended=full' : '';
 		for (let page = 1; page <= MAX_PAGES; page++) {
-			const items = await fetchJson<T[]>('trakt', `${BASE}${path}?page=${page}&limit=${PAGE}`, {
+			const url = `${BASE}${path}?page=${page}&limit=${PAGE}${extended}`;
+			const items = await fetchJson<T[]>('trakt', url, {
 				fetch,
 				limiter,
-				headers
+				headers: { ...headers, ...auth }
 			});
 			if (items === null) return page === 1 ? null : all;
 			all.push(...items);
@@ -48,21 +66,72 @@ export function createTraktClient(opts: {
 		return all;
 	}
 
+	/** Body of a call to Trakt's OAuth endpoints (PKCE: the client id, no secret). */
+	const oauthBody = (body: Record<string, string>) =>
+		JSON.stringify({ ...body, client_id: opts.clientId });
+
 	return {
-		/** The user's library as import rows; null when the profile is private or unknown. */
-		async userLibrary(userName: string): Promise<ImportItem[] | null> {
+		/**
+		 * Trades the code Trakt sent to the redirect URI for an access token; null if refused.
+		 * `codeVerifier` is the PKCE secret whose hash went with the sign-in link.
+		 */
+		async exchangeCode(
+			code: string,
+			redirectUri: string,
+			codeVerifier: string
+		): Promise<string | null> {
+			try {
+				const res = await fetchJson<{ access_token: string }>('trakt', `${BASE}/oauth/token`, {
+					fetch,
+					limiter,
+					method: 'POST',
+					headers,
+					body: oauthBody({
+						code,
+						redirect_uri: redirectUri,
+						grant_type: 'authorization_code',
+						code_verifier: codeVerifier
+					})
+				});
+				return res?.access_token ?? null;
+			} catch (err) {
+				// An expired, reused or forged code answers 400/401
+				if (err instanceof ProviderError && err.status < 500) return null;
+				throw err;
+			}
+		},
+
+		/** The token is only needed for one import: give it back. */
+		async revoke(token: string): Promise<void> {
+			await limiter();
+			// Answers 200 with an empty body, hence no fetchJson
+			await fetch(`${BASE}/oauth/revoke`, {
+				method: 'POST',
+				headers: { ...headers, 'User-Agent': USER_AGENT },
+				body: oauthBody({ token })
+			});
+		},
+
+		/**
+		 * The user's library as import rows; null when the profile is private or unknown.
+		 * With an access token, `userName` is "me" and private profiles are readable.
+		 */
+		async userLibrary(userName: string, accessToken?: string): Promise<TraktItem[] | null> {
 			const user = encodeURIComponent(userName);
+			const auth: Record<string, string> = accessToken
+				? { Authorization: `Bearer ${accessToken}` }
+				: {};
 			let data;
 			try {
 				data = await Promise.all([
-					getAll<Listed>(`/users/${user}/watchlist/movies`),
-					getAll<Listed>(`/users/${user}/watchlist/shows`),
-					getAll<Watched>(`/users/${user}/watched/movies`),
-					getAll<Watched>(`/users/${user}/watched/shows`),
-					getAll<Rated>(`/users/${user}/ratings/movies`),
-					getAll<Rated>(`/users/${user}/ratings/shows`),
+					getAll<Listed>(`/users/${user}/watchlist/movies`, auth),
+					getAll<Listed>(`/users/${user}/watchlist/shows`, auth),
+					getAll<Watched>(`/users/${user}/watched/movies`, auth),
+					getAll<Watched>(`/users/${user}/watched/shows`, auth),
+					getAll<Rated>(`/users/${user}/ratings/movies`, auth),
+					getAll<Rated>(`/users/${user}/ratings/shows`, auth),
 					// watched/shows no longer lists seasons: count episodes from the history instead
-					getAll<HistoryEpisode>(`/users/${user}/history/episodes`)
+					getAll<HistoryEpisode>(`/users/${user}/history/episodes`, auth, false)
 				]);
 			} catch (err) {
 				// Private profiles answer 401/403 without OAuth
@@ -82,7 +151,7 @@ export function createTraktClient(opts: {
 				seen.get(key)!.add(`${h.episode.season}x${h.episode.number}`);
 			}
 
-			const items = new Map<string, ImportItem>();
+			const items = new Map<string, TraktItem>();
 			/** One row per title; later sources (watched, ratings) refine earlier ones (watchlist). */
 			const row = (type: 'movie' | 'tv', w: Work) => {
 				const key = keyOf(type, w);
@@ -94,6 +163,7 @@ export function createTraktClient(opts: {
 						...(w.ids.tmdb && {
 							ref: { provider: 'tmdb' as const, externalId: String(w.ids.tmdb) }
 						}),
+						...(w.genres?.includes('anime') && { anime: { title: w.title, year: w.year } }),
 						entry: {
 							status: 'planned',
 							progress: 0,

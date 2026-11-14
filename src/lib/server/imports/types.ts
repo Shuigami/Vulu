@@ -1,7 +1,7 @@
 import type { EntryStatus } from '../../labels';
 import type { MediaType, Provider, ProviderMedia } from '../providers/types';
 
-export const IMPORT_SOURCES = ['anilist', 'goodreads', 'mal', 'trakt'] as const;
+export const IMPORT_SOURCES = ['anilist', 'goodreads', 'letterboxd', 'mal', 'trakt'] as const;
 export type ImportSource = (typeof IMPORT_SOURCES)[number];
 
 /** Library state carried over from the source service. */
@@ -19,7 +19,8 @@ export type ImportedEntry = {
 
 /**
  * One row of an import, with one way to find its media: the media itself (AniList lists embed
- * it), a provider id (Trakt gives TMDB ids) or a book lookup (Goodreads).
+ * it), a provider id (Trakt gives TMDB ids), a book lookup (Goodreads) or a title and year to
+ * search (Letterboxd).
  */
 export type ImportItem = {
 	label: string; // shown when the row cannot be matched
@@ -27,6 +28,7 @@ export type ImportItem = {
 	media?: ProviderMedia;
 	ref?: { provider: Provider; externalId: string };
 	lookup?: BookLookup;
+	search?: { title: string; year: number | null };
 	entry: ImportedEntry;
 };
 

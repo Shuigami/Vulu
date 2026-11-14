@@ -1,11 +1,54 @@
 // Runs a library import in the worker: resolves each row to a catalogue media, then adds it
 // to the user's library. Existing entries are kept as they are (V1 choice).
 import { eq } from 'drizzle-orm';
-import { importMedia, upsertMedia, type Providers } from '../catalogue';
+import { importMedia, searchProvider, upsertMedia, type Providers } from '../catalogue';
 import type { Db } from '../db';
 import { activityEvents, importJobs, libraryEntries, media } from '../db/schema';
 import { cached, DAY } from '../providers/cache';
+import type { MediaType, SearchResult } from '../providers/types';
 import type { ImportItem, ImportedEntry, ImportSource, Unmatched } from './types';
+
+/** Case, accents and punctuation aside ("Amélie" = "amelie", "Spider-Man" = "Spider Man"). */
+const norm = (s: string) =>
+	s
+		.normalize('NFD')
+		.replace(/\p{M}/gu, '')
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, ' ')
+		.trim();
+const mostRated = (list: SearchResult[]) =>
+	list.reduce<SearchResult | undefined>(
+		(best, r) => (!best || (r.votes ?? 0) > (best.votes ?? 0) ? r : best),
+		undefined
+	);
+
+/**
+ * Finds a work from an English title and a year (Letterboxd). Searches that year in English and
+ * keeps results within a year (sources date films by festival or theatrical release), then takes
+ * the most rated of: films of the same title, else shows of the same title (miniseries are on
+ * Letterboxd), else films whose title starts with it ("Glass Onion: A Knives Out Mystery").
+ * Relevance or an exact year alone pick obscure namesakes ("Black Box" 2021 is Boîte noire).
+ * No match leaves the row unmatched rather than guessing.
+ */
+async function findByTitle(
+	db: Db,
+	providers: Providers,
+	type: MediaType,
+	title: string,
+	year: number | null
+): Promise<number | null> {
+	const near = async (t: MediaType) =>
+		(
+			await searchProvider(db, providers, t, title, { year: year ?? undefined, english: true })
+		).filter((r) => year === null || (r.year !== null && Math.abs(r.year - year) <= 1));
+	const q = norm(title);
+	const same = (r: SearchResult) => [r.title, r.originalTitle].some((t) => t && norm(t) === q);
+	const works = await near(type);
+	let hit = mostRated(works.filter(same));
+	if (!hit && type === 'movie') hit = mostRated((await near('tv')).filter(same));
+	hit ??= mostRated(works.filter((r) => norm(r.title).startsWith(`${q} `)));
+	return hit ? importMedia(db, providers, hit.type, hit.externalId) : null;
+}
 
 type Stats = { total: number; imported: number; kept: number; unmatched: number };
 
@@ -25,6 +68,8 @@ async function resolve(db: Db, providers: Providers, item: ImportItem): Promise<
 	if (item.ref && providers[item.type].name === item.ref.provider) {
 		return importMedia(db, providers, item.type, item.ref.externalId);
 	}
+	if (item.search)
+		return findByTitle(db, providers, item.type, item.search.title, item.search.year);
 	return null;
 }
 
@@ -49,8 +94,13 @@ export async function saveImportedEntry(
 			})
 			.from(media)
 			.where(eq(media.id, mediaId));
-		// Sources can overshoot (rewatches counted as plays): never above the known total
-		const progress = m.total ? Math.min(imported.progress, m.total) : imported.progress;
+		// Sources can overshoot (rewatches counted as plays): never above the known total.
+		// Completed without a count (Letterboxd shows): every unit seen, as updateEntry would do.
+		const progress = !m.total
+			? imported.progress
+			: imported.status === 'completed' && !imported.progress
+				? m.total
+				: Math.min(imported.progress, m.total);
 		// A finished work whose every unit was seen is completed, even if the source says otherwise
 		const done =
 			imported.status === 'in_progress' &&
@@ -102,11 +152,19 @@ export async function runImport(
 	providers: Providers,
 	job: { importId: number; userId: string; source: ImportSource; items: ImportItem[] }
 ): Promise<Stats> {
-	await db.update(importJobs).set({ status: 'running' }).where(eq(importJobs.id, job.importId));
 	const stats: Stats = { total: job.items.length, imported: 0, kept: 0, unmatched: 0 };
 	const unmatched: Unmatched[] = [];
+	// Running counts let the import page draw a progress bar; at most one write per second
+	const saveProgress = () =>
+		db.update(importJobs).set({ status: 'running', stats }).where(eq(importJobs.id, job.importId));
+	await saveProgress();
+	let savedAt = Date.now();
 	try {
 		for (const item of job.items) {
+			if (Date.now() - savedAt >= 1000) {
+				await saveProgress();
+				savedAt = Date.now();
+			}
 			let mediaId: number | null = null;
 			try {
 				mediaId = await resolve(db, providers, item);

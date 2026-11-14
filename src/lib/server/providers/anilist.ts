@@ -1,5 +1,6 @@
 // AniList GraphQL API (anime, manga). Public queries need no key.
-// https://docs.anilist.co — rate limit ~90 requests/minute.
+// https://docs.anilist.co — rate limit 90 requests/minute, lowered to 30 while AniList is degraded
+// (X-RateLimit-Limit says 30 in 2026).
 import type { ImportItem } from '../imports/types';
 import { createRateLimiter, fetchJson, ProviderError, type Fetch, type RateLimiter } from './http';
 import {
@@ -35,6 +36,7 @@ type AniMedia = {
 	genres: string[] | null;
 	isAdult: boolean;
 	studios: { nodes: { name: string }[] } | null;
+	relations?: { edges: { relationType: string; node: { id: number; format: string | null } }[] };
 };
 
 const FIELDS = `id idMal type format status title { romaji english native } synonyms
@@ -136,13 +138,23 @@ export type AniListClient = ProviderClient & {
 	userList(userName: string, type: 'anime' | 'manga'): Promise<ImportItem[] | null>;
 	/** AniList media for MyAnimeList ids (50 per request); ids AniList does not know are absent. */
 	byMalIds(ids: number[], type: 'anime' | 'manga'): Promise<Map<number, ProviderMedia>>;
+	/**
+	 * An anime found by title and year (within one), then its TV sequels in order: AniList has one
+	 * entry per season where TMDB/Trakt have one show. A film is alone. Null when not found.
+	 */
+	animeSeasons(title: string, year: number | null, movie: boolean): Promise<ProviderMedia[] | null>;
 };
+
+const SERIES_FORMATS = ['TV', 'TV_SHORT', 'ONA'];
+// Every format but music videos (a null format_in makes AniList answer 500)
+const ANY_FORMATS = [...SERIES_FORMATS, 'MOVIE', 'OVA', 'SPECIAL'];
+const MAX_SEASONS = 30;
 
 export function createAniListClient(
 	opts: { fetch?: Fetch; limiter?: RateLimiter } = {}
 ): AniListClient {
 	const fetch = opts.fetch ?? globalThis.fetch;
-	const limiter = opts.limiter ?? createRateLimiter(85);
+	const limiter = opts.limiter ?? createRateLimiter(30);
 
 	async function query<T>(gql: string, variables: Record<string, unknown>): Promise<T | null> {
 		const res = await fetchJson<{
@@ -231,6 +243,62 @@ export function createAniListClient(
 				}
 			}
 			return found;
+		},
+
+		async animeSeasons(title, year, movie) {
+			const fields = `${DETAIL_FIELDS} relations { edges { relationType node { id format } } }`;
+			const find = async (q: string, formats: string[], keep?: (r: AniMedia) => boolean) => {
+				const data = await query<{ Page: { media: AniMedia[] } }>(
+					`query ($q: String, $formats: [MediaFormat]) {
+						Page(perPage: 10) { media(search: $q, type: ANIME, format_in: $formats, sort: SEARCH_MATCH) { ${fields} } }
+					}`,
+					{ q, formats }
+				);
+				return data?.Page.media.find(
+					(r) =>
+						(keep?.(r) ?? true) &&
+						(year === null || (r.startDate?.year != null && Math.abs(r.startDate.year - year) <= 1))
+				);
+			};
+			// AniList's search misses some English titles: retry without accents ("Shippūden"),
+			// without "the Movie", then the part before ":" or "!" ("Food Wars! Shokugeki no Soma"),
+			// and last in any format (OVAs, a "film" AniList lists as TV). Only on failure.
+			const plain = title.normalize('NFD').replace(/\p{M}/gu, '');
+			const noMovie = plain.replace(/[\s:-]*\bthe movie\b/i, '').trim();
+			const queries = [...new Set([title, plain, noMovie])];
+			const prefix = noMovie.split(/[:!]/)[0].trim();
+			const norm = (s: string) =>
+				s
+					.normalize('NFD')
+					.replace(/\p{M}/gu, '')
+					.toLowerCase()
+					.replace(/[^\p{L}\p{N}]+/gu, ' ')
+					.trim();
+			// A franchise name ("Fate/Grand Order") finds other works: only an entry of that exact name
+			const named = (r: AniMedia) =>
+				[r.title.english, r.title.romaji, ...(r.synonyms ?? [])].some(
+					(t) => !!t && norm(t) === norm(prefix)
+				);
+			let m: AniMedia | undefined;
+			for (const formats of [movie ? ['MOVIE'] : SERIES_FORMATS, ANY_FORMATS]) {
+				for (const q of queries) m ??= await find(q, formats);
+				if (!m && prefix && !queries.includes(prefix)) m = await find(prefix, formats, named);
+			}
+			const seasons: ProviderMedia[] = [];
+			while (m && seasons.length < MAX_SEASONS) {
+				seasons.push(toProviderMedia(m));
+				if (movie || !SERIES_FORMATS.includes(m.format ?? '')) break; // films, OVAs: one entry
+				const next = m.relations?.edges.find(
+					(e) => e.relationType === 'SEQUEL' && SERIES_FORMATS.includes(e.node.format ?? '')
+				);
+				if (!next) break;
+				const sequel = await query<{ Media: AniMedia | null }>(
+					`query ($id: Int) { Media(id: $id, type: ANIME) { ${fields} } }`,
+					{ id: next.node.id }
+				);
+				m = sequel?.Media ?? undefined;
+			}
+			return seasons.length ? seasons : null;
 		},
 
 		async userList(userName, type) {

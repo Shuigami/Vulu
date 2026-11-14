@@ -29,6 +29,7 @@ type SearchItem = {
 	adult?: boolean;
 	genre_ids?: number[];
 	origin_country?: string[]; // tv
+	vote_count?: number;
 };
 type SeasonSummary = {
 	season_number: number;
@@ -91,7 +92,8 @@ const toResults = (items: SearchItem[] | undefined, type: MediaType) =>
 			originalTitle: r.original_title ?? r.original_name ?? null,
 			year: yearOf(r.release_date ?? r.first_air_date),
 			posterUrl: image(r.poster_path, 'w342'),
-			isAdult: r.adult ?? false
+			isAdult: r.adult ?? false,
+			votes: r.vote_count
 		}));
 
 export function createTmdbClient(opts: {
@@ -125,10 +127,13 @@ export function createTmdbClient(opts: {
 	return {
 		types: ['movie', 'tv'],
 
-		async search(q, type) {
+		async search(q, type, { year, english } = {}) {
 			const res = await get<{ results: SearchItem[] }>(`/search/${kind(type)}`, {
 				query: q,
-				include_adult: 'false'
+				include_adult: 'false',
+				// Movies: any release that year (festival or theatrical); shows: first air date
+				...(year && { [type === 'movie' ? 'year' : 'first_air_date_year']: String(year) }),
+				...(english && { language: 'en-US' })
 			});
 			return toResults(res?.results, type);
 		},

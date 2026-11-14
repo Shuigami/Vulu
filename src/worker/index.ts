@@ -26,6 +26,7 @@ import {
 import { eq } from 'drizzle-orm';
 import { importJobs } from '../lib/server/db/schema';
 import { resolveMal } from '../lib/server/imports/mal';
+import { resolveTraktAnime } from '../lib/server/imports/trakt';
 import { runImport } from '../lib/server/imports/run';
 import type { ImportItem } from '../lib/server/imports/types';
 import { purgeExpired } from '../lib/server/providers/cache';
@@ -108,6 +109,8 @@ await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
 			.update(importJobs)
 			.set({ status: 'failed', error, finishedAt: new Date() })
 			.where(eq(importJobs.id, importId));
+	// Fetching and matching can take minutes before runImport starts: running already
+	await db.update(importJobs).set({ status: 'running' }).where(eq(importJobs.id, importId));
 
 	let items: ImportItem[];
 	if (job.data.source === 'anilist') {
@@ -120,9 +123,24 @@ await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
 		items = lists.flatMap((l) => l ?? []);
 	} else if (job.data.source === 'trakt') {
 		if (!trakt) return void (await fail('trakt_not_configured'));
-		const library = await trakt.userLibrary(job.data.userName);
+		let library;
+		if ('code' in job.data) {
+			const { code, redirectUri, codeVerifier } = job.data;
+			const token = await trakt.exchangeCode(code, redirectUri, codeVerifier);
+			if (!token) return void (await fail('trakt_auth_failed'));
+			try {
+				library = await trakt.userLibrary('me', token);
+			} finally {
+				await trakt.revoke(token).catch((err) => console.error('[worker] trakt revoke', err));
+			}
+		} else library = await trakt.userLibrary(job.data.userName);
 		if (!library) return void (await fail('trakt_user_not_found'));
-		items = library;
+		items = await resolveTraktAnime(db, providers.anilist!, library, (done, total) =>
+			db
+				.update(importJobs)
+				.set({ stats: { anime: { done, total } } })
+				.where(eq(importJobs.id, importId))
+		);
 	} else if (job.data.source === 'mal') {
 		items = await resolveMal(providers.anilist!, job.data.items);
 	} else {
