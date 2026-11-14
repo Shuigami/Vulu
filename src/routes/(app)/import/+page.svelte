@@ -24,7 +24,14 @@
 	const errorText: Record<string, string> = {
 		anilist_user_not_found: 'Profil AniList introuvable ou privé.',
 		trakt_user_not_found: 'Profil Trakt introuvable ou privé.',
-		trakt_not_configured: 'L’import Trakt n’est pas configuré sur ce serveur.'
+		trakt_not_configured: 'L’import Trakt n’est pas configuré sur ce serveur.',
+		trakt_auth_failed: 'La connexion à Trakt a échoué ou expiré, réessaie.'
+	};
+	// Back from the Trakt sign-in (import/trakt callback)
+	const traktText: Record<string, string> = {
+		denied: 'Connexion à Trakt annulée.',
+		busy: 'Un import est déjà en cours, attends qu’il se termine.',
+		unavailable: 'Le service d’import est indisponible, réessaie plus tard.'
 	};
 	const dateFormat = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' });
 
@@ -53,7 +60,12 @@
 <p class="text-muted">Les œuvres déjà présentes dans ta bibliothèque Vulu ne sont pas modifiées.</p>
 
 {#if form?.error}<p role="alert" class="mt-3 text-sm text-danger">{form.error}</p>{/if}
-{#if form?.started}<p role="status" class="mt-3 text-sm text-success">Import lancé.</p>{/if}
+{#if data.traktResult && traktText[data.traktResult]}
+	<p role="alert" class="mt-3 text-sm text-danger">{traktText[data.traktResult]}</p>
+{/if}
+{#if form?.started || data.traktResult === 'started'}
+	<p role="status" class="mt-3 text-sm text-success">Import lancé.</p>
+{/if}
 
 <div class="mt-7 grid gap-4 sm:grid-cols-2">
 	<form
@@ -155,26 +167,35 @@
 		</button>
 	</form>
 
-	<form
-		method="post"
-		action="?/trakt"
-		use:enhance={submit('trakt')}
-		class="flex flex-col gap-3 card p-5"
-	>
+	<div class="flex flex-col gap-3 card p-5">
 		<h2 class="h2">Trakt</h2>
-		<p class="text-sm text-muted">Films et séries vus, notes et watchlist de ton profil public.</p>
+		<p class="text-sm text-muted">Films et séries vus, notes et watchlist.</p>
 		{#if data.traktEnabled}
-			<label class="flex flex-col gap-1.5 text-[13px] text-muted">
-				Pseudo Trakt
-				<input name="userName" required autocomplete="off" class="field" />
-			</label>
-			<button disabled={sending !== null || active} class="mt-auto btn-accent">
-				Importer depuis Trakt
-			</button>
+			<form
+				method="post"
+				action="?/trakt"
+				use:enhance={submit('trakt')}
+				class="flex flex-col gap-3"
+			>
+				<label class="flex flex-col gap-1.5 text-[13px] text-muted">
+					Pseudo Trakt (profil public)
+					<input name="userName" required autocomplete="off" class="field" />
+				</label>
+				<button disabled={sending !== null || active} class="btn-accent">
+					Importer depuis Trakt
+				</button>
+			</form>
+			{#if data.traktOAuth}
+				<!-- No enhance: the action redirects to trakt.tv -->
+				<form method="post" action="?/traktConnect" class="mt-auto flex flex-col gap-2">
+					<p class="text-sm text-muted">Profil privé : connecte-toi à Trakt pour l’importer.</p>
+					<button disabled={sending !== null || active} class="btn">Se connecter à Trakt</button>
+				</form>
+			{/if}
 		{:else}
 			<p class="text-sm text-accent-ink">Pas encore disponible sur ce serveur.</p>
 		{/if}
-	</form>
+	</div>
 </div>
 
 {#if data.jobs.length}

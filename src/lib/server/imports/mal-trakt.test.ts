@@ -190,6 +190,36 @@ describe('Trakt', () => {
 		expect(items).toHaveLength(253);
 	});
 
+	it('trades an OAuth code for a token and reads the private profile with it', async () => {
+		const calls: { url: string; init?: RequestInit }[] = [];
+		const fetch: Fetch = async (url, init) => {
+			calls.push({ url: String(url), init });
+			if (String(url).endsWith('/oauth/token')) return json({ access_token: 'tok' });
+			return json([]);
+		};
+		const client = createTraktClient({ clientId: 'c', clientSecret: 's', fetch, limiter: noWait });
+		const token = await client.exchangeCode('code1', 'https://vulu.test/import/trakt');
+		expect(token).toBe('tok');
+		expect(JSON.parse(String(calls[0].init?.body))).toEqual({
+			code: 'code1',
+			redirect_uri: 'https://vulu.test/import/trakt',
+			grant_type: 'authorization_code',
+			client_id: 'c',
+			client_secret: 's'
+		});
+		await client.userLibrary('me', token!);
+		expect(calls[1].url).toContain('/users/me/');
+		expect(calls[1].init?.headers).toMatchObject({ Authorization: 'Bearer tok' });
+
+		const refused = createTraktClient({
+			clientId: 'c',
+			clientSecret: 's',
+			fetch: async () => json({ error: 'invalid_grant' }, 401),
+			limiter: noWait
+		});
+		expect(await refused.exchangeCode('old', 'x')).toBeNull();
+	});
+
 	it('returns null for a private or unknown profile', async () => {
 		const privateFetch: Fetch = async () => json({}, 401);
 		expect(
