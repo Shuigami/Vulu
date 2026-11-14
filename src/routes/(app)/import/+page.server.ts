@@ -133,6 +133,6 @@ export const actions: Actions = {
 			code_challenge: createHash('sha256').update(verifier).digest('base64url'),
 			code_challenge_method: 'S256'
 		});
-		redirect(303, `https://trakt.tv/oauth/authorize?${params}`);
+		redirect(303, `https://trakt.tv/oauth/authorize?${params}`, { external: ['https://trakt.tv'] });
 	}
 };
