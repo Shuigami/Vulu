@@ -67,7 +67,13 @@
 							animate:glide
 							class="group relative flex w-[min(340px,85vw)] shrink-0 snap-start gap-4 card p-3.5 tile-frame"
 						>
-							<Poster src={e.posterUrl} title={e.title} type={e.type} class="w-21 rounded-[10px]" />
+							<!-- self-start: cards share the row's height, the poster keeps its 2:3 -->
+							<Poster
+								src={e.posterUrl}
+								title={e.title}
+								type={e.type}
+								class="w-21 self-start rounded-[10px]"
+							/>
 							<div class="flex min-w-0 flex-1 flex-col gap-1.5">
 								<div><TypeTag type={e.type} /></div>
 								<a
