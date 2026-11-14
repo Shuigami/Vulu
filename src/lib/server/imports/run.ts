@@ -25,13 +25,14 @@ async function resolve(db: Db, providers: Providers, item: ImportItem): Promise<
 	if (item.ref && providers[item.type].name === item.ref.provider) {
 		return importMedia(db, providers, item.type, item.ref.externalId);
 	}
-	// Title and year only (Letterboxd): the same year, else one year off (release dates vary by country)
+	// Title and year only (Letterboxd): the most relevant result within a year, since sources date
+	// films differently (festival premiere vs release). An exact-year rule picks obscure namesakes.
 	if (item.search) {
 		const { title, year } = item.search;
 		const results = await searchProvider(db, providers, item.type, title);
-		const hit =
-			results.find((r) => year === null || r.year === year) ??
-			results.find((r) => year !== null && r.year !== null && Math.abs(r.year - year) === 1);
+		const hit = results.find(
+			(r) => year === null || (r.year !== null && Math.abs(r.year - year) <= 1)
+		);
 		return hit ? importMedia(db, providers, item.type, hit.externalId) : null;
 	}
 	return null;

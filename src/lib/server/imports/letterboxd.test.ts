@@ -111,7 +111,7 @@ describe('runImport with title and year', () => {
 		await db.$client.end();
 	});
 
-	it('picks the search result of the same year, else one year off', async () => {
+	it('picks the most relevant search result within a year', async () => {
 		[{ id: userId }] = await db
 			.insert(users)
 			.values({ email: `lbx-${run}@test.vulu`, username: `lbx_${run}` })
@@ -130,7 +130,7 @@ describe('runImport with title and year', () => {
 					types: ['movie'],
 					search: async (q: string) =>
 						q.includes('remake')
-							? [result('1990', 1990)]
+							? [result('1990', 1990), result('1991', 1991)] // most relevant first, a year off
 							: [result('1984', 1984), result('2021', 2021)],
 					get: async (id: string): Promise<ProviderMedia> => ({
 						media: {
