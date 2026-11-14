@@ -72,7 +72,7 @@ describe('Letterboxd export', () => {
 		});
 		expect(byLabel['Seen, Once (2019)'].entry).toMatchObject({
 			status: 'completed',
-			completedOn: null,
+			completedOn: '2024-02-02', // no diary entry: the day it was marked seen
 			score: null
 		});
 		expect(byLabel['Rated only (2010)'].entry).toMatchObject({ status: 'completed', score: 10 });

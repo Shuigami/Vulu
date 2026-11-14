@@ -112,13 +112,18 @@ export function parseLetterboxd(files: LetterboxdFiles): ImportItem[] {
 	};
 
 	for (const r of rows('watchlist.csv')) film(r);
-	for (const r of rows('watched.csv')) seen(r, null); // its Date is when it was logged
 	const logs = new Map<ImportItem['entry'], number>();
 	for (const r of rows('diary.csv')) {
 		const e = seen(r, day(r['Watched Date']) ?? day(r.Date));
 		if (e) logs.set(e, (logs.get(e) ?? 0) + 1);
 	}
 	for (const [e, n] of logs) e.repeatCount = n - 1;
+	// Films marked seen without a diary entry: the day they were marked is the best date there is
+	// (better than the import day, which would sit in this month's stats and "seen recently")
+	for (const r of rows('watched.csv')) {
+		const e = seen(r, null);
+		if (e && !e.completedOn) e.completedOn = day(r.Date);
+	}
 	for (const r of rows('ratings.csv')) {
 		const e = seen(r, null); // rated means seen
 		const stars = Number(r.Rating);
