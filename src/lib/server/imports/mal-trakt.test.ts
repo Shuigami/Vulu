@@ -197,15 +197,15 @@ describe('Trakt', () => {
 			if (String(url).endsWith('/oauth/token')) return json({ access_token: 'tok' });
 			return json([]);
 		};
-		const client = createTraktClient({ clientId: 'c', clientSecret: 's', fetch, limiter: noWait });
-		const token = await client.exchangeCode('code1', 'https://vulu.test/import/trakt');
+		const client = createTraktClient({ clientId: 'c', fetch, limiter: noWait });
+		const token = await client.exchangeCode('code1', 'https://vulu.test/import/trakt', 'verif');
 		expect(token).toBe('tok');
 		expect(JSON.parse(String(calls[0].init?.body))).toEqual({
 			code: 'code1',
 			redirect_uri: 'https://vulu.test/import/trakt',
 			grant_type: 'authorization_code',
-			client_id: 'c',
-			client_secret: 's'
+			code_verifier: 'verif',
+			client_id: 'c'
 		});
 		await client.userLibrary('me', token!);
 		expect(calls[1].url).toContain('/users/me/');
@@ -213,11 +213,10 @@ describe('Trakt', () => {
 
 		const refused = createTraktClient({
 			clientId: 'c',
-			clientSecret: 's',
 			fetch: async () => json({ error: 'invalid_grant' }, 401),
 			limiter: noWait
 		});
-		expect(await refused.exchangeCode('old', 'x')).toBeNull();
+		expect(await refused.exchangeCode('old', 'x', 'v')).toBeNull();
 	});
 
 	it('returns null for a private or unknown profile', async () => {

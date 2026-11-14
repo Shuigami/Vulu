@@ -185,13 +185,11 @@
 					Importer depuis Trakt
 				</button>
 			</form>
-			{#if data.traktOAuth}
-				<!-- No enhance: the action redirects to trakt.tv -->
-				<form method="post" action="?/traktConnect" class="mt-auto flex flex-col gap-2">
-					<p class="text-sm text-muted">Profil privé : connecte-toi à Trakt pour l’importer.</p>
-					<button disabled={sending !== null || active} class="btn">Se connecter à Trakt</button>
-				</form>
-			{/if}
+			<!-- No enhance: the action redirects to trakt.tv -->
+			<form method="post" action="?/traktConnect" class="mt-auto flex flex-col gap-2">
+				<p class="text-sm text-muted">Profil privé : connecte-toi à Trakt pour l’importer.</p>
+				<button disabled={sending !== null || active} class="btn">Se connecter à Trakt</button>
+			</form>
 		{:else}
 			<p class="text-sm text-accent-ink">Pas encore disponible sur ce serveur.</p>
 		{/if}

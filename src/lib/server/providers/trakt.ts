@@ -1,6 +1,6 @@
 // Trakt API (import source only): watched movies and shows, ratings and watchlist of a public
-// profile, or of a private one through OAuth (authorization code, exchanged here, then revoked).
-// Needs a Trakt application (https://trakt.tv/oauth/applications); OAuth also needs its secret.
+// profile, or of a private one through OAuth (authorization code with PKCE, exchanged here, then
+// revoked). Needs a Trakt application's client id (https://trakt.tv/oauth/applications), no secret.
 // Docs: https://trakt.docs.apiary.io — 1000 GET requests per 5 minutes, 250 items per page.
 import type { ImportItem } from '../imports/types';
 import {
@@ -29,7 +29,6 @@ const keyOf = (type: 'movie' | 'tv', w: Work) =>
 
 export function createTraktClient(opts: {
 	clientId: string;
-	clientSecret?: string;
 	fetch?: Fetch;
 	limiter?: RateLimiter;
 }) {
@@ -57,22 +56,32 @@ export function createTraktClient(opts: {
 		return all;
 	}
 
-	/** Body of a call to Trakt's OAuth endpoints, with the application's credentials. */
-	const oauthBody = (body: Record<string, string>) => {
-		if (!opts.clientSecret) throw new Error('TRAKT_CLIENT_SECRET is not set');
-		return JSON.stringify({ ...body, client_id: opts.clientId, client_secret: opts.clientSecret });
-	};
+	/** Body of a call to Trakt's OAuth endpoints (PKCE: the client id, no secret). */
+	const oauthBody = (body: Record<string, string>) =>
+		JSON.stringify({ ...body, client_id: opts.clientId });
 
 	return {
-		/** Trades the code Trakt sent to the redirect URI for an access token; null if refused. */
-		async exchangeCode(code: string, redirectUri: string): Promise<string | null> {
+		/**
+		 * Trades the code Trakt sent to the redirect URI for an access token; null if refused.
+		 * `codeVerifier` is the PKCE secret whose hash went with the sign-in link.
+		 */
+		async exchangeCode(
+			code: string,
+			redirectUri: string,
+			codeVerifier: string
+		): Promise<string | null> {
 			try {
 				const res = await fetchJson<{ access_token: string }>('trakt', `${BASE}/oauth/token`, {
 					fetch,
 					limiter,
 					method: 'POST',
 					headers,
-					body: oauthBody({ code, redirect_uri: redirectUri, grant_type: 'authorization_code' })
+					body: oauthBody({
+						code,
+						redirect_uri: redirectUri,
+						grant_type: 'authorization_code',
+						code_verifier: codeVerifier
+					})
 				});
 				return res?.access_token ?? null;
 			} catch (err) {

@@ -18,7 +18,7 @@ export async function start(
 	source: ImportSource,
 	payload:
 		| { userName: string }
-		| { code: string; redirectUri: string }
+		| { code: string; redirectUri: string; codeVerifier: string }
 		| { items: ImportItem[] | MalItem[] }
 ) {
 	const running = await db

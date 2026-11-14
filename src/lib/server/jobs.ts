@@ -32,8 +32,8 @@ export type EpisodesJob = { mediaId: number };
 export type LibraryImportJob = { importId: number; userId: string } & (
 	| { source: 'anilist'; userName: string }
 	| { source: 'trakt'; userName: string }
-	// Private profile: the OAuth code, traded for a token by the worker (never stored)
-	| { source: 'trakt'; code: string; redirectUri: string }
+	// Private profile: the OAuth code and PKCE verifier, traded for a token by the worker (never stored)
+	| { source: 'trakt'; code: string; redirectUri: string; codeVerifier: string }
 	| { source: 'goodreads' | 'letterboxd'; items: ImportItem[] }
 	| { source: 'mal'; items: MalItem[] }
 );

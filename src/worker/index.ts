@@ -40,10 +40,7 @@ if (!process.env.TMDB_API_KEY)
 const db = createDb(url);
 const providers = createProviders(process.env);
 const trakt = process.env.TRAKT_CLIENT_ID
-	? createTraktClient({
-			clientId: process.env.TRAKT_CLIENT_ID,
-			clientSecret: process.env.TRAKT_CLIENT_SECRET
-		})
+	? createTraktClient({ clientId: process.env.TRAKT_CLIENT_ID })
 	: null;
 // LISTEN/NOTIFY (one connection) wakes workers as soon as the app sends a job the user waits on
 const boss = new PgBoss({ connectionString: url, useListenNotify: true });
@@ -125,8 +122,8 @@ await boss.work<LibraryImportJob>(QUEUES.libraryImport, async ([job]) => {
 		if (!trakt) return void (await fail('trakt_not_configured'));
 		let library;
 		if ('code' in job.data) {
-			if (!process.env.TRAKT_CLIENT_SECRET) return void (await fail('trakt_not_configured'));
-			const token = await trakt.exchangeCode(job.data.code, job.data.redirectUri);
+			const { code, redirectUri, codeVerifier } = job.data;
+			const token = await trakt.exchangeCode(code, redirectUri, codeVerifier);
 			if (!token) return void (await fail('trakt_auth_failed'));
 			try {
 				library = await trakt.userLibrary('me', token);
