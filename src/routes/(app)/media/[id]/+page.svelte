@@ -13,6 +13,7 @@
 	import {
 		ENTRY_STATUSES,
 		releaseStatusLabel,
+		rewatchLabel,
 		secondaryUnitLabel,
 		statusLabel,
 		toScale,
@@ -303,6 +304,8 @@
 					await update({ reset: false });
 					if (action.search === '?/remove' && result.type === 'success')
 						toast('Retiré de ta bibliothèque');
+					if (action.search === '?/rewatch' && result.type === 'success')
+						toast(m.type === 'manga' || m.type === 'book' ? 'Bonne relecture' : 'Bon visionnage');
 				}}
 			onchange={save}
 			class="overflow-hidden card rounded-[22px]"
@@ -520,6 +523,22 @@
 						class="field min-h-9 min-w-0 px-2 text-[13px]"
 					/>
 				</label>
+				<label class="flex items-center gap-2">
+					{rewatchLabel[m.type].done}
+					<input
+						name="repeatCount"
+						type="number"
+						min="0"
+						value={entry.repeatCount}
+						class="field min-h-9 w-16 px-2 text-[13px]"
+					/>
+					fois
+				</label>
+				{#if entry.status === 'completed'}
+					<button formaction="?/rewatch" class="btn-ghost min-h-9 text-[13px]"
+						>{rewatchLabel[m.type].verb}</button
+					>
+				{/if}
 				{#if form?.error}<p role="alert" class="col-span-2 text-danger">{form.error}</p>{/if}
 				{#if form?.saved}<p role="status" class="col-span-2 text-success">Enregistré.</p>{/if}
 			</div>

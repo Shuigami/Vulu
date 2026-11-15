@@ -74,6 +74,44 @@ describe('applyChange', () => {
 			{ kind: 'rated', amount: 90, minutes: null }
 		]);
 	});
+
+	it('starts a completed series over on rewatch', () => {
+		const current = entry({ status: 'completed', progress: 12, completedOn: '2026-01-01' });
+		const { next, events } = applyChange(current, { rewatch: true }, anime, TODAY);
+		expect(next).toMatchObject({
+			status: 'in_progress',
+			progress: 0,
+			repeatCount: 1,
+			startedOn: TODAY,
+			completedOn: null
+		});
+		expect(next).not.toHaveProperty('rewatch');
+		expect(events).toEqual([{ kind: 'started', amount: null, minutes: null }]);
+	});
+
+	it('logs a movie rewatch as one more completion', () => {
+		const movie = { type: 'movie' as const, totalUnits: null, runtimeMinutes: 125 };
+		const current = entry({ status: 'completed', repeatCount: 2, completedOn: '2026-01-01' });
+		const { next, events } = applyChange(current, { rewatch: true }, movie, TODAY);
+		expect(next).toMatchObject({ status: 'completed', repeatCount: 3, completedOn: TODAY });
+		expect(events).toEqual([{ kind: 'completed', amount: null, minutes: 125 }]);
+	});
+
+	it('ignores rewatch on an unfinished entry, and logs nothing for a hand-edited count', () => {
+		const current = entry({ status: 'in_progress', progress: 3 });
+		expect(applyChange(current, { rewatch: true }, anime, TODAY)).toMatchObject({
+			next: { progress: 3, repeatCount: 0 },
+			events: []
+		});
+		const edited = applyChange(
+			entry({ status: 'completed', progress: 12 }),
+			{ repeatCount: 4 },
+			anime,
+			TODAY
+		);
+		expect(edited.next.repeatCount).toBe(4);
+		expect(edited.events).toEqual([]);
+	});
 });
 
 describe('score scale', () => {
