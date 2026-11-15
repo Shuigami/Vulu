@@ -6,6 +6,7 @@
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import {
 		MEDIA_TYPES,
+		rewatchLabel,
 		statusLabel,
 		typeLabel,
 		typePlural,
@@ -194,6 +195,23 @@
 		}
 	}
 
+	/** "Revoir" / "Relire" a completed work from the menu (same action as the media page). */
+	async function rewatch(r: Result) {
+		if (pending || r.entry?.status !== 'completed') return;
+		pending = true;
+		const res = await postAction(`${mediaHref(r)}?/rewatch`, {}).catch(() => null);
+		const result = res?.ok ? await res.json() : null;
+		pending = false;
+		if (result?.type !== 'success') return toast('Échec, réessaie.');
+		// A movie stays completed (one more viewing logged); the rest starts over
+		if (r.type !== 'movie') r.entry = { status: 'in_progress', progress: 0 };
+		toast(
+			r.type === 'manga' || r.type === 'book'
+				? `Bonne relecture de « ${r.title} »`
+				: `Bon visionnage de « ${r.title} »`
+		);
+	}
+
 	/** Imports a provider result through the search page's `open` action; returns its catalogue id. */
 	async function importResult(r: Result) {
 		const res = await postAction(`${resolve('search')}?/open`, {
@@ -295,6 +313,17 @@
 					? 'Recherche chez TMDB, AniList et Open Library…'
 					: 'Tape le titre d’un film, d’une série, d’un anime, d’un manga ou d’un livre.'}
 		</p>
+	{/if}
+{/snippet}
+
+{#snippet rewatchButton(r: Result)}
+	{#if r.entry?.status === 'completed'}
+		<button
+			type="button"
+			disabled={pending}
+			class="btn-accent shrink-0 text-sm"
+			onclick={() => rewatch(r)}>{rewatchLabel[r.type].verb}</button
+		>
 	{/if}
 {/snippet}
 
@@ -442,11 +471,14 @@
 						<span class="text-sm font-semibold text-success"
 							>Dans ta bibliothèque · {entryText(current)}</span
 						>
-						<a
-							href={mediaHref(current)}
-							class="btn-ghost shrink-0 text-sm"
-							onclick={() => dialog?.close()}>Ouvrir la fiche</a
-						>
+						<span class="flex shrink-0 gap-2">
+							{@render rewatchButton(current)}
+							<a
+								href={mediaHref(current)}
+								class="btn-ghost shrink-0 text-sm"
+								onclick={() => dialog?.close()}>Ouvrir la fiche</a
+							>
+						</span>
 					</div>
 				{:else}
 					<div class="grid grid-cols-3 gap-2">
@@ -570,11 +602,14 @@
 								><span class="font-semibold text-success">Dans ta bibliothèque</span>
 								<span class="text-muted">· {entryText(current)}</span></span
 							>
-							<a
-								href={mediaHref(current)}
-								class="btn-ghost shrink-0 text-sm"
-								onclick={() => dialog?.close()}>Ouvrir la fiche</a
-							>
+							<span class="flex shrink-0 gap-2">
+								{@render rewatchButton(current)}
+								<a
+									href={mediaHref(current)}
+									class="btn-ghost shrink-0 text-sm"
+									onclick={() => dialog?.close()}>Ouvrir la fiche</a
+								>
+							</span>
 						</div>
 					{:else}
 						<fieldset class="flex flex-col">

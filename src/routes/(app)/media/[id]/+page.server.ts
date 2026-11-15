@@ -183,10 +183,16 @@ export const actions: Actions = {
 		return { saved: true };
 	},
 
-	rewatch: async ({ request, locals, url }) => {
-		const entryId = Number((await request.formData()).get('entryId'));
-		if (!(await rewatchEntry(db, requireUser(locals, url).id, entryId)))
-			error(404, 'Entrée introuvable');
+	// Found by media, so the quick add menu can call it without knowing the entry id
+	rewatch: async ({ params, locals, url }) => {
+		const userId = requireUser(locals, url).id;
+		const [entry] = await db
+			.select({ id: libraryEntries.id })
+			.from(libraryEntries)
+			.where(
+				and(eq(libraryEntries.userId, userId), eq(libraryEntries.mediaId, parseId(params.id)))
+			);
+		if (!entry || !(await rewatchEntry(db, userId, entry.id))) error(404, 'Entrée introuvable');
 	},
 
 	remove: async ({ request, locals, url }) => {
