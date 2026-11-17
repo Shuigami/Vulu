@@ -781,8 +781,9 @@
 					>
 						{#each season.episodes as e (e.id)}
 							{@const isNext = nextUp?.id === e.id}
+							<!-- The whole row opens the episode (its title link covers it); the tick stays on top -->
 							<li
-								class="flex items-center gap-3 px-3 py-2.5 sm:px-4 {e.aired
+								class="group relative flex items-center gap-3 px-3 py-2.5 hover:bg-surface-2 has-[a:focus-visible]:bg-surface-2 has-[a:focus-visible]:outline-2 has-[a:focus-visible]:-outline-offset-2 has-[a:focus-visible]:outline-accent motion-safe:transition-colors sm:px-4 {e.aired
 									? ''
 									: 'opacity-60'} {isNext ? 'bg-accent/10' : ''}"
 							>
@@ -794,7 +795,7 @@
 											? 'vu, marquer comme pas vu'
 											: 'marquer comme vu'}"
 										disabled={marking || !e.aired}
-										class="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border-2 disabled:cursor-default motion-safe:transition-colors {e.seen
+										class="relative z-10 grid size-9 shrink-0 cursor-pointer place-items-center rounded-full border-2 disabled:cursor-default motion-safe:transition-colors {e.seen
 											? 'border-accent bg-accent text-on-accent'
 											: 'border-line text-transparent hover:border-accent'}"
 										onclick={() => mark('episode', { episodeId: e.id, seen: String(!e.seen) })}
@@ -811,12 +812,7 @@
 										></button
 									>
 								{/if}
-								<a
-									href={episodeHref(e.id)}
-									tabindex="-1"
-									aria-hidden="true"
-									class="hidden w-28 shrink-0 sm:block"><EpisodeStill src={e.stillUrl} /></a
-								>
+								<span class="hidden w-28 shrink-0 sm:block"><EpisodeStill src={e.stillUrl} /></span>
 								<span class="w-7 shrink-0 text-sm font-semibold text-muted tabular-nums"
 									>{e.number}</span
 								>
@@ -824,7 +820,7 @@
 									<span class="flex min-w-0 items-center gap-2">
 										<a
 											href={episodeHref(e.id)}
-											class="truncate font-semibold text-ink no-underline hover:underline"
+											class="truncate font-semibold text-ink no-underline outline-none after:absolute after:inset-0"
 											>{e.title ?? `Épisode ${e.number}`}</a
 										>
 										{#if isNext}
@@ -849,10 +845,9 @@
 										title="Note des membres">★ {toScale(e.average, scale)}</span
 									>
 								{/if}
-								<a
-									href={episodeHref(e.id)}
-									aria-label="Ouvrir l'épisode {e.number}"
-									class="hidden size-9 shrink-0 place-items-center rounded-lg text-muted hover:text-ink sm:grid"
+								<span
+									aria-hidden="true"
+									class="hidden size-9 shrink-0 place-items-center text-muted group-hover:text-ink motion-safe:transition-colors sm:grid"
 									><svg
 										aria-hidden="true"
 										width="18"
@@ -863,7 +858,7 @@
 										stroke-width="2"
 										stroke-linecap="round"
 										stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg
-									></a
+									></span
 								>
 							</li>
 						{/each}
