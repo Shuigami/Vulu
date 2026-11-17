@@ -44,12 +44,20 @@
 		busy = false;
 		if (result?.type !== 'success') toast('Échec, réessaie.');
 	}
-	// The season strip opens on this episode, without scrolling the page itself
+	// The season strip opens on this episode, without scrolling the page itself, then slides
+	// to each episode reached from it (previous / next, the strip itself)
 	let strip = $state<HTMLOListElement>();
+	let stripShown = false;
 	$effect(() => {
-		void ep.id; // and again on each episode reached from it
+		void ep.id;
 		const li = strip?.querySelector<HTMLElement>('[aria-current="page"]')?.parentElement;
-		if (strip && li) strip.scrollLeft = li.offsetLeft - (strip.clientWidth - li.clientWidth) / 2;
+		if (!strip || !li) return;
+		const slide = stripShown && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+		strip.scrollTo({
+			left: li.offsetLeft - (strip.clientWidth - li.clientWidth) / 2,
+			behavior: slide ? 'smooth' : 'instant'
+		});
+		stripShown = true;
 	});
 	const toggleSeen = () => send('episode', { seen: String(!ep.seen) });
 	// Clicking the current rating again clears it
