@@ -1,6 +1,7 @@
 import { error, fail } from '@sveltejs/kit';
 import { and, desc, eq, sum } from 'drizzle-orm';
-import { db } from '#lib/server/app.ts';
+import { db, getBoss } from '#lib/server/app.ts';
+import { QUEUES } from '#lib/server/jobs.ts';
 import { requireUser, viewerId as viewerOf } from '#lib/server/guard.ts';
 import {
 	describeAirDate,
@@ -78,6 +79,13 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		// Anime episodes come later (#49): AniList only gives the upcoming ones
 		m.type === 'tv' ? seasonList(db, id, viewerId, entry ?? null) : []
 	]);
+	// Imports only fetch episodes of airing shows: fetch a finished show's on its first visit
+	if (m.type === 'tv' && !seasons.length)
+		getBoss()
+			.then((boss) =>
+				boss.send(QUEUES.syncEpisodes, { mediaId: id }, { singletonKey: `episodes:${id}` })
+			)
+			.catch((err) => console.error('[media] episode sync not queued', err));
 	return {
 		media: m,
 		entry: entry ?? null,
