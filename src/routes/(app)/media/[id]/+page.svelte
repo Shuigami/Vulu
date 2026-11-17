@@ -344,23 +344,35 @@
 						.join(' · ')}</span
 				>
 			</div>
-			<button
-				type="button"
-				class="btn-accent max-sm:w-full"
-				disabled={marking}
-				onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}
-				><svg
-					aria-hidden="true"
-					width="18"
-					height="18"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="3"
-					stroke-linecap="round"
-					stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg
-				>Marquer vu</button
-			>
+			<div class="flex flex-wrap gap-2 max-sm:w-full">
+				{#if lastAired && lastAired.id !== nextUp.id}
+					<!-- Series-wide, so it sits with the next episode, away from the season controls -->
+					<button
+						type="button"
+						class="btn-ghost text-sm max-sm:flex-1"
+						disabled={marking}
+						onclick={() => mark('episode', { episodeId: lastAired.id, seen: 'true' })}
+						>Marquer toute la série comme vue</button
+					>
+				{/if}
+				<button
+					type="button"
+					class="btn-accent max-sm:flex-1"
+					disabled={marking}
+					onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}
+					><svg
+						aria-hidden="true"
+						width="18"
+						height="18"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="3"
+						stroke-linecap="round"
+						stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg
+					>Marquer vu</button
+				>
+			</div>
 		</section>
 	{/if}
 
@@ -762,15 +774,6 @@
 									>{season.seen} / {season.episodes.length} vus</span
 								>
 							</div>
-							{#if lastAired && nextUp}
-								<button
-									type="button"
-									class="btn-ghost text-sm"
-									disabled={marking}
-									onclick={() => mark('episode', { episodeId: lastAired.id, seen: 'true' })}
-									>Tout marquer comme vu</button
-								>
-							{/if}
 						{/if}
 					</div>
 					{#if data.user && left.length}
