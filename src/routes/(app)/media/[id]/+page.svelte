@@ -8,6 +8,7 @@
 	import Marquee from '#lib/components/Marquee.svelte';
 	import Poster from '#lib/components/Poster.svelte';
 	import RatingHistogram from '#lib/components/RatingHistogram.svelte';
+	import EpisodeStill from '#lib/components/EpisodeStill.svelte';
 	import Progress from '#lib/components/Progress.svelte';
 	import StarRating from '#lib/components/StarRating.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
@@ -153,6 +154,31 @@
 			data.seasons.find((s) => s.episodes.some((e) => e.absolute === progress + 1)) ??
 			data.seasons[0]
 	);
+	// Next episode to watch: the first aired one not seen yet (specials do not count)
+	const nextUp = $derived.by(() => {
+		for (const s of data.seasons)
+			for (const e of s.episodes)
+				if (e.absolute !== null && e.aired && !e.seen)
+					return { ...e, label: `S${s.number}E${e.number}` };
+		return null;
+	});
+	const episodeHref = (id: number) =>
+		resolve('/(app)/media/[id]/episodes/[episodeId]', {
+			id: String(m.id),
+			episodeId: String(id)
+		});
+	type Season = (typeof data.seasons)[number];
+	const seasonName = (s: Season) =>
+		s.number === 0
+			? 'Épisodes spéciaux'
+			: `Saison ${s.number}${s.title && s.title !== `Saison ${s.number}` ? ` · ${s.title}` : ''}`;
+	// Each option carries the season's progress, ticked once every aired episode is seen
+	function seasonOption(s: Season) {
+		const n = s.episodes.length;
+		if (!data.user) return `${seasonName(s)} · ${n} épisode${n > 1 ? 's' : ''}`;
+		const aired = s.episodes.filter((e) => e.aired).length;
+		return `${seasonName(s)} · ${s.seen} / ${n} vus${aired && s.seen >= aired ? ' ✓' : ''}`;
+	}
 	let marking = $state(false);
 	async function mark(action: 'episode' | 'season', fields: Record<string, string | number>) {
 		marking = true;
@@ -291,6 +317,55 @@
 			</div>
 		</section>
 	</div>
+
+	{#if data.user && nextUp}
+		<section
+			aria-labelledby="next-up"
+			class="flex flex-wrap items-center gap-4 card rounded-[22px] p-4 sm:gap-5 sm:p-5"
+		>
+			<a
+				href={episodeHref(nextUp.id)}
+				tabindex="-1"
+				aria-hidden="true"
+				class="w-32 shrink-0 sm:w-44"><EpisodeStill src={nextUp.stillUrl} class="rounded-xl" /></a
+			>
+			<div class="flex min-w-0 flex-[1_1_200px] flex-col gap-1">
+				<h2 id="next-up" class="text-xs font-bold tracking-widest text-accent-ink uppercase">
+					À voir ensuite
+				</h2>
+				<a
+					href={episodeHref(nextUp.id)}
+					class="font-display text-lg leading-tight font-bold text-ink no-underline hover:underline sm:text-xl"
+					>{nextUp.label} · {nextUp.title ?? `Épisode ${nextUp.number}`}</a
+				>
+				<span class="text-[13px] text-muted"
+					>{[
+						nextUp.airDate && `Diffusé le ${nextUp.airDate}`,
+						nextUp.runtime && `${nextUp.runtime} min`
+					]
+						.filter(Boolean)
+						.join(' · ')}</span
+				>
+			</div>
+			<button
+				type="button"
+				class="btn-accent max-sm:w-full"
+				disabled={marking}
+				onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}
+				><svg
+					aria-hidden="true"
+					width="18"
+					height="18"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="3"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg
+				>Marquer vu</button
+			>
+		</section>
+	{/if}
 
 	{#if !entry}
 		<form
@@ -648,37 +723,48 @@
 							>
 						{/if}
 					</div>
-					{#if data.seasons.length > 1}
-						<div class="scroll-row" role="group" aria-label="Saisons">
-							{#each data.seasons as s (s.id)}
-								{@const done =
-									s.episodes.some((e) => e.aired) && s.episodes.every((e) => e.seen || !e.aired)}
-								<button
-									type="button"
-									aria-pressed={s.id === season.id}
-									class="{s.id === season.id
-										? 'chip-on'
-										: done
-											? 'chip border-success text-success'
-											: 'chip'} min-h-9 px-3.5"
-									onclick={() => (seasonPick = s.id)}
-									>{#if done}<svg
-											aria-hidden="true"
-											width="14"
-											height="14"
-											viewBox="0 0 24 24"
-											fill="none"
-											stroke="currentColor"
-											stroke-width="3"
-											stroke-linecap="round"
-											stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg
-										>{/if}{s.number === 0
-										? 'Épisodes spéciaux'
-										: `Saison ${s.number}`}{#if done}<span class="sr-only">, vue</span>{/if}</button
+					<div class="flex flex-wrap items-center gap-x-5 gap-y-3">
+						{#if data.seasons.length > 1}
+							<label class="relative flex min-w-0 items-center">
+								<span class="sr-only">Saison</span>
+								<select
+									value={season.id}
+									onchange={(e) => (seasonPick = Number(e.currentTarget.value))}
+									class="field max-w-full cursor-pointer appearance-none pr-10 font-semibold"
 								>
-							{/each}
-						</div>
-					{/if}
+									{#each data.seasons as s (s.id)}
+										<option value={s.id}>{seasonOption(s)}</option>
+									{/each}
+								</select>
+								<svg
+									aria-hidden="true"
+									class="pointer-events-none absolute right-3.5 text-muted"
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg
+								>
+							</label>
+						{:else}
+							<h3 class="font-semibold">{seasonName(season)}</h3>
+						{/if}
+						{#if data.user}
+							<div class="flex min-w-48 flex-1 items-center gap-3">
+								<Progress
+									value={season.seen}
+									max={season.episodes.length}
+									label="Épisodes vus de la saison"
+								/>
+								<span class="text-[13px] whitespace-nowrap text-muted tabular-nums"
+									>{season.seen} / {season.episodes.length} vus</span
+								>
+							</div>
+						{/if}
+					</div>
 					{#if data.user && left.length}
 						<button
 							type="button"
@@ -690,9 +776,16 @@
 								: `la saison ${season.number}`} comme vue</button
 						>
 					{/if}
-					<ol class="flex flex-col divide-y divide-line rounded-2xl border border-line">
+					<ol
+						class="flex flex-col divide-y divide-line overflow-hidden rounded-2xl border border-line"
+					>
 						{#each season.episodes as e (e.id)}
-							<li class="flex items-center gap-3 px-3 py-2.5 sm:px-4 {e.aired ? '' : 'opacity-60'}">
+							{@const isNext = nextUp?.id === e.id}
+							<li
+								class="flex items-center gap-3 px-3 py-2.5 sm:px-4 {e.aired
+									? ''
+									: 'opacity-60'} {isNext ? 'bg-accent/10' : ''}"
+							>
 								{#if data.user}
 									<button
 										type="button"
@@ -718,23 +811,60 @@
 										></button
 									>
 								{/if}
-								<span class="w-8 shrink-0 text-sm font-semibold text-muted tabular-nums"
+								<a
+									href={episodeHref(e.id)}
+									tabindex="-1"
+									aria-hidden="true"
+									class="hidden w-28 shrink-0 sm:block"><EpisodeStill src={e.stillUrl} /></a
+								>
+								<span class="w-7 shrink-0 text-sm font-semibold text-muted tabular-nums"
 									>{e.number}</span
 								>
 								<span class="flex min-w-0 flex-1 flex-col">
-									<a
-										href={resolve('/(app)/media/[id]/episodes/[episodeId]', {
-											id: String(m.id),
-											episodeId: String(e.id)
-										})}
-										class="truncate font-semibold text-ink no-underline hover:underline"
-										>{e.title ?? `Épisode ${e.number}`}</a
-									>
-									<span class="text-xs text-muted"
-										>{#if !e.aired}Diffusion le {e.airDate}{:else if e.seen && e.seenOn}Vu le {e.seenOn}{:else}{e.airDate ??
-												''}{/if}</span
+									<span class="flex min-w-0 items-center gap-2">
+										<a
+											href={episodeHref(e.id)}
+											class="truncate font-semibold text-ink no-underline hover:underline"
+											>{e.title ?? `Épisode ${e.number}`}</a
+										>
+										{#if isNext}
+											<span
+												class="shrink-0 rounded-full bg-accent px-2 py-0.5 text-[11px] font-bold text-on-accent"
+												>À voir</span
+											>
+										{/if}
+									</span>
+									<span class="text-xs {e.seen && e.seenOn ? 'text-success' : 'text-muted'}"
+										>{#if !e.aired}Diffusion le {e.airDate}{:else if e.seen && e.seenOn}Vu le {e.seenOn}{:else}{[
+												e.airDate,
+												e.runtime && `${e.runtime} min`
+											]
+												.filter(Boolean)
+												.join(' · ')}{/if}</span
 									>
 								</span>
+								{#if e.average !== null}
+									<span
+										class="shrink-0 text-[13px] text-muted tabular-nums"
+										title="Note des membres">★ {toScale(e.average, scale)}</span
+									>
+								{/if}
+								<a
+									href={episodeHref(e.id)}
+									aria-label="Ouvrir l'épisode {e.number}"
+									class="hidden size-9 shrink-0 place-items-center rounded-lg text-muted hover:text-ink sm:grid"
+									><svg
+										aria-hidden="true"
+										width="18"
+										height="18"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"><path d="m9 6 6 6-6 6"></path></svg
+									></a
+								>
 							</li>
 						{/each}
 					</ol>
@@ -958,14 +1088,32 @@
 	<div
 		class="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 flex items-center gap-3 border-t border-line bg-surface/95 px-4 py-2.5 backdrop-blur md:hidden"
 	>
-		<div class="flex min-w-0 flex-1 flex-col">
-			<span class="truncate text-sm font-semibold">{m.title}</span>
-			<span class="text-[13px] text-muted tabular-nums"
-				>{progress}{m.totalUnits ? ` / ${m.totalUnits}` : ''} {unit}</span
+		{#if nextUp}
+			<!-- Shows with episodes: the next one, by name -->
+			<div class="flex min-w-0 flex-1 flex-col">
+				<span class="text-[11px] font-bold tracking-widest text-accent-ink uppercase"
+					>À voir ensuite</span
+				>
+				<span class="truncate text-sm font-semibold"
+					>{nextUp.label} · {nextUp.title ?? `Épisode ${nextUp.number}`}</span
+				>
+			</div>
+			<button
+				type="button"
+				class="btn-accent shrink-0"
+				disabled={marking}
+				onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}>Marquer vu</button
 			>
-		</div>
-		<button type="button" class="btn-accent shrink-0" onclick={() => setProgress(progress + 1)}
-			>+1 {singular(unit)}</button
-		>
+		{:else}
+			<div class="flex min-w-0 flex-1 flex-col">
+				<span class="truncate text-sm font-semibold">{m.title}</span>
+				<span class="text-[13px] text-muted tabular-nums"
+					>{progress}{m.totalUnits ? ` / ${m.totalUnits}` : ''} {unit}</span
+				>
+			</div>
+			<button type="button" class="btn-accent shrink-0" onclick={() => setProgress(progress + 1)}
+				>+1 {singular(unit)}</button
+			>
+		{/if}
 	</div>
 {/if}

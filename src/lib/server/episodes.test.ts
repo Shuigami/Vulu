@@ -282,6 +282,11 @@ describe('episodes in the database', () => {
 		await rateEpisode(db, bob, id, e1, 100);
 		expect(await rateEpisode(db, alice, await newMedia(12), e1, 50)).toBe(false);
 
+		// The season list carries each episode's visible average
+		const listed = (await seasonList(db, id, alice, null))[0];
+		expect(listed.episodes.map((e) => e.average)).toEqual([80, null]);
+		expect(listed.seen).toBe(0);
+
 		let page = (await episodePage(db, id, e1, alice, null))!;
 		expect(page).toMatchObject({
 			label: 'S1E1',
@@ -296,7 +301,7 @@ describe('episodes in the database', () => {
 		// Bob hides his entry: his score leaves Alice's view, not his own
 		await db.update(libraryEntries).set({ isPrivate: true }).where(eq(libraryEntries.userId, bob));
 		page = (await episodePage(db, id, e1, alice, null))!;
-		expect(page.community).toEqual({ count: 1, average: 60 });
+		expect(page.community).toMatchObject({ count: 1, average: 60 });
 		expect((await episodePage(db, id, e1, bob, null))!.community.count).toBe(2);
 
 		await rateEpisode(db, alice, id, e1, null);

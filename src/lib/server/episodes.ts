@@ -33,6 +33,8 @@ export async function seasonList(db: Db, mediaId: number, userId: string, entry:
 			absolute: episodes.absoluteNumber,
 			title: episodes.title,
 			airDate: episodes.airDate,
+			runtime: episodes.runtimeMinutes,
+			stillUrl: episodes.stillUrl,
 			seenAt: max(episodeViews.viewedAt)
 		})
 		.from(episodes)
@@ -48,6 +50,9 @@ export async function seasonList(db: Db, mediaId: number, userId: string, entry:
 		.where(eq(episodes.mediaId, mediaId))
 		.groupBy(seasons.id, episodes.id)
 		.orderBy(sql`${seasons.number} = 0`, asc(seasons.number), asc(episodes.number));
+	const averages = new Map(
+		(await episodeAverages(db, mediaId, userId)).map((a) => [a.episodeId, a.average])
+	);
 
 	const now = Date.now();
 	const progress = entry?.progress ?? 0;
@@ -55,31 +60,43 @@ export async function seasonList(db: Db, mediaId: number, userId: string, entry:
 		id: number;
 		number: number;
 		title: string | null;
+		seen: number;
 		episodes: {
 			id: number;
 			number: number;
 			absolute: number | null;
 			title: string | null;
 			airDate: string | null;
+			runtime: number | null;
+			stillUrl: string | null;
 			aired: boolean;
 			seen: boolean;
 			seenOn: string | null;
+			/** Community average out of 100, visible scores only */
+			average: number | null;
 		}[];
 	}[] = [];
 	for (const r of rows) {
 		let s = list.at(-1);
 		if (s?.id !== r.seasonId)
-			list.push((s = { id: r.seasonId, number: r.season, title: r.seasonTitle, episodes: [] }));
+			list.push(
+				(s = { id: r.seasonId, number: r.season, title: r.seasonTitle, seen: 0, episodes: [] })
+			);
+		// Numbered episodes follow the counter; specials only have their views
+		const seen = !!entry && (r.absolute ? r.absolute <= progress : !!r.seenAt);
+		if (seen) s.seen++;
 		s.episodes.push({
 			id: r.id,
 			number: r.number,
 			absolute: r.absolute,
 			title: r.title,
 			airDate: r.airDate && shortDate(r.airDate),
+			runtime: r.runtime,
+			stillUrl: r.stillUrl,
 			aired: !r.airDate || r.airDate.getTime() <= now,
-			// Numbered episodes follow the counter; specials only have their views
-			seen: !!entry && (r.absolute ? r.absolute <= progress : !!r.seenAt),
-			seenOn: r.seenAt && shortDate(r.seenAt)
+			seen,
+			seenOn: r.seenAt && shortDate(r.seenAt),
+			average: averages.get(r.id) ?? null
 		});
 	}
 	return list;
@@ -220,13 +237,15 @@ export async function episodePage(
 		.where(and(eq(episodes.id, episodeId), eq(episodes.mediaId, mediaId)));
 	if (!ep) return null;
 
-	const list = (await seasonList(db, mediaId, viewerId, entry)).flatMap((s) =>
+	const all = await seasonList(db, mediaId, viewerId, entry);
+	const list = all.flatMap((s) =>
 		s.episodes.map((e) => ({
 			...e,
 			label: episodeLabel({ seasonNumber: s.number, number: e.number })
 		}))
 	);
 	const i = list.findIndex((e) => e.id === episodeId);
+	const season = all.find((s) => s.id === ep.seasonId);
 	const [views, [mine], community] = await Promise.all([
 		db
 			.select({ viewedAt: episodeViews.viewedAt })
@@ -240,7 +259,16 @@ export async function episodePage(
 		episodeRatingSummary(db, episodeId, viewerId)
 	]);
 	const neighbour = (e: (typeof list)[number] | undefined) =>
-		e && { id: e.id, label: e.label, title: e.title };
+		e && {
+			id: e.id,
+			label: e.label,
+			title: e.title,
+			stillUrl: e.stillUrl,
+			airDate: e.airDate,
+			aired: e.aired,
+			seen: e.seen,
+			seenOn: e.seenOn
+		};
 	return {
 		...ep,
 		label: episodeLabel(ep),
@@ -251,30 +279,63 @@ export async function episodePage(
 		previous: i > 0 ? neighbour(list[i - 1]) : null,
 		next: i >= 0 ? neighbour(list[i + 1]) : null,
 		myScore: mine?.score ?? null,
-		community
+		community,
+		// The season around it: its episodes for the strip, and where this one sits
+		season: season && {
+			number: season.number,
+			title: season.title,
+			seen: season.seen,
+			episodes: season.episodes.map((e) => ({
+				id: e.id,
+				number: e.number,
+				title: e.title,
+				stillUrl: e.stillUrl,
+				seen: e.seen
+			}))
+		}
 	};
 }
 
-/** Count and average (out of 100) of the episode's scores that `viewerId` can see. */
-export async function episodeRatingSummary(db: Db, episodeId: number, viewerId: string) {
-	const [r] = await db
+// Episode scores follow show scores' visibility, through the rater's library entry
+const raterEntry = and(
+	eq(libraryEntries.userId, episodeRatings.userId),
+	eq(libraryEntries.mediaId, episodes.mediaId)
+);
+
+/** Average (out of 100) of each episode of a media that has scores `viewerId` can see. */
+function episodeAverages(db: Db, mediaId: number, viewerId: string) {
+	return db
 		.select({
-			count: sql<number>`count(*)::int`,
-			average: sql<number | null>`avg(${episodeRatings.score})::float8`
+			episodeId: episodeRatings.episodeId,
+			average: sql<number>`avg(${episodeRatings.score})::float8`
 		})
 		.from(episodeRatings)
 		.innerJoin(episodes, eq(episodes.id, episodeRatings.episodeId))
 		.innerJoin(users, eq(users.id, episodeRatings.userId))
-		// Same visibility as show scores: through the rater's library entry
-		.innerJoin(
-			libraryEntries,
-			and(
-				eq(libraryEntries.userId, episodeRatings.userId),
-				eq(libraryEntries.mediaId, episodes.mediaId)
-			)
-		)
-		.where(and(eq(episodeRatings.episodeId, episodeId), visibleTo(viewerId)));
-	return r;
+		.innerJoin(libraryEntries, raterEntry)
+		.where(and(eq(episodes.mediaId, mediaId), visibleTo(viewerId)))
+		.groupBy(episodeRatings.episodeId);
+}
+
+/** Count, average (out of 100) and histogram buckets of the episode's scores `viewerId` can see. */
+export async function episodeRatingSummary(db: Db, episodeId: number, viewerId: string) {
+	const rows = await db
+		.select({
+			bucket: sql<number>`least(${episodeRatings.score} / 10, 9)::int`,
+			count: sql<number>`count(*)::int`,
+			sum: sql<number>`sum(${episodeRatings.score})::int`
+		})
+		.from(episodeRatings)
+		.innerJoin(episodes, eq(episodes.id, episodeRatings.episodeId))
+		.innerJoin(users, eq(users.id, episodeRatings.userId))
+		.innerJoin(libraryEntries, raterEntry)
+		.where(and(eq(episodeRatings.episodeId, episodeId), visibleTo(viewerId)))
+		.groupBy(sql`1`);
+	const buckets = Array<number>(10).fill(0);
+	for (const r of rows) buckets[r.bucket] = r.count;
+	const count = rows.reduce((n, r) => n + r.count, 0);
+	const average = count ? rows.reduce((n, r) => n + r.sum, 0) / count : null;
+	return { count, average, buckets };
 }
 
 /**
