@@ -60,12 +60,16 @@ export async function searchProviders(
 	db: Db,
 	boss: PgBoss,
 	query: string,
-	type?: MediaType
+	type?: MediaType,
+	signal?: AbortSignal
 ): Promise<{ results: SearchResult[]; failed: boolean }> {
 	const types = type ? [type] : MEDIA_TYPES;
 	const settled = await Promise.allSettled(
-		types.map((t) => requestJob<SearchOutput>(boss, QUEUES.search, { type: t, query }))
+		types.map((t) =>
+			requestJob<SearchOutput>(boss, QUEUES.search, { type: t, query }, undefined, signal)
+		)
 	);
+	if (signal?.aborted) return { results: [], failed: false };
 	const results = settled
 		.flatMap((s) => (s.status === 'fulfilled' ? s.value.results : []))
 		.filter((r) => !r.isAdult);

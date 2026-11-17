@@ -10,7 +10,7 @@ import type { RequestHandler } from './$types';
  * Quick-add search: the local catalogue, with what the dialog previews (overview, total units)
  * and the viewer's own entry when the title is already in their library.
  */
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals, request }) => {
 	const q = url.searchParams.get('q')?.trim().slice(0, 200) ?? '';
 	const t = url.searchParams.get('type');
 	const type = isMediaType(t) ? t : undefined;
@@ -19,7 +19,8 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 	// `remote`: provider results not yet in the catalogue, asked for when the local ones are few
 	if (url.searchParams.has('remote')) {
 		const { results } = await getBoss()
-			.then((boss) => searchProviders(db, boss, q, type))
+			// Each keystroke aborts the previous fetch: drop its jobs so they do not queue up
+			.then((boss) => searchProviders(db, boss, q, type, request.signal))
 			.catch(() => ({ results: [] }));
 		return json(
 			results.slice(0, 12).map(({ provider, externalId, type, title, posterUrl, year }) => ({

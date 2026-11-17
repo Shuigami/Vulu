@@ -43,12 +43,14 @@ export type ImportOutput = { mediaId: number | null };
 /**
  * Sends a job and waits for the worker's result: lets the app use provider APIs
  * while only the worker calls them. Throws if the job fails or takes too long.
+ * When `signal` aborts (the browser gave up), the job is cancelled so it stops holding a worker slot.
  */
 export async function requestJob<O extends object>(
 	boss: PgBoss,
 	name: string,
 	data: object,
-	timeoutMs = 8000
+	timeoutMs = 8000,
+	signal?: AbortSignal
 ): Promise<O> {
 	const id = await boss.send(name, data, {
 		retryLimit: 0,
@@ -59,6 +61,10 @@ export async function requestJob<O extends object>(
 	const deadline = Date.now() + timeoutMs;
 	for (let delay = 50; Date.now() < deadline; delay = Math.min(delay * 2, 400)) {
 		await new Promise((r) => setTimeout(r, delay));
+		if (signal?.aborted) {
+			await boss.cancel(name, id).catch(() => {});
+			throw new Error(`Job ${name} cancelled: request aborted`);
+		}
 		const [job] = await boss.findJobs<object>(name, { id });
 		if (job?.state === 'completed') return job.output as O;
 		if (job?.state === 'failed' || job?.state === 'cancelled') {
