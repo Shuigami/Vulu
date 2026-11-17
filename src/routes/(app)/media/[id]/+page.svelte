@@ -788,14 +788,14 @@
 											? 'vu, marquer comme pas vu'
 											: 'marquer comme vu'}"
 										disabled={marking || !e.aired}
-										class="relative z-10 grid size-7 shrink-0 cursor-pointer place-items-center rounded-full border-2 before:absolute before:-inset-2 before:content-[''] disabled:cursor-default motion-safe:transition-colors {e.seen
+										class="relative z-10 grid size-6 shrink-0 cursor-pointer place-items-center rounded-full border-2 before:absolute before:-inset-2.5 before:content-[''] disabled:cursor-default motion-safe:transition-colors {e.seen
 											? 'border-accent bg-accent text-on-accent'
 											: 'border-line text-transparent hover:border-accent'}"
 										onclick={() => mark('episode', { episodeId: e.id, seen: String(!e.seen) })}
 										><svg
 											aria-hidden="true"
-											width="14"
-											height="14"
+											width="12"
+											height="12"
 											viewBox="0 0 24 24"
 											fill="none"
 											stroke="currentColor"
