@@ -84,6 +84,15 @@ const timeFormat = new Intl.DateTimeFormat('fr-FR', {
 	minute: '2-digit'
 });
 
+const fullDateFormat = new Intl.DateTimeFormat('fr-FR', {
+	timeZone: TIMEZONE,
+	day: 'numeric',
+	month: 'short',
+	year: 'numeric'
+});
+/** "12 mars 2024", in TIMEZONE. */
+export const shortDate = (d: Date) => fullDateFormat.format(d);
+
 /** TMDB only gives a date (stored at 00:00 UTC); AniList gives the exact airing time. */
 const hasTime = (d: Date) => d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0;
 

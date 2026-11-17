@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { describeAirDate, episodeLabel, startOfToday, upcomingEpisodes } from './calendar';
 import { staleAiringMedia, storeEpisodes, upsertMedia } from './catalogue';
 import { createDb } from './db';
-import { episodes, libraryEntries, media, users } from './db/schema';
+import { activityEvents, episodes, episodeViews, libraryEntries, media, users } from './db/schema';
+import { markEpisode, markSeason, seasonList } from './episodes';
 import type { ProviderEpisodes, ProviderMedia } from './providers/types';
 
 describe('calendar helpers', () => {
@@ -171,5 +172,89 @@ describe('episodes in the database', () => {
 		const stale = (await staleAiringMedia(db)).map((m) => m.id);
 		expect(stale).toContain(followed);
 		expect(stale).not.toContain(ignored); // nobody follows it
+	});
+	it('marks episodes "seen up to here", by season, and specials on their own', async () => {
+		const id = await newMedia(9, { totalUnits: 4 });
+		const userId = await newUser();
+		const day = 24 * 3600 * 1000;
+		const ep = (season: number, number: number, absoluteNumber: number | null, inDays: number) => ({
+			seasonNumber: season,
+			number,
+			absoluteNumber,
+			title: null,
+			airDate: new Date(Date.now() + inDays * day),
+			runtimeMinutes: 30
+		});
+		await storeEpisodes(db, id, {
+			upcomingOnly: false,
+			seasons: [0, 1, 2].map((number) => ({
+				number,
+				title: null,
+				airDate: null,
+				episodeCount: null,
+				posterUrl: null
+			})),
+			episodes: [
+				ep(0, 1, null, -9),
+				ep(1, 1, 1, -9),
+				ep(1, 2, 2, -8),
+				ep(2, 1, 3, -2),
+				ep(2, 2, 4, 5)
+			]
+		});
+		const state = async () => {
+			const [entry] = await db
+				.select()
+				.from(libraryEntries)
+				.where(and(eq(libraryEntries.userId, userId), eq(libraryEntries.mediaId, id)));
+			const list = await seasonList(db, id, userId, entry);
+			return { entry, seen: list.map((s) => s.episodes.map((e) => +e.seen).join('')).join(' ') };
+		};
+		const byNumber = async (season: number, number: number) =>
+			(await seasonList(db, id, userId, null))
+				.find((s) => s.number === season)!
+				.episodes.find((e) => e.number === number)!.id;
+
+		// Seasons in order, specials last; S1E2 marks S1E1 too, and is kept on the journal event
+		const s1e2 = await byNumber(1, 2);
+		expect(await markEpisode(db, userId, id, s1e2, true)).toBe(true);
+		let s = await state();
+		expect(s.entry).toMatchObject({ progress: 2, status: 'in_progress' });
+		expect(s.seen).toBe('11 00 0');
+		const [event] = await db
+			.select({ episodeId: activityEvents.episodeId, amount: activityEvents.amount })
+			.from(activityEvents)
+			.where(and(eq(activityEvents.userId, userId), eq(activityEvents.kind, 'episode')));
+		expect(event).toEqual({ episodeId: s1e2, amount: 2 });
+		const views = () => db.select().from(episodeViews).where(eq(episodeViews.userId, userId));
+		expect(await views()).toHaveLength(2);
+
+		// A season: its aired episodes only; an earlier episode never moves progress back
+		const season2 = (await seasonList(db, id, userId, null)).find((x) => x.number === 2)!.id;
+		await markSeason(db, userId, id, season2);
+		expect((await state()).entry.progress).toBe(3);
+		await markEpisode(db, userId, id, await byNumber(1, 1), true);
+		expect((await state()).entry.progress).toBe(3);
+
+		// Unseen goes back to the episode before, and drops the later views
+		await markEpisode(db, userId, id, s1e2, false);
+		s = await state();
+		expect(s.entry.progress).toBe(1);
+		expect(s.seen).toBe('10 00 0');
+		expect(await views()).toHaveLength(1);
+
+		// Specials: toggled alone, progress untouched
+		const special = await byNumber(0, 1);
+		await markEpisode(db, userId, id, special, true);
+		await markEpisode(db, userId, id, special, true);
+		s = await state();
+		expect(s.seen).toBe('10 00 1');
+		expect(s.entry.progress).toBe(1);
+		expect(await views()).toHaveLength(2);
+		await markEpisode(db, userId, id, special, false);
+		expect((await state()).seen).toBe('10 00 0');
+
+		// Another media's episode is refused
+		expect(await markEpisode(db, userId, await newMedia(10), s1e2, true)).toBe(false);
 	});
 });
