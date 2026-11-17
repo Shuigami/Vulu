@@ -162,6 +162,10 @@
 					return { ...e, label: `S${s.number}E${e.number}` };
 		return null;
 	});
+	// "Everything seen": the last aired numbered episode, which covers all those before it
+	const lastAired = $derived(
+		data.seasons.flatMap((s) => s.episodes).findLast((e) => e.absolute !== null && e.aired)
+	);
 	const episodeHref = (id: number) =>
 		resolve('/(app)/media/[id]/episodes/[episodeId]', {
 			id: String(m.id),
@@ -747,15 +751,26 @@
 						{/if}
 						{#if data.user}
 							<div class="flex min-w-48 flex-1 items-center gap-3">
-								<Progress
-									value={season.seen}
-									max={season.episodes.length}
-									label="Épisodes vus de la saison"
-								/>
+								<div class="flex-1">
+									<Progress
+										value={season.seen}
+										max={season.episodes.length}
+										label="Épisodes vus de la saison"
+									/>
+								</div>
 								<span class="text-[13px] whitespace-nowrap text-muted tabular-nums"
 									>{season.seen} / {season.episodes.length} vus</span
 								>
 							</div>
+							{#if lastAired && nextUp}
+								<button
+									type="button"
+									class="btn-ghost text-sm"
+									disabled={marking}
+									onclick={() => mark('episode', { episodeId: lastAired.id, seen: 'true' })}
+									>Tout marquer comme vu</button
+								>
+							{/if}
 						{/if}
 					</div>
 					{#if data.user && left.length}
