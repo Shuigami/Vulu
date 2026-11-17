@@ -45,6 +45,8 @@ type SeasonDetail = {
 		name: string | null;
 		air_date: string | null;
 		runtime: number | null;
+		overview?: string | null;
+		still_path?: string | null;
 	}[];
 };
 type Details = SearchItem & {
@@ -234,7 +236,9 @@ export function createTmdbClient(opts: {
 						absoluteNumber: s.season_number > 0 ? ++absolute : null,
 						title: e.name || null,
 						airDate: e.air_date ? new Date(`${e.air_date}T00:00:00Z`) : null,
-						runtimeMinutes: e.runtime ?? null
+						runtimeMinutes: e.runtime ?? null,
+						overview: e.overview || null,
+						stillUrl: image(e.still_path, 'w780')
 					});
 				}
 			}

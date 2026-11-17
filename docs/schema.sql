@@ -186,6 +186,8 @@ CREATE TABLE episodes (
   title            text,
   air_date         timestamptz,
   runtime_minutes  integer,
+  overview         text,
+  still_url        text,                     -- image hot-linkée depuis le CDN du fournisseur
   UNIQUE (season_id, number)
 );
 CREATE INDEX episodes_media_idx    ON episodes (media_id, absolute_number);
@@ -225,6 +227,16 @@ CREATE TABLE episode_views (
   viewed_at   timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (user_id, episode_id, viewed_at)
 );
+
+-- Note par épisode, en plus de la note de l'œuvre (pas d'événement dans le fil)
+CREATE TABLE episode_ratings (
+  user_id     uuid     NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  episode_id  bigint   NOT NULL REFERENCES episodes (id) ON DELETE CASCADE,
+  score       smallint NOT NULL CHECK (score BETWEEN 0 AND 100),  -- stocké sur 100
+  rated_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, episode_id)
+);
+CREATE INDEX episode_ratings_episode_idx ON episode_ratings (episode_id);
 
 -- Journal d'activité : historique, statistiques, rétrospective annuelle
 CREATE TABLE activity_events (

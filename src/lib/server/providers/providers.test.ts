@@ -278,7 +278,14 @@ describe('episodes', () => {
 						},
 						'season/1': {
 							episodes: [
-								{ episode_number: 1, name: 'Bonjour', air_date: '2022-02-17', runtime: 57 },
+								{
+									episode_number: 1,
+									name: 'Bonjour',
+									air_date: '2022-02-17',
+									runtime: 57,
+									overview: 'Le début.',
+									still_path: '/e1.jpg'
+								},
 								{ episode_number: 2, name: '', air_date: null, runtime: null }
 							]
 						}
@@ -321,7 +328,9 @@ describe('episodes', () => {
 				absoluteNumber: null,
 				title: 'Spécial',
 				airDate: new Date('2021-12-15T00:00:00Z'),
-				runtimeMinutes: 10
+				runtimeMinutes: 10,
+				overview: null,
+				stillUrl: null
 			},
 			{
 				seasonNumber: 1,
@@ -329,7 +338,9 @@ describe('episodes', () => {
 				absoluteNumber: 1,
 				title: 'Bonjour',
 				airDate: new Date('2022-02-17T00:00:00Z'),
-				runtimeMinutes: 57
+				runtimeMinutes: 57,
+				overview: 'Le début.',
+				stillUrl: 'https://image.tmdb.org/t/p/w780/e1.jpg'
 			},
 			{
 				seasonNumber: 1,
@@ -337,7 +348,9 @@ describe('episodes', () => {
 				absoluteNumber: 2,
 				title: null,
 				airDate: null,
-				runtimeMinutes: null
+				runtimeMinutes: null,
+				overview: null,
+				stillUrl: null
 			}
 		]);
 		expect(result?.upcomingOnly).toBe(false);

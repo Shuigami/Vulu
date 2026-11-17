@@ -286,7 +286,9 @@ export const episodes = pgTable(
 		absoluteNumber: integer(),
 		title: text(),
 		airDate: timestamptz(),
-		runtimeMinutes: integer()
+		runtimeMinutes: integer(),
+		overview: text(),
+		stillUrl: text() // hot-linked from the provider CDN
 	},
 	(t) => [
 		unique('episodes_season_id_number_key').on(t.seasonId, t.number),
@@ -344,6 +346,24 @@ export const episodeViews = pgTable(
 		viewedAt: timestamptz().notNull().defaultNow()
 	},
 	(t) => [primaryKey({ name: 'episode_views_pkey', columns: [t.userId, t.episodeId, t.viewedAt] })]
+);
+
+// One score per user and episode, on top of the show's own score (no feed event)
+export const episodeRatings = pgTable(
+	'episode_ratings',
+	{
+		userId: userRef(),
+		episodeId: bigint({ mode: 'number' })
+			.notNull()
+			.references(() => episodes.id, { onDelete: 'cascade' }),
+		score: smallint().notNull(), // out of 100, displayed in users.rating_scale
+		ratedAt: timestamptz().notNull().defaultNow()
+	},
+	(t) => [
+		primaryKey({ name: 'episode_ratings_pkey', columns: [t.userId, t.episodeId] }),
+		check('episode_ratings_score_check', sql`${t.score} BETWEEN 0 AND 100`),
+		index('episode_ratings_episode_idx').on(t.episodeId)
+	]
 );
 
 export const activityEvents = pgTable(
