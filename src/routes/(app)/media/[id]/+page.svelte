@@ -647,18 +647,32 @@
 						{/if}
 					</div>
 					{#if data.seasons.length > 1}
-						<div
-							class="-mx-4 flex [scrollbar-width:none] gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:px-0"
-							role="group"
-							aria-label="Saisons"
-						>
+						<div class="scroll-row" role="group" aria-label="Saisons">
 							{#each data.seasons as s (s.id)}
+								{@const done =
+									s.episodes.some((e) => e.aired) && s.episodes.every((e) => e.seen || !e.aired)}
 								<button
 									type="button"
 									aria-pressed={s.id === season.id}
-									class="{s.id === season.id ? 'chip-on' : 'chip'} min-h-9 shrink-0 px-3.5"
+									class="{s.id === season.id
+										? 'chip-on'
+										: done
+											? 'chip border-success text-success'
+											: 'chip'} min-h-9 px-3.5"
 									onclick={() => (seasonPick = s.id)}
-									>{s.number === 0 ? 'Épisodes spéciaux' : `Saison ${s.number}`}</button
+									>{#if done}<svg
+											aria-hidden="true"
+											width="14"
+											height="14"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="3"
+											stroke-linecap="round"
+											stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg
+										>{/if}{s.number === 0
+										? 'Épisodes spéciaux'
+										: `Saison ${s.number}`}{#if done}<span class="sr-only">, vue</span>{/if}</button
 								>
 							{/each}
 						</div>
