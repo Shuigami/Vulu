@@ -1,11 +1,19 @@
 // Episodes by season and per-episode tracking (TV shows). Progress stays the single counter
 // of library_entries: marking an episode means "seen up to here" (its absolute number).
 // episode_views only add dates, and track specials, which have no absolute number.
-import { and, asc, eq, gt, gte, inArray, lte, max, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, lte, max, or, sql } from 'drizzle-orm';
 import type { Db } from './db';
-import { episodes, episodeViews, libraryEntries, seasons } from './db/schema';
+import {
+	episodeRatings,
+	episodes,
+	episodeViews,
+	libraryEntries,
+	seasons,
+	users
+} from './db/schema';
 import { addToLibrary, updateEntry } from './library';
-import { shortDate } from './calendar';
+import { episodeLabel, shortDate } from './calendar';
+import { visibleTo } from './social';
 
 type Entry = { progress: number; startedOn: string | null } | null;
 
@@ -178,5 +186,125 @@ export async function markSeason(db: Db, userId: string, mediaId: number, season
 	const last = aired.findLast((e) => e.absolute !== null);
 	if (last) return markEpisode(db, userId, mediaId, last.id, true);
 	for (const e of aired) await markEpisode(db, userId, mediaId, e.id, true);
+	return true;
+}
+
+/**
+ * One episode for its page: details, previous and next episodes, the viewer's views (every run)
+ * and score, and the community scores. Null when the episode is not one of this media's.
+ */
+export async function episodePage(
+	db: Db,
+	mediaId: number,
+	episodeId: number,
+	viewerId: string,
+	entry: Entry
+) {
+	const [ep] = await db
+		.select({
+			id: episodes.id,
+			number: episodes.number,
+			title: episodes.title,
+			airDate: episodes.airDate,
+			runtimeMinutes: episodes.runtimeMinutes,
+			overview: episodes.overview,
+			stillUrl: episodes.stillUrl,
+			seasonId: episodes.seasonId,
+			seasonNumber: seasons.number,
+			// Episodes synced before overviews and stills were stored: none of them has one
+			stale: sql<boolean>`not exists (select 1 from ${episodes} e where e.media_id = ${mediaId}
+				and (e.overview is not null or e.still_url is not null))`
+		})
+		.from(episodes)
+		.leftJoin(seasons, eq(seasons.id, episodes.seasonId))
+		.where(and(eq(episodes.id, episodeId), eq(episodes.mediaId, mediaId)));
+	if (!ep) return null;
+
+	const list = (await seasonList(db, mediaId, viewerId, entry)).flatMap((s) =>
+		s.episodes.map((e) => ({
+			...e,
+			label: episodeLabel({ seasonNumber: s.number, number: e.number })
+		}))
+	);
+	const i = list.findIndex((e) => e.id === episodeId);
+	const [views, [mine], community] = await Promise.all([
+		db
+			.select({ viewedAt: episodeViews.viewedAt })
+			.from(episodeViews)
+			.where(and(eq(episodeViews.userId, viewerId), eq(episodeViews.episodeId, episodeId)))
+			.orderBy(desc(episodeViews.viewedAt)),
+		db
+			.select({ score: episodeRatings.score })
+			.from(episodeRatings)
+			.where(and(eq(episodeRatings.userId, viewerId), eq(episodeRatings.episodeId, episodeId))),
+		episodeRatingSummary(db, episodeId, viewerId)
+	]);
+	const neighbour = (e: (typeof list)[number] | undefined) =>
+		e && { id: e.id, label: e.label, title: e.title };
+	return {
+		...ep,
+		label: episodeLabel(ep),
+		airDate: ep.airDate && shortDate(ep.airDate),
+		aired: !ep.airDate || ep.airDate.getTime() <= Date.now(),
+		seen: list[i]?.seen ?? views.length > 0,
+		seenOn: views.map((v) => shortDate(v.viewedAt)),
+		previous: i > 0 ? neighbour(list[i - 1]) : null,
+		next: i >= 0 ? neighbour(list[i + 1]) : null,
+		myScore: mine?.score ?? null,
+		community
+	};
+}
+
+/** Count and average (out of 100) of the episode's scores that `viewerId` can see. */
+export async function episodeRatingSummary(db: Db, episodeId: number, viewerId: string) {
+	const [r] = await db
+		.select({
+			count: sql<number>`count(*)::int`,
+			average: sql<number | null>`avg(${episodeRatings.score})::float8`
+		})
+		.from(episodeRatings)
+		.innerJoin(episodes, eq(episodes.id, episodeRatings.episodeId))
+		.innerJoin(users, eq(users.id, episodeRatings.userId))
+		// Same visibility as show scores: through the rater's library entry
+		.innerJoin(
+			libraryEntries,
+			and(
+				eq(libraryEntries.userId, episodeRatings.userId),
+				eq(libraryEntries.mediaId, episodes.mediaId)
+			)
+		)
+		.where(and(eq(episodeRatings.episodeId, episodeId), visibleTo(viewerId)));
+	return r;
+}
+
+/**
+ * Sets (score out of 100) or clears (null) the user's score for an episode. Adds the work to the
+ * library, whose entry carries the score's visibility. False when the episode is not this media's.
+ */
+export async function rateEpisode(
+	db: Db,
+	userId: string,
+	mediaId: number,
+	episodeId: number,
+	score: number | null
+): Promise<boolean> {
+	const [ep] = await db
+		.select({ id: episodes.id })
+		.from(episodes)
+		.where(and(eq(episodes.id, episodeId), eq(episodes.mediaId, mediaId)));
+	if (!ep) return false;
+	const mine = and(eq(episodeRatings.userId, userId), eq(episodeRatings.episodeId, episodeId));
+	if (score === null) {
+		await db.delete(episodeRatings).where(mine);
+		return true;
+	}
+	await addToLibrary(db, userId, mediaId);
+	await db
+		.insert(episodeRatings)
+		.values({ userId, episodeId, score })
+		.onConflictDoUpdate({
+			target: [episodeRatings.userId, episodeRatings.episodeId],
+			set: { score, ratedAt: new Date() }
+		});
 	return true;
 }

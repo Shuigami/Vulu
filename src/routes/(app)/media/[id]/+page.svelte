@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
+	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import Avatar from '#lib/components/Avatar.svelte';
 	import Marquee from '#lib/components/Marquee.svelte';
@@ -144,7 +145,8 @@
 	let seasonPick = $state<number | null>(null);
 	$effect(() => {
 		void m.id;
-		seasonPick = null;
+		// Back from an episode page: its season
+		seasonPick = Number(page.url.searchParams.get('saison')) || null;
 	});
 	const season = $derived(
 		data.seasons.find((s) => s.id === seasonPick) ??
@@ -720,7 +722,14 @@
 									>{e.number}</span
 								>
 								<span class="flex min-w-0 flex-1 flex-col">
-									<span class="truncate font-semibold">{e.title ?? `Épisode ${e.number}`}</span>
+									<a
+										href={resolve('/(app)/media/[id]/episodes/[episodeId]', {
+											id: String(m.id),
+											episodeId: String(e.id)
+										})}
+										class="truncate font-semibold text-ink no-underline hover:underline"
+										>{e.title ?? `Épisode ${e.number}`}</a
+									>
 									<span class="text-xs text-muted"
 										>{#if !e.aired}Diffusion le {e.airDate}{:else if e.seen && e.seenOn}Vu le {e.seenOn}{:else}{e.airDate ??
 												''}{/if}</span
