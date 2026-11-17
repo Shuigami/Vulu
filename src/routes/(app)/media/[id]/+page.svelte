@@ -172,13 +172,6 @@
 		s.number === 0
 			? 'Épisodes spéciaux'
 			: `Saison ${s.number}${s.title && s.title !== `Saison ${s.number}` ? ` · ${s.title}` : ''}`;
-	// Each option carries the season's progress, ticked once every aired episode is seen
-	function seasonOption(s: Season) {
-		const n = s.episodes.length;
-		if (!data.user) return `${seasonName(s)} · ${n} épisode${n > 1 ? 's' : ''}`;
-		const aired = s.episodes.filter((e) => e.aired).length;
-		return `${seasonName(s)} · ${s.seen} / ${n} vus${aired && s.seen >= aired ? ' ✓' : ''}`;
-	}
 	let marking = $state(false);
 	async function mark(action: 'episode' | 'season', fields: Record<string, string | number>) {
 		marking = true;
@@ -733,7 +726,7 @@
 									class="field max-w-full cursor-pointer appearance-none pr-10 font-semibold"
 								>
 									{#each data.seasons as s (s.id)}
-										<option value={s.id}>{seasonOption(s)}</option>
+										<option value={s.id}>{seasonName(s)}</option>
 									{/each}
 								</select>
 								<svg
