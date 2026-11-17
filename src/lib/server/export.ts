@@ -2,7 +2,24 @@
 import { and, asc, eq, sql } from 'drizzle-orm';
 import type { MediaType } from '../labels';
 import type { Db } from './db';
-import { activityEvents, libraryEntries, media, mediaExternalIds, users } from './db/schema';
+import {
+	activityEvents,
+	episodeRatings,
+	episodes,
+	libraryEntries,
+	media,
+	mediaExternalIds,
+	seasons,
+	users
+} from './db/schema';
+
+type EpisodeRating = {
+	season: number | null;
+	episode: number;
+	title: string | null;
+	score: number;
+	ratedAt: string;
+};
 
 const ID_PROVIDERS = ['tmdb', 'imdb', 'anilist', 'mal', 'openlibrary', 'isbn13'] as const;
 
@@ -43,7 +60,16 @@ export async function exportData(db: Db, userId: string, type?: MediaType, now =
 			notes: libraryEntries.notes,
 			addedAt: libraryEntries.createdAt,
 			updatedAt: libraryEntries.updatedAt,
-			externalIds: sql<Record<string, string>>`coalesce(${externalIds.ids}, '{}'::jsonb)`
+			externalIds: sql<Record<string, string>>`coalesce(${externalIds.ids}, '{}'::jsonb)`,
+			episodeRatings: sql<EpisodeRating[]>`coalesce((
+				select jsonb_agg(jsonb_build_object('season', ${seasons.number}, 'episode', ${episodes.number},
+					'title', ${episodes.title}, 'score', ${episodeRatings.score}, 'ratedAt', ${episodeRatings.ratedAt})
+					order by ${seasons.number}, ${episodes.number})
+				from ${episodeRatings}
+				join ${episodes} on ${episodes.id} = ${episodeRatings.episodeId}
+				left join ${seasons} on ${seasons.id} = ${episodes.seasonId}
+				where ${episodeRatings.userId} = ${libraryEntries.userId} and ${episodes.mediaId} = ${media.id}
+			), '[]'::jsonb)`
 		})
 		.from(libraryEntries)
 		.innerJoin(media, eq(media.id, libraryEntries.mediaId))
@@ -92,6 +118,7 @@ const CSV_COLUMNS = [
 	'review',
 	'notes',
 	'added_at',
+	'episode_scores_100',
 	...ID_PROVIDERS
 ];
 
@@ -119,6 +146,10 @@ export function entriesCsv(entries: Awaited<ReturnType<typeof exportData>>['entr
 		e.review,
 		e.notes,
 		e.addedAt,
+		// "S1E2=80 S1E3=90" (no season for anime episodes)
+		e.episodeRatings
+			.map((r) => `${r.season === null ? '' : `S${r.season}`}E${r.episode}=${r.score}`)
+			.join(' '),
 		...ID_PROVIDERS.map((p) => e.externalIds[p])
 	]);
 	return '﻿' + [CSV_COLUMNS, ...rows].map((r) => r.map(field).join(',')).join('\r\n') + '\r\n';

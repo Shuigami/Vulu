@@ -5,7 +5,7 @@ import { describeAirDate, episodeLabel, startOfToday, upcomingEpisodes } from '.
 import { staleAiringMedia, storeEpisodes, upsertMedia } from './catalogue';
 import { createDb } from './db';
 import { activityEvents, episodes, episodeViews, libraryEntries, media, users } from './db/schema';
-import { markEpisode, markSeason, seasonList } from './episodes';
+import { episodePage, markEpisode, markSeason, rateEpisode, seasonList } from './episodes';
 import type { ProviderEpisodes, ProviderMedia } from './providers/types';
 
 describe('calendar helpers', () => {
@@ -256,5 +256,57 @@ describe('episodes in the database', () => {
 
 		// Another media's episode is refused
 		expect(await markEpisode(db, userId, await newMedia(10), s1e2, true)).toBe(false);
+	});
+
+	it('builds the episode page and rates episodes with the entry visibility', async () => {
+		const id = await newMedia(11);
+		await storeEpisodes(db, id, {
+			upcomingOnly: false,
+			seasons: [{ number: 1, title: null, airDate: null, episodeCount: 2, posterUrl: null }],
+			episodes: [1, 2].map((n) => ({
+				seasonNumber: 1,
+				number: n,
+				absoluteNumber: n,
+				title: `E${n}`,
+				airDate: new Date('2026-01-01T00:00:00Z'),
+				runtimeMinutes: 40,
+				overview: n === 1 ? 'Synopsis' : null,
+				stillUrl: null
+			}))
+		});
+		const [alice, bob] = [await newUser(), await newUser()];
+		const [e1, e2] = (await seasonList(db, id, alice, null))[0].episodes.map((e) => e.id);
+
+		expect(await rateEpisode(db, alice, id, e1, 80)).toBe(true);
+		await rateEpisode(db, alice, id, e1, 60); // one score per user and episode
+		await rateEpisode(db, bob, id, e1, 100);
+		expect(await rateEpisode(db, alice, await newMedia(12), e1, 50)).toBe(false);
+
+		// The season list carries each episode's visible average
+		const listed = (await seasonList(db, id, alice, null))[0];
+		expect(listed.episodes.map((e) => e.average)).toEqual([80, null]);
+		expect(listed.seen).toBe(0);
+
+		let page = (await episodePage(db, id, e1, alice, null))!;
+		expect(page).toMatchObject({
+			label: 'S1E1',
+			overview: 'Synopsis',
+			stale: false,
+			myScore: 60,
+			previous: null,
+			next: { id: e2, label: 'S1E2' },
+			community: { count: 2, average: 80 }
+		});
+
+		// Bob hides his entry: his score leaves Alice's view, not his own
+		await db.update(libraryEntries).set({ isPrivate: true }).where(eq(libraryEntries.userId, bob));
+		page = (await episodePage(db, id, e1, alice, null))!;
+		expect(page.community).toMatchObject({ count: 1, average: 60 });
+		expect((await episodePage(db, id, e1, bob, null))!.community.count).toBe(2);
+
+		await rateEpisode(db, alice, id, e1, null);
+		expect((await episodePage(db, id, e1, alice, null))!.myScore).toBeNull();
+		expect((await episodePage(db, id, e2, alice, null))!.previous?.id).toBe(e1);
+		expect(await episodePage(db, await newMedia(13), e1, alice, null)).toBeNull();
 	});
 });

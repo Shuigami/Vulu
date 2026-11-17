@@ -207,7 +207,9 @@ export function storeEpisodes(db: Db, mediaId: number, data: ProviderEpisodes): 
 			absoluteNumber: sql`excluded.absolute_number`,
 			title: sql`excluded.title`,
 			airDate: sql`excluded.air_date`,
-			runtimeMinutes: sql`excluded.runtime_minutes`
+			runtimeMinutes: sql`excluded.runtime_minutes`,
+			overview: sql`excluded.overview`,
+			stillUrl: sql`excluded.still_url`
 		};
 		const withSeason = rows.filter((r) => r.seasonId !== null);
 		const withoutSeason = rows.filter((r) => r.seasonId === null);

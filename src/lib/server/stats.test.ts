@@ -2,7 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { inArray } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createDb } from './db';
-import { activityEvents, libraryEntries, media, mediaExternalIds, users } from './db/schema';
+import {
+	activityEvents,
+	episodeRatings,
+	episodes,
+	libraryEntries,
+	media,
+	mediaExternalIds,
+	users
+} from './db/schema';
 import { entriesCsv, exportData } from './export';
 import { parseCsv } from './imports/goodreads';
 import { lastMonths, userStats } from './stats';
@@ -71,7 +79,17 @@ describe('stats and export in the database', () => {
 		expect(stats.perMonth.at(-1)).toMatchObject({ month: '2026-11', counts: { movie: 1 } });
 		expect(stats.perMonth.reduce((n, p) => n + p.counts.movie, 0)).toBe(1);
 
+		// Any media with episodes will do: no season, so the CSV shows "E3"
+		const [ep] = await db
+			.insert(episodes)
+			.values({ mediaId: manga, number: 3, title: 'Trois' })
+			.returning({ id: episodes.id });
+		await db.insert(episodeRatings).values({ userId, episodeId: ep.id, score: 70 });
+
 		const data = await exportData(db, userId, undefined, now);
+		expect(data.entries[1].episodeRatings).toMatchObject([
+			{ season: null, episode: 3, title: 'Trois', score: 70 }
+		]);
 		expect(data.entries).toHaveLength(2);
 		expect(data.history).toHaveLength(3);
 		const mangaOnly = await exportData(db, userId, 'manga', now);
@@ -81,6 +99,7 @@ describe('stats and export in the database', () => {
 			(r) => r.length > 1
 		);
 		const row = Object.fromEntries(header.map((h, i) => [h, lines[0][i]]));
+		expect(lines[1][header.indexOf('episode_scores_100')]).toBe('E3=70');
 		expect(row).toMatchObject({
 			title: `Film, "${run}"`,
 			score_100: '85',

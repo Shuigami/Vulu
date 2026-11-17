@@ -46,6 +46,8 @@ export type ProviderEpisodes = {
 		title: string | null;
 		airDate: Date | null;
 		runtimeMinutes: number | null;
+		overview?: string | null;
+		stillUrl?: string | null; // TMDB only
 	}[];
 	/** True when only upcoming episodes are listed (AniList airing schedule). */
 	upcomingOnly: boolean;
