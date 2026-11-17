@@ -205,6 +205,7 @@
 		if (result?.type !== 'success') return toast('Échec, réessaie.');
 		// A movie stays completed (one more viewing logged); the rest starts over
 		if (r.type !== 'movie') r.entry = { status: 'in_progress', progress: 0 };
+		dialog?.close();
 		toast(
 			r.type === 'manga' || r.type === 'book'
 				? `Bonne relecture de « ${r.title} »`
