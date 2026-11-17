@@ -54,6 +54,15 @@ export const secondaryUnitLabel: Record<MediaType, string | null> = {
 	book: null
 };
 
+/** "Revoir" button and "Revu N fois" counter. */
+export const rewatchLabel: Record<MediaType, { verb: string; done: string }> = {
+	movie: { verb: 'Revoir', done: 'Revu' },
+	tv: { verb: 'Revoir', done: 'Revu' },
+	anime: { verb: 'Revoir', done: 'Revu' },
+	manga: { verb: 'Relire', done: 'Relu' },
+	book: { verb: 'Relire', done: 'Relu' }
+};
+
 export const isMediaType = (v: unknown): v is MediaType => MEDIA_TYPES.includes(v as MediaType);
 export const isEntryStatus = (v: unknown): v is EntryStatus =>
 	ENTRY_STATUSES.includes(v as EntryStatus);

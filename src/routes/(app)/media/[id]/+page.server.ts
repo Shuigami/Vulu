@@ -10,7 +10,13 @@ import {
 	timeAgo
 } from '#lib/server/calendar.ts';
 import { activityEvents, libraryEntries, media, mediaExternalIds } from '#lib/server/db/schema.ts';
-import { addToLibrary, removeEntry, updateEntry, type EntryPatch } from '#lib/server/library.ts';
+import {
+	addToLibrary,
+	removeEntry,
+	rewatchEntry,
+	updateEntry,
+	type EntryPatch
+} from '#lib/server/library.ts';
 import {
 	addToList,
 	createList,
@@ -102,7 +108,9 @@ function parseEntryForm(form: FormData, ratingScale: number): EntryPatch | strin
 	if (!isEntryStatus(status)) return 'Statut invalide.';
 	const progress = int('progress');
 	const progressSecondary = int('progressSecondary');
-	if (progress === null || progressSecondary === null) return 'Progression invalide.';
+	const repeatCount = int('repeatCount');
+	if (progress === null || progressSecondary === null || repeatCount === null)
+		return 'Progression invalide.';
 
 	const rawScore = String(form.get('score') ?? '').replace(',', '.');
 	const scoreValue = Number(rawScore);
@@ -116,6 +124,7 @@ function parseEntryForm(form: FormData, ratingScale: number): EntryPatch | strin
 		status,
 		progress,
 		progressSecondary,
+		repeatCount,
 		score: rawScore === '' ? null : fromScale(scoreValue, ratingScale),
 		startedOn,
 		completedOn,
@@ -172,6 +181,18 @@ export const actions: Actions = {
 		);
 		if (!ok) error(404, 'Entrée introuvable');
 		return { saved: true };
+	},
+
+	// Found by media, so the quick add menu can call it without knowing the entry id
+	rewatch: async ({ params, locals, url }) => {
+		const userId = requireUser(locals, url).id;
+		const [entry] = await db
+			.select({ id: libraryEntries.id })
+			.from(libraryEntries)
+			.where(
+				and(eq(libraryEntries.userId, userId), eq(libraryEntries.mediaId, parseId(params.id)))
+			);
+		if (!entry || !(await rewatchEntry(db, userId, entry.id))) error(404, 'Entrée introuvable');
 	},
 
 	remove: async ({ request, locals, url }) => {

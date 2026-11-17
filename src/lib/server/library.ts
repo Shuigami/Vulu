@@ -13,6 +13,7 @@ export type EntryPatch = Partial<
 		| 'status'
 		| 'progress'
 		| 'progressSecondary'
+		| 'repeatCount'
 		| 'score'
 		| 'startedOn'
 		| 'completedOn'
@@ -21,7 +22,10 @@ export type EntryPatch = Partial<
 		| 'isFavorite'
 		| 'isPrivate'
 	>
->;
+> & {
+	/** Rewatch / reread a completed work: +1 repeat, progress starts over (a movie is logged again). */
+	rewatch?: true;
+};
 
 type MediaInfo = { type: MediaType; totalUnits: number | null; runtimeMinutes: number | null };
 type Event = Pick<EventInsert, 'kind' | 'amount' | 'minutes'>;
@@ -34,15 +38,29 @@ const progressKind = { tv: 'episode', anime: 'episode', manga: 'chapter', book: 
  */
 export function applyChange(
 	current: Entry,
-	patch: EntryPatch,
+	{ rewatch, ...patch }: EntryPatch,
 	m: MediaInfo,
 	today: string
 ): { next: Entry; events: Event[] } {
+	// Only a finished work can be started again; dates then describe the current run
+	const again = rewatch && current.status === 'completed';
+	if (again) {
+		patch.repeatCount = current.repeatCount + 1;
+		if (m.type === 'movie') patch.completedOn = today;
+		else {
+			patch.status = 'in_progress';
+			patch.progress = 0;
+			patch.progressSecondary = 0;
+			patch.startedOn = today;
+			patch.completedOn = null;
+		}
+	}
 	const next = { ...current, ...patch };
 	const total = m.totalUnits ?? null;
 
 	next.progress = Math.max(0, total ? Math.min(next.progress, total) : next.progress);
 	next.progressSecondary = Math.max(0, next.progressSecondary);
+	next.repeatCount = Math.max(0, next.repeatCount);
 
 	// Status follows progress unless the user changed the status in the same edit
 	if (patch.status === undefined && next.progress !== current.progress) {
@@ -71,12 +89,15 @@ export function applyChange(
 				amount: null,
 				minutes: m.type === 'movie' ? m.runtimeMinutes : null
 			});
-		} else if (next.status === 'in_progress' && current.status === 'planned') {
+		} else if (next.status === 'in_progress' && (current.status === 'planned' || again)) {
 			events.push({ kind: 'started', amount: null, minutes: null });
 		} else {
 			events.push({ kind: 'status_changed', amount: null, minutes: null });
 		}
 	}
+	// A movie has no progress: watching it again is one more completion
+	if (again && m.type === 'movie')
+		events.push({ kind: 'completed', amount: null, minutes: m.runtimeMinutes });
 	if (next.score !== null && next.score !== current.score) {
 		events.push({ kind: 'rated', amount: next.score, minutes: null });
 	}
@@ -150,7 +171,8 @@ export async function updateEntry(
 
 		const p = typeof patch === 'function' ? patch(row.entry) : patch;
 		const { next, events } = applyChange(row.entry, p, row, today);
-		const { status, progress, progressSecondary, score, startedOn, completedOn } = next;
+		const { status, progress, progressSecondary, repeatCount, score, startedOn, completedOn } =
+			next;
 		const { notes, review, isFavorite, isPrivate, mediaId } = next;
 		await tx
 			.update(libraryEntries)
@@ -158,6 +180,7 @@ export async function updateEntry(
 				status,
 				progress,
 				progressSecondary,
+				repeatCount,
 				score,
 				startedOn,
 				completedOn,
@@ -186,6 +209,10 @@ export async function updateEntry(
 /** +1 episode / chapter / page, used by the "En cours" page. */
 export const incrementProgress = (db: Db, userId: string, entryId: number) =>
 	updateEntry(db, userId, entryId, (e) => ({ progress: e.progress + 1 }));
+
+/** "Revoir" / "Relire" on a completed entry. */
+export const rewatchEntry = (db: Db, userId: string, entryId: number) =>
+	updateEntry(db, userId, entryId, { rewatch: true });
 
 export async function removeEntry(db: Db, userId: string, entryId: number) {
 	await db
