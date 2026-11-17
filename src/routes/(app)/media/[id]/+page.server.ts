@@ -24,6 +24,7 @@ import {
 	parseListInput,
 	removeFromList
 } from '#lib/server/lists.ts';
+import { markEpisode, markSeason, seasonList } from '#lib/server/episodes.ts';
 import { mediaEntries, ratingSummary } from '#lib/server/social.ts';
 import { fromScale, isEntryStatus } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -53,7 +54,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	};
 	const viewerId = viewerOf(locals);
 	const mine = and(eq(activityEvents.mediaId, id), eq(activityEvents.userId, viewerId));
-	const [ratings, followed, reviews, journal, [time], lists] = await Promise.all([
+	const [ratings, followed, reviews, journal, [time], lists, seasons] = await Promise.all([
 		ratingSummary(db, id, viewerId),
 		mediaEntries(db, id, viewerId, { followedOnly: true, limit: 24 }),
 		mediaEntries(db, id, viewerId, { reviewsOnly: true }),
@@ -73,7 +74,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			.select({ minutes: sum(activityEvents.minutes).mapWith(Number) })
 			.from(activityEvents)
 			.where(mine),
-		listsForMedia(db, viewerId, id)
+		listsForMedia(db, viewerId, id),
+		// Anime episodes come later (#49): AniList only gives the upcoming ones
+		m.type === 'tv' ? seasonList(db, id, viewerId, entry ?? null) : []
 	]);
 	return {
 		media: m,
@@ -85,7 +88,8 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		reviews: reviews.map(({ updatedAt, ...r }) => ({ ...r, when: timeAgo(updatedAt) })),
 		journal: journal.map(({ occurredAt, ...e }) => ({ ...e, when: timeAgo(occurredAt) })),
 		minutesSpent: time?.minutes ?? 0,
-		lists
+		lists,
+		seasons
 	};
 };
 
@@ -193,6 +197,29 @@ export const actions: Actions = {
 				and(eq(libraryEntries.userId, userId), eq(libraryEntries.mediaId, parseId(params.id)))
 			);
 		if (!entry || !(await rewatchEntry(db, userId, entry.id))) error(404, 'Entrée introuvable');
+	},
+
+	episode: async ({ params, request, locals, url }) => {
+		const form = await request.formData();
+		const episodeId = Number(form.get('episodeId'));
+		if (!Number.isInteger(episodeId)) return fail(400);
+		const userId = requireUser(locals, url).id;
+		const ok = await markEpisode(
+			db,
+			userId,
+			parseId(params.id),
+			episodeId,
+			form.get('seen') === 'true'
+		);
+		if (!ok) error(404, 'Épisode introuvable');
+	},
+
+	season: async ({ params, request, locals, url }) => {
+		const seasonId = Number((await request.formData()).get('seasonId'));
+		if (!Number.isInteger(seasonId)) return fail(400);
+		const userId = requireUser(locals, url).id;
+		if (!(await markSeason(db, userId, parseId(params.id), seasonId)))
+			error(404, 'Saison introuvable');
 	},
 
 	remove: async ({ request, locals, url }) => {

@@ -128,6 +128,8 @@ export type UpdateOptions = {
 	 * key was already journaled is skipped (webhooks are often delivered twice).
 	 */
 	dedupKey?: string;
+	/** The episode marked, kept on the progress event. */
+	episodeId?: number;
 };
 
 /**
@@ -197,6 +199,7 @@ export async function updateEntry(
 					...e,
 					userId,
 					mediaId,
+					episodeId: e.kind === 'episode' ? opts.episodeId : undefined,
 					source: opts.source ?? 'manual',
 					dedupKey: opts.dedupKey && `${opts.dedupKey}:${e.kind}`
 				}))
