@@ -5,6 +5,7 @@
 	import Poster from '#lib/components/Poster.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, typePlural } from '#lib/labels.ts';
+	import { byRelevance } from '#lib/relevance.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -12,10 +13,30 @@
 
 	const filterHref = (type?: string) =>
 		`${resolve('search')}?${new URLSearchParams({ q: data.q, ...(type && { type }) })}`;
-	const providerName = { tmdb: 'TMDB', anilist: 'AniList', openlibrary: 'Open Library' } as Record<
-		string,
-		string
-	>;
+	// Provider results arrive later (streamed); both lists then show as one, most relevant first
+	type Remote = Awaited<NonNullable<typeof data.remote>>;
+	let remote = $state<Remote | null>(null);
+	$effect(() => {
+		const pending = data.remote;
+		remote = null;
+		pending?.then((r) => {
+			if (data.remote === pending) remote = r;
+		});
+	});
+	const searching = $derived(!!data.remote && !remote);
+	const results = $derived(
+		byRelevance(data.q, [
+			...data.local.map((m) => ({ ...m, provider: null, externalId: null, key: `local:${m.id}` })),
+			...(remote?.results ?? []).map((r) => ({
+				...r,
+				id: null,
+				key: `${r.provider}:${r.externalId}`
+			}))
+		])
+	);
+	// Per-type counts, only meaningful on "Tous" (a type filter searches that type alone)
+	const count = (type?: string) =>
+		data.type ? null : type ? results.filter((r) => r.type === type).length : results.length;
 </script>
 
 <svelte:head><title>{data.q ? `${data.q} · Recherche` : 'Recherche'} · Vulu</title></svelte:head>
@@ -40,6 +61,9 @@
 						aria-current={data.type === type ? 'page' : undefined}
 					>
 						{type ? typePlural[type] : 'Tous'}
+						{#if count(type) !== null}<span class="font-medium tabular-nums opacity-60"
+								>{count(type)}</span
+							>{/if}
 					</a>
 				{/each}
 			</nav>
@@ -68,90 +92,80 @@
 			</section>
 		{/if}
 
-		{#if data.local.length}
-			<section aria-labelledby="local" class="flex flex-col gap-2">
-				<h2 id="local" class="eyebrow">Dans le catalogue</h2>
+		<section aria-labelledby="results" class="flex flex-col gap-2">
+			<h2 id="results" class="sr-only">Œuvres</h2>
+			{#if results.length}
 				<ul class="flex flex-col gap-2">
-					{#each data.local as m (m.id)}
+					{#each results as r (r.key)}
 						<li class="flex items-center gap-4 card rounded-[14px] py-2.5 pr-3.5 pl-2.5">
-							<Poster src={m.posterUrl} title={m.title} type={m.type} class="w-13 rounded-lg" />
+							<Poster src={r.posterUrl} title={r.title} type={r.type} class="w-13 rounded-lg" />
 							<div class="min-w-0 flex-1">
-								<a
-									href={resolve('/(app)/media/[id]', { id: String(m.id) })}
-									class="text-base font-semibold text-ink no-underline hover:underline">{m.title}</a
-								>
+								{#if r.id}
+									<a
+										href={resolve('/(app)/media/[id]', { id: String(r.id) })}
+										class="text-base font-semibold text-ink no-underline hover:underline"
+										>{r.title}</a
+									>
+								{:else}
+									<p class="text-base font-semibold">{r.title}</p>
+								{/if}
 								<p class="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted">
-									<TypeTag type={m.type} />{m.year ?? ''}
+									<TypeTag type={r.type} />{r.year ?? ''}
 								</p>
+								{#if r.id && data.inLibrary.includes(r.id)}
+									<p class="mt-1 text-[13px] font-semibold text-success">Dans ta bibliothèque</p>
+								{/if}
 							</div>
-							{#if data.inLibrary.includes(m.id)}
-								<span class="text-[13px] font-semibold text-success">Dans ta bibliothèque</span>
-							{:else}
-								<form method="post" action="?/add" use:enhance>
-									<input type="hidden" name="mediaId" value={m.id} />
-									<button class="btn-ghost text-sm">+ Ajouter</button>
+							{#if !(r.id && data.inLibrary.includes(r.id))}
+								<form
+									method="post"
+									action={r.id ? '?/add' : '?/import'}
+									use:enhance={() => {
+										adding = r.key;
+										return async ({ update }) => {
+											await update();
+											adding = null;
+										};
+									}}
+								>
+									{#if r.id}
+										<input type="hidden" name="mediaId" value={r.id} />
+									{:else}
+										<input type="hidden" name="type" value={r.type} />
+										<input type="hidden" name="provider" value={r.provider} />
+										<input type="hidden" name="externalId" value={r.externalId} />
+									{/if}
+									<button
+										disabled={adding !== null}
+										aria-label="Ajouter {r.title} à ma bibliothèque"
+										title="Ajouter à ma bibliothèque"
+										class="btn-ghost size-11 rounded-full px-0"
+										>{#if adding === r.key}<span class="text-xs">…</span>{:else}<svg
+												aria-hidden="true"
+												width="20"
+												height="20"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2.2"
+												stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg
+											>{/if}</button
+									>
 								</form>
 							{/if}
 						</li>
 					{/each}
 				</ul>
-			</section>
-		{/if}
-
-		{#if data.remote}
-			{#await data.remote}
+			{/if}
+			{#if searching}
 				<p class="text-sm text-muted" aria-live="polite">Recherche chez les fournisseurs…</p>
-			{:then remote}
-				{#if remote.results.length}
-					<section aria-labelledby="remote" class="flex flex-col gap-2">
-						<h2 id="remote" class="eyebrow">Pas encore dans le catalogue</h2>
-						<ul class="flex flex-col gap-2">
-							{#each remote.results as r (`${r.provider}:${r.externalId}`)}
-								{@const key = `${r.provider}:${r.externalId}`}
-								<li
-									class="flex items-center gap-4 rounded-[14px] border border-dashed border-line py-2.5 pr-3.5 pl-2.5"
-								>
-									<Poster src={r.posterUrl} title={r.title} type={r.type} class="w-13 rounded-lg" />
-									<div class="min-w-0 flex-1">
-										<p class="text-base font-semibold">{r.title}</p>
-										<p class="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted">
-											<TypeTag type={r.type} />{r.year ? `${r.year} · ` : ''}{providerName[
-												r.provider
-											]}
-										</p>
-									</div>
-									<form
-										method="post"
-										action="?/import"
-										use:enhance={() => {
-											adding = key;
-											return async ({ update }) => {
-												await update();
-												adding = null;
-											};
-										}}
-									>
-										<input type="hidden" name="type" value={r.type} />
-										<input type="hidden" name="provider" value={r.provider} />
-										<input type="hidden" name="externalId" value={r.externalId} />
-										<button disabled={adding !== null} class="btn-ghost text-sm">
-											{adding === key ? 'Ajout…' : '+ Ajouter'}
-										</button>
-									</form>
-								</li>
-							{/each}
-						</ul>
-					</section>
-				{/if}
-				{#if remote.failed}
-					<p class="text-sm text-accent-ink">
-						Certains fournisseurs n’ont pas répondu : des résultats peuvent manquer.
-					</p>
-				{/if}
-				{#if !data.local.length && !remote.results.length && !remote.failed}
-					<p class="text-muted">Aucun résultat pour « {data.q} ».</p>
-				{/if}
-			{/await}
-		{/if}
+			{:else if remote?.failed}
+				<p class="text-sm text-accent-ink">
+					Certains fournisseurs n’ont pas répondu : des résultats peuvent manquer.
+				</p>
+			{:else if !results.length}
+				<p class="text-muted">Aucun résultat pour « {data.q} ».</p>
+			{/if}
+		</section>
 	{/if}
 </div>
