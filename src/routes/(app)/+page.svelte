@@ -30,6 +30,20 @@
 		flip(node, move, {
 			duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 450
 		});
+	const pitches = [
+		{
+			title: 'Une progression, cinq formats',
+			text: 'Épisodes, chapitres, pages : un +1 suffit, le statut et les dates suivent tout seuls.'
+		},
+		{
+			title: 'Ce qui sort, au bon moment',
+			text: 'Le calendrier réunit les prochains épisodes de tout ce que tu suis.'
+		},
+		{
+			title: 'Arrive avec ton historique',
+			text: 'Importe ta bibliothèque en quelques clics, et Jellyfin coche les épisodes pour toi.'
+		}
+	];
 	let pending = $state<number | null>(null);
 	const singular = { épisodes: 'épisode', chapitres: 'chapitre', pages: 'page' } as Record<
 		string,
@@ -50,7 +64,42 @@
 <svelte:head><title>Accueil · Vulu</title></svelte:head>
 
 <div class="flex flex-col gap-3 sm:gap-10">
-	<h1 class="sr-only">Accueil</h1>
+	{#if !data.user}
+		<!-- Signed out: say what Vulu is before the shelves -->
+		<section class="flex flex-col gap-8 pb-4 sm:gap-10 sm:pb-2">
+			<div class="flex max-w-2xl flex-col gap-5">
+				<ul class="flex flex-wrap gap-2" aria-label="Types suivis">
+					{#each MEDIA_TYPES as t (t)}
+						<li><TypeTag type={t} label={typePlural[t]} /></li>
+					{/each}
+				</ul>
+				<h1 class="h1 text-balance">
+					Tout ce que tu regardes et lis, <span class="text-accent-ink">au même endroit.</span>
+				</h1>
+				<p class="text-lg text-muted">
+					Note tes films, avance d’un épisode ou d’un chapitre en un geste, et vois ce qui sort
+					cette semaine pour tout ce que tu suis.
+				</p>
+				<div class="flex flex-wrap items-center gap-3">
+					<a href={resolve('signup')} class="btn-accent px-6">Créer mon compte</a>
+					<a href="#trending" class="btn-ghost">Explorer sans compte</a>
+				</div>
+				<p class="text-[13px] text-muted">
+					Importe ta bibliothèque depuis Letterboxd, MyAnimeList, AniList, Trakt ou Goodreads.
+				</p>
+			</div>
+			<ul class="grid [grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))] gap-4">
+				{#each pitches as p (p.title)}
+					<li class="flex flex-col gap-1.5 card p-5">
+						<h2 class="font-display text-lg font-bold">{p.title}</h2>
+						<p class="text-muted">{p.text}</p>
+					</li>
+				{/each}
+			</ul>
+		</section>
+	{:else}
+		<h1 class="sr-only">Accueil</h1>
+	{/if}
 
 	{#if data.user}
 		<section aria-labelledby="resume" class="flex flex-col gap-2.5 sm:gap-4">
