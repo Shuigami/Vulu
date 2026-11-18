@@ -280,6 +280,16 @@
 						.filter(Boolean)
 						.join(' · ')}
 				</Marquee>
+				{#if data.ratings.count && data.ratings.average !== null}
+					<a href="#members-title" class="flex items-center gap-2 text-sm text-muted no-underline">
+						<span
+							class="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5 font-bold text-accent-ink"
+							><span aria-hidden="true">★</span>
+							{toScale(data.ratings.average, scale)}<span class="sr-only">sur {scale}</span></span
+						>
+						{data.ratings.count} note{data.ratings.count > 1 ? 's' : ''} sur Vulu
+					</a>
+				{/if}
 				{#if extra.genres?.length}
 					<ul class="flex flex-wrap gap-1.5" aria-label="Genres">
 						{#each extra.genres as g (g)}
@@ -387,18 +397,21 @@
 					if (result.type === 'success' && added)
 						toast('Ajouté à ta bibliothèque', () => undoAdd(added.id));
 				}}
-			class="flex flex-wrap items-center gap-x-7 gap-y-4 card rounded-[22px] px-6 py-5"
+			class="flex flex-wrap items-center gap-x-7 gap-y-4 card rounded-[22px] px-6 py-5 max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(3.75rem+env(safe-area-inset-bottom))] max-md:z-30 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:bg-surface/95 max-md:px-4 max-md:py-3 max-md:backdrop-blur"
 		>
-			<div class="flex-[1_1_260px]">
+			<!-- Phones: a bar fixed above the tab bar, so the synopsis stays in view -->
+			<div class="flex-[1_1_260px] max-md:sr-only">
 				<h2 class="h2 text-xl">Ajouter à ma bibliothèque</h2>
 				<p class="text-sm text-muted">Choisis directement où tu en es.</p>
 			</div>
-			<div class="flex flex-wrap gap-2">
-				<button name="status" value="planned" class="btn-accent px-5">{statusLabel.planned}</button>
-				<button name="status" value="in_progress" class="btn-ghost"
+			<div class="flex flex-wrap gap-2 max-md:w-full max-md:flex-nowrap">
+				<button name="status" value="planned" class="btn-accent px-5 max-md:flex-[1.4]"
+					>{statusLabel.planned}</button
+				>
+				<button name="status" value="in_progress" class="btn-ghost max-md:flex-1 max-md:px-2"
 					>{statusLabel.in_progress}</button
 				>
-				<button name="status" value="completed" class="btn-ghost"
+				<button name="status" value="completed" class="btn-ghost max-md:flex-1 max-md:px-2"
 					>Déjà {m.type === 'manga' || m.type === 'book' ? 'lu' : 'vu'}</button
 				>
 			</div>
