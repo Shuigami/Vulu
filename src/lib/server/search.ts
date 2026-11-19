@@ -52,31 +52,32 @@ export function searchMedia(
 export type LocalResult = Awaited<ReturnType<typeof searchMedia>>[number];
 
 /**
- * Provider results for the types searched, through the worker. Results already in the
- * catalogue are dropped (the local search shows them). `failed` is true when a provider
- * could not answer, so the page can say results may be missing.
+ * Provider results for one type, through the worker. Results already in the catalogue are
+ * dropped (the local search shows them). `failed` is true when the provider could not answer,
+ * so the page can say results may be missing.
  */
-export async function searchProviders(
+export async function searchProviderType(
 	db: Db,
 	boss: PgBoss,
 	query: string,
-	type?: MediaType,
+	type: MediaType,
 	signal?: AbortSignal
-): Promise<{ results: SearchResult[]; failed: boolean }> {
-	const types = type ? [type] : MEDIA_TYPES;
-	const settled = await Promise.allSettled(
-		types.map((t) =>
-			requestJob<SearchOutput>(boss, QUEUES.search, { type: t, query }, undefined, signal)
-		)
-	);
-	if (signal?.aborted) return { results: [], failed: false };
-	const results = settled
-		.flatMap((s) => (s.status === 'fulfilled' ? s.value.results : []))
-		.filter((r) => !r.isAdult);
-	const errors = settled.filter((s) => s.status === 'rejected').map((s) => s.reason);
-	for (const err of errors) console.error('[search] provider search failed', err);
-	const failed = errors.length > 0;
-	if (!results.length) return { results, failed };
+): Promise<{ type: MediaType; results: SearchResult[]; failed: boolean }> {
+	let results: SearchResult[];
+	try {
+		({ results } = await requestJob<SearchOutput>(
+			boss,
+			QUEUES.search,
+			{ type, query },
+			undefined,
+			signal
+		));
+	} catch (err) {
+		if (!signal?.aborted) console.error('[search] provider search failed', err);
+		return { type, results: [], failed: !signal?.aborted };
+	}
+	results = results.filter((r) => !r.isAdult);
+	if (!results.length) return { type, results, failed: false };
 
 	const known = await db
 		.select({ provider: mediaExternalIds.provider, externalId: mediaExternalIds.externalId })
@@ -92,5 +93,23 @@ export async function searchProviders(
 			)
 		);
 	const isKnown = new Set(known.map((k) => `${k.provider}:${k.externalId}`));
-	return { results: results.filter((r) => !isKnown.has(`${r.provider}:${r.externalId}`)), failed };
+	return {
+		type,
+		results: results.filter((r) => !isKnown.has(`${r.provider}:${r.externalId}`)),
+		failed: false
+	};
+}
+
+/** All the types searched at once (quick add): waits for every provider. */
+export async function searchProviders(
+	db: Db,
+	boss: PgBoss,
+	query: string,
+	type?: MediaType,
+	signal?: AbortSignal
+): Promise<{ results: SearchResult[]; failed: boolean }> {
+	const parts = await Promise.all(
+		(type ? [type] : MEDIA_TYPES).map((t) => searchProviderType(db, boss, query, t, signal))
+	);
+	return { results: parts.flatMap((p) => p.results), failed: parts.some((p) => p.failed) };
 }

@@ -13,29 +13,33 @@
 
 	const filterHref = (type?: string) =>
 		`${resolve('search')}?${new URLSearchParams({ q: data.q, ...(type && { type }) })}`;
-	// Provider results arrive later (streamed), below the catalogue ones; each part most relevant first
-	type Remote = Awaited<NonNullable<typeof data.remote>>;
-	let remote = $state<Remote | null>(null);
+	// Provider results stream in per type, below the catalogue ones. Each batch is added in arrival
+	// order (most relevant first within it), so what is on screen never moves.
+	type Part = Awaited<NonNullable<typeof data.remote>[number]>;
+	let parts = $state<Part[]>([]);
 	$effect(() => {
 		const pending = data.remote;
-		remote = null;
-		pending?.then((r) => {
-			if (data.remote === pending) remote = r;
-		});
+		parts = [];
+		for (const p of pending ?? [])
+			p.then((part) => {
+				if (data.remote === pending) parts.push(part);
+			});
 	});
-	const searching = $derived(!!data.remote && !remote);
+	const searching = $derived(!!data.remote && parts.length < data.remote.length);
+	// Open Library is often too slow: on "Tous", missing books alone are not worth a warning
+	const failed = $derived(
+		parts.some((p) => p.failed && (p.type !== 'book' || data.type === 'book'))
+	);
 	const results = $derived([
 		...byRelevance(
 			data.q,
 			data.local.map((m) => ({ ...m, provider: null, externalId: null, key: `local:${m.id}` }))
 		),
-		...byRelevance(
-			data.q,
-			(remote?.results ?? []).map((r) => ({
-				...r,
-				id: null,
-				key: `${r.provider}:${r.externalId}`
-			}))
+		...parts.flatMap((p) =>
+			byRelevance(
+				data.q,
+				p.results.map((r) => ({ ...r, id: null, key: `${r.provider}:${r.externalId}` }))
+			)
 		)
 	]);
 	// Per-type counts, only meaningful on "Tous" (a type filter searches that type alone)
@@ -163,11 +167,13 @@
 			{/if}
 			{#if searching}
 				<p class="text-sm text-muted" aria-live="polite">Recherche chez les fournisseurs…</p>
-			{:else if remote?.failed}
+			{/if}
+			{#if !searching && failed}
 				<p class="text-sm text-accent-ink">
 					Certains fournisseurs n’ont pas répondu : des résultats peuvent manquer.
 				</p>
-			{:else if !results.length}
+			{/if}
+			{#if !searching && !results.length}
 				<p class="text-muted">Aucun résultat pour « {data.q} ».</p>
 			{/if}
 		</section>
