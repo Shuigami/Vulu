@@ -76,6 +76,21 @@ describe('AniList client', () => {
 		studios: { nodes: [{ name: 'Madhouse' }] }
 	};
 
+	it('answers an anime and a manga search with one request', async () => {
+		const manga = { ...frieren, id: 118586, type: 'MANGA', format: 'MANGA' };
+		const { fetch, calls } = fakeFetch([
+			['anilist', () => json({ data: { anime: { media: [frieren] }, manga: { media: [manga] } } })]
+		]);
+		const client = createAniListClient({ fetch, limiter: noWait });
+		const [anime, mangas] = await Promise.all([
+			client.search('frieren', 'anime'),
+			client.search('frieren', 'manga')
+		]);
+		expect(calls).toHaveLength(1);
+		expect(anime.map((r) => [r.externalId, r.type])).toEqual([['154587', 'anime']]);
+		expect(mangas.map((r) => [r.externalId, r.type])).toEqual([['118586', 'manga']]);
+	});
+
 	it('maps a media to the catalogue shape', async () => {
 		const { fetch, calls } = fakeFetch([['anilist', () => json({ data: { Media: frieren } })]]);
 		const client = createAniListClient({ fetch, limiter: noWait });

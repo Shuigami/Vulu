@@ -155,6 +155,10 @@ export function createAniListClient(
 ): AniListClient {
 	const fetch = opts.fetch ?? globalThis.fetch;
 	const limiter = opts.limiter ?? createRateLimiter(30);
+	const searches = new Map<
+		string,
+		Promise<Record<'anime' | 'manga', { media: AniMedia[] }> | null>
+	>();
 
 	async function query<T>(gql: string, variables: Record<string, unknown>): Promise<T | null> {
 		const res = await fetchJson<{
@@ -183,13 +187,25 @@ export function createAniListClient(
 		types: ['anime', 'manga'],
 
 		async search(q, type) {
-			const data = await query<{ Page: { media: AniMedia[] } }>(
-				`query ($q: String, $type: MediaType) {
-					Page(perPage: 20) { media(search: $q, type: $type, sort: SEARCH_MATCH) { ${FIELDS} } }
-				}`,
-				{ q, type: aniType(type) }
-			);
-			return (data?.Page.media ?? []).map(toSearchResult);
+			aniType(type);
+			// The page searches anime and manga in two jobs: one request answers both, so the second
+			// does not wait 2 s for the rate limiter
+			let both = searches.get(q);
+			if (!both) {
+				both = query<Record<'anime' | 'manga', { media: AniMedia[] }>>(
+					`query ($q: String) {
+						anime: Page(perPage: 20) { media(search: $q, type: ANIME, sort: SEARCH_MATCH) { ${FIELDS} } }
+						manga: Page(perPage: 20) { media(search: $q, type: MANGA, sort: SEARCH_MATCH) { ${FIELDS} } }
+					}`,
+					{ q }
+				);
+				searches.set(q, both);
+				// shortcut: kept 10 s in memory, enough for the sibling job; the provider cache keeps the rest
+				const forget = () => setTimeout(() => searches.delete(q), 10_000);
+				both.then(forget, forget);
+			}
+			const data = await both;
+			return (data?.[type as 'anime' | 'manga'].media ?? []).map(toSearchResult);
 		},
 
 		async trending(type) {
