@@ -13,7 +13,7 @@
 
 	const filterHref = (type?: string) =>
 		`${resolve('search')}?${new URLSearchParams({ q: data.q, ...(type && { type }) })}`;
-	// Provider results arrive later (streamed); both lists then show as one, most relevant first
+	// Provider results arrive later (streamed), below the catalogue ones; each part most relevant first
 	type Remote = Awaited<NonNullable<typeof data.remote>>;
 	let remote = $state<Remote | null>(null);
 	$effect(() => {
@@ -24,16 +24,20 @@
 		});
 	});
 	const searching = $derived(!!data.remote && !remote);
-	const results = $derived(
-		byRelevance(data.q, [
-			...data.local.map((m) => ({ ...m, provider: null, externalId: null, key: `local:${m.id}` })),
-			...(remote?.results ?? []).map((r) => ({
+	const results = $derived([
+		...byRelevance(
+			data.q,
+			data.local.map((m) => ({ ...m, provider: null, externalId: null, key: `local:${m.id}` }))
+		),
+		...byRelevance(
+			data.q,
+			(remote?.results ?? []).map((r) => ({
 				...r,
 				id: null,
 				key: `${r.provider}:${r.externalId}`
 			}))
-		])
-	);
+		)
+	]);
 	// Per-type counts, only meaningful on "Tous" (a type filter searches that type alone)
 	const count = (type?: string) =>
 		data.type ? null : type ? results.filter((r) => r.type === type).length : results.length;
