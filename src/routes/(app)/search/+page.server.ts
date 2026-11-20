@@ -5,9 +5,9 @@ import { requireUser, viewerId } from '#lib/server/guard.ts';
 import { libraryEntries } from '#lib/server/db/schema.ts';
 import { QUEUES, requestJob, type ImportOutput } from '#lib/server/jobs.ts';
 import { addToLibrary } from '#lib/server/library.ts';
-import { LOCAL_ENOUGH, searchMedia, searchProviders } from '#lib/server/search.ts';
+import { LOCAL_ENOUGH, searchMedia, searchProviderType } from '#lib/server/search.ts';
 import { searchUsers } from '#lib/server/social.ts';
-import { isMediaType } from '#lib/labels.ts';
+import { isMediaType, MEDIA_TYPES } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 const PROVIDERS = ['tmdb', 'anilist', 'openlibrary'] as const;
@@ -39,16 +39,18 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 			).map((e) => e.mediaId)
 		: [];
 
-	// Streamed: local results show at once, provider results when the worker answers.
+	// Streamed: local results show at once, each provider's when the worker answers it.
 	const remote =
 		local.length >= LOCAL_ENOUGH
 			? null
-			: getBoss()
-					.then((boss) => searchProviders(db, boss, q, type))
-					.catch((err) => {
-						console.error('[search] provider search unavailable', err);
-						return { results: [], failed: true };
-					});
+			: (type ? [type] : MEDIA_TYPES).map((t) =>
+					getBoss()
+						.then((boss) => searchProviderType(db, boss, q, t))
+						.catch((err) => {
+							console.error('[search] provider search unavailable', err);
+							return { type: t, results: [], failed: true };
+						})
+				);
 
 	return { q, type, members, local, inLibrary, remote };
 };

@@ -59,7 +59,7 @@ export async function requestJob<O extends object>(
 	if (!id) throw new Error(`Job ${name} was not created`);
 
 	const deadline = Date.now() + timeoutMs;
-	for (let delay = 50; Date.now() < deadline; delay = Math.min(delay * 2, 400)) {
+	for (let delay = 20; Date.now() < deadline; delay = Math.min(delay * 2, 100)) {
 		await new Promise((r) => setTimeout(r, delay));
 		if (signal?.aborted) {
 			await boss.cancel(name, id).catch(() => {});

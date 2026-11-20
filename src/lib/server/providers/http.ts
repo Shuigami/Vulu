@@ -37,15 +37,15 @@ const RETRIES = 3;
 export async function fetchJson<T>(
 	provider: string,
 	url: string,
-	init: RequestInit & { fetch: Fetch; limiter: RateLimiter }
+	init: RequestInit & { fetch: Fetch; limiter: RateLimiter; timeoutMs?: number }
 ): Promise<T | null> {
-	const { fetch: doFetch, limiter, ...request } = init;
+	const { fetch: doFetch, limiter, timeoutMs = 10_000, ...request } = init;
 	for (let attempt = 0; ; attempt++) {
 		await limiter();
 		const res = await doFetch(url, {
 			...request,
 			headers: { 'User-Agent': USER_AGENT, Accept: 'application/json', ...request.headers },
-			signal: AbortSignal.timeout(10_000)
+			signal: AbortSignal.timeout(timeoutMs)
 		});
 		if (res.ok) return (await res.json()) as T;
 		if (res.status === 404) return null;

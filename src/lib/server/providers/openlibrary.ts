@@ -44,12 +44,13 @@ export function createOpenLibraryClient(
 ): ProviderClient {
 	const fetch = opts.fetch ?? globalThis.fetch;
 	const limiter = opts.limiter ?? createRateLimiter(60);
-	const get = <T>(path: string) =>
-		fetchJson<T>('openlibrary', `${BASE}${path}`, { fetch, limiter });
+	const get = <T>(path: string, timeoutMs?: number) =>
+		fetchJson<T>('openlibrary', `${BASE}${path}`, { fetch, limiter, timeoutMs });
 
-	async function searchDocs(q: string, limit: number) {
+	// `timeoutMs`: the search page gives up sooner (Open Library often takes 5-15 s); imports wait
+	async function searchDocs(q: string, limit: number, timeoutMs?: number) {
 		const params = new URLSearchParams({ q, fields: SEARCH_FIELDS, limit: String(limit) });
-		return (await get<{ docs: SearchDoc[] }>(`/search.json?${params}`))?.docs ?? [];
+		return (await get<{ docs: SearchDoc[] }>(`/search.json?${params}`, timeoutMs))?.docs ?? [];
 	}
 
 	return {
@@ -86,7 +87,7 @@ export function createOpenLibraryClient(
 		},
 
 		async search(q) {
-			return (await searchDocs(q, 20)).map(toResult);
+			return (await searchDocs(q, 20, 4000)).map(toResult);
 		},
 
 		async trending() {
