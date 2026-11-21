@@ -87,6 +87,14 @@
 	/* Same width with or without a scrollbar, so centred content never shifts between pages */
 	html {
 		scrollbar-gutter: stable;
+		/* Phones: bars fixed above the tab bar sit at --nav-h and pad by --nav-pad, so they drop to
+		   the bottom when the tab bar hides on scroll (.nav-hidden, set by the app layout) */
+		--nav-h: calc(3.75rem + env(safe-area-inset-bottom));
+		--nav-pad: 0px;
+	}
+	html.nav-hidden {
+		--nav-h: 0px;
+		--nav-pad: env(safe-area-inset-bottom);
 	}
 	body {
 		@apply bg-bg font-sans text-[15px] leading-normal text-ink antialiased;

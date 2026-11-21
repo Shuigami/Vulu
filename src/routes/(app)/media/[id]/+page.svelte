@@ -407,7 +407,7 @@
 					if (result.type === 'success' && added)
 						toast('Ajouté à ta bibliothèque', () => undoAdd(added.id));
 				}}
-			class="flex flex-wrap items-center gap-x-7 gap-y-4 card rounded-[22px] px-6 py-5 max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(3.75rem+env(safe-area-inset-bottom))] max-md:z-30 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:bg-surface/95 max-md:px-4 max-md:py-3 max-md:backdrop-blur"
+			class="flex flex-wrap items-center gap-x-7 gap-y-4 card rounded-[22px] px-6 py-5 max-md:fixed max-md:inset-x-0 max-md:bottom-(--nav-h) max-md:z-30 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:bg-surface/95 max-md:px-4 max-md:pt-3 max-md:pb-[calc(0.75rem+var(--nav-pad))] max-md:backdrop-blur max-md:transition-[bottom]"
 		>
 			<!-- Phones: a bar fixed above the tab bar, so the synopsis stays in view -->
 			<div class="flex-[1_1_260px] max-md:sr-only">
@@ -1140,7 +1140,7 @@
 
 {#if entry && unit && !trackingVisible && (!m.totalUnits || progress < m.totalUnits)}
 	<div
-		class="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 flex items-center gap-3 border-t border-line bg-surface/95 px-4 py-2.5 backdrop-blur md:hidden"
+		class="fixed inset-x-0 bottom-(--nav-h) z-30 flex items-center gap-3 border-t border-line bg-surface/95 px-4 pt-2.5 pb-[calc(0.625rem+var(--nav-pad))] backdrop-blur transition-[bottom] md:hidden"
 	>
 		{#if nextUp}
 			<!-- Shows with episodes: the next one, by name -->

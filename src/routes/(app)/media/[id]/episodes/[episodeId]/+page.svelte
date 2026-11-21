@@ -273,7 +273,7 @@
 {#if data.user}
 	<!-- Phones: seen and next stay under the thumb -->
 	<div
-		class="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 flex items-center gap-2 border-t border-line bg-surface/95 px-4 py-2.5 backdrop-blur md:hidden"
+		class="fixed inset-x-0 bottom-(--nav-h) z-30 flex items-center gap-2 border-t border-line bg-surface/95 px-4 pt-2.5 pb-[calc(0.625rem+var(--nav-pad))] backdrop-blur transition-[bottom] md:hidden"
 	>
 		<button
 			type="button"
