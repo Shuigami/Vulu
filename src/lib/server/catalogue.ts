@@ -14,14 +14,15 @@ import { createAniListClient, type AniListClient } from './providers/anilist';
 import { cached, DAY } from './providers/cache';
 import { createOpenLibraryClient } from './providers/openlibrary';
 import { createTmdbClient } from './providers/tmdb';
-import type {
-	MediaType,
-	Provider,
-	ProviderClient,
-	ProviderEpisodes,
-	ProviderMedia,
-	SearchOptions,
-	SearchResult
+import {
+	yearOf,
+	type MediaType,
+	type Provider,
+	type ProviderClient,
+	type ProviderEpisodes,
+	type ProviderMedia,
+	type SearchOptions,
+	type SearchResult
 } from './providers/types';
 
 /** Source of truth per media type (docs/v1-spec.md), plus the AniList client for list imports. */
@@ -125,7 +126,12 @@ export function upsertMedia(db: Db, data: ProviderMedia): Promise<number> {
 		let mediaId: number;
 		if (existing) {
 			mediaId = existing.id;
-			await tx.update(media).set(values).where(eq(media.id, mediaId));
+			// Merged, so keys Vulu adds (the TMDB match of an anime) survive refreshes
+			const extra = sql`${media.extra} || ${JSON.stringify(values.extra ?? {})}::jsonb`;
+			await tx
+				.update(media)
+				.set({ ...values, extra })
+				.where(eq(media.id, mediaId));
 		} else {
 			[{ id: mediaId }] = await tx.insert(media).values(values).returning({ id: media.id });
 			await tx.insert(mediaExternalIds).values({ mediaId, ...primary, isPrimary: true });
@@ -160,7 +166,10 @@ export async function syncEpisodes(
 		.select({
 			type: media.type,
 			provider: mediaExternalIds.provider,
-			externalId: mediaExternalIds.externalId
+			externalId: mediaExternalIds.externalId,
+			startDate: media.startDate,
+			totalUnits: media.totalUnits,
+			extra: media.extra
 		})
 		.from(media)
 		.innerJoin(
@@ -172,7 +181,124 @@ export async function syncEpisodes(
 	const { name, client } = providers[row.type];
 	if (row.provider !== name || !client.episodes) return null;
 	const data = await client.episodes(row.externalId, row.type);
-	return data ? storeEpisodes(db, mediaId, data) : null;
+	if (!data) return null;
+	if (row.type === 'anime' && row.extra.format !== 'MOVIE' && row.startDate) {
+		try {
+			const full = await tmdbAnimeEpisodes(db, providers, mediaId, {
+				...row,
+				startDate: row.startDate
+			});
+			if (full) data.episodes = mergeSchedule(full, data.episodes);
+		} catch (err) {
+			// TMDB is a complement: without it the AniList schedule is still stored
+			console.warn(`[episodes] TMDB episodes for anime ${mediaId} failed`, err);
+		}
+	}
+	return storeEpisodes(db, mediaId, data);
+}
+
+/**
+ * Every episode of an anime from TMDB (titles, synopses, stills), which AniList does not have.
+ * The match is stored in `extra.tmdbId` (set it by hand to fix a wrong one): one TMDB show spans
+ * several AniList entries, so it cannot be an external id. Null when nothing matches for sure.
+ */
+async function tmdbAnimeEpisodes(
+	db: Db,
+	providers: Providers,
+	mediaId: number,
+	anime: { startDate: string; totalUnits: number | null; extra: Record<string, unknown> }
+): Promise<ProviderEpisodes['episodes'] | null> {
+	const tmdb = providers.tv.client;
+	if (!tmdb.episodes) return null;
+	const tried = new Set<string>();
+	const attempt = async (id: string) => {
+		tried.add(id);
+		const show = await tmdb.episodes!(id, 'tv');
+		return show && matchAnimeEpisodes(show.episodes, anime.startDate, anime.totalUnits);
+	};
+	const known = anime.extra.tmdbId;
+	if (typeof known === 'string') return attempt(known);
+
+	const titles = await db
+		.select({ title: mediaTitles.title })
+		.from(mediaTitles)
+		.where(and(eq(mediaTitles.mediaId, mediaId), inArray(mediaTitles.locale, ['en', 'ja-Latn'])));
+	// Sequels are searched without their marker ("Season 2", ": Part 2") if the full title fails
+	const base = (t: string) =>
+		t
+			.replace(/\b(season|part|cour)\s*\d+\b|\b\d+(st|nd|rd|th)\s+season\b/gi, '')
+			.split(':')[0]
+			.trim();
+	const queries = new Set([...titles.map((t) => t.title), ...titles.map((t) => base(t.title))]);
+	const year = yearOf(anime.startDate)!;
+	for (const q of queries) {
+		if (!q) continue;
+		const results = await searchProvider(db, providers, 'tv', q, { keepAnime: true });
+		// A sequel belongs to a show that started the same year or before
+		const ids = results
+			.filter((r) => r.anime && r.year && r.year <= year && !tried.has(r.externalId))
+			.slice(0, 2)
+			.map((r) => r.externalId);
+		for (const id of ids) {
+			if (tried.size >= 3) break;
+			const found = await attempt(id);
+			if (!found) continue;
+			await db
+				.update(media)
+				.set({ extra: sql`${media.extra} || ${JSON.stringify({ tmdbId: id })}::jsonb` })
+				.where(eq(media.id, mediaId));
+			return found;
+		}
+	}
+	// Tried: pages stop queueing syncs for it; the daily refresh of airing anime still retries
+	await db
+		.update(media)
+		.set({ extra: sql`${media.extra} || '{"tmdbId": null}'::jsonb` })
+		.where(eq(media.id, mediaId));
+	return null;
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The anime's run inside a TMDB show: TMDB seasons rarely follow AniList entries (split cours,
+ * one long season), so the TMDB episodes are numbered across seasons and the run starts at the
+ * one aired on the anime's start date (two days of slack). Null when no episode aired then.
+ */
+export function matchAnimeEpisodes(
+	tmdb: ProviderEpisodes['episodes'],
+	startDate: string,
+	total: number | null
+): ProviderEpisodes['episodes'] | null {
+	const eps = tmdb
+		.filter((e) => e.absoluteNumber !== null)
+		.sort((a, b) => a.absoluteNumber! - b.absoluteNumber!);
+	const start = Date.parse(`${startDate}T00:00:00Z`);
+	const first = eps.findIndex(
+		(e) => e.airDate && Math.abs(new Date(e.airDate).getTime() - start) <= 2 * DAY_MS
+	);
+	if (first < 0) return null;
+	// shortcut: without an AniList episode count (still airing) every later TMDB episode is taken,
+	// which may run into the next AniList entry; cap it if that shows up
+	const run = eps.slice(first, total ? first + total : undefined);
+	return run.map((e, i) => ({ ...e, seasonNumber: null, number: i + 1, absoluteNumber: i + 1 }));
+}
+
+/** TMDB episodes, with AniList's exact air times; scheduled episodes TMDB lacks are kept. */
+export function mergeSchedule(
+	full: ProviderEpisodes['episodes'],
+	schedule: ProviderEpisodes['episodes']
+): ProviderEpisodes['episodes'] {
+	const byNumber = new Map(schedule.map((e) => [e.number, e]));
+	const numbers = new Set(full.map((e) => e.number));
+	return [
+		...full.map((e) => ({
+			...e,
+			airDate: byNumber.get(e.number)?.airDate ?? e.airDate,
+			runtimeMinutes: e.runtimeMinutes ?? byNumber.get(e.number)?.runtimeMinutes ?? null
+		})),
+		...schedule.filter((e) => !numbers.has(e.number))
+	];
 }
 
 const CHUNK = 500; // keeps each insert well under PostgreSQL's parameter limit

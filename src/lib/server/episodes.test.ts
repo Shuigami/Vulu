@@ -2,7 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, inArray } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { describeAirDate, episodeLabel, startOfToday, upcomingEpisodes } from './calendar';
-import { staleAiringMedia, storeEpisodes, upsertMedia } from './catalogue';
+import {
+	matchAnimeEpisodes,
+	staleAiringMedia,
+	storeEpisodes,
+	syncEpisodes,
+	upsertMedia,
+	type Providers
+} from './catalogue';
 import { createDb } from './db';
 import { activityEvents, episodes, episodeViews, libraryEntries, media, users } from './db/schema';
 import { episodePage, markEpisode, markSeason, rateEpisode, seasonList } from './episodes';
@@ -39,6 +46,70 @@ describe('calendar helpers', () => {
 	});
 });
 
+/** A TMDB show: season 1 (3 episodes from 2025-01-05), season 2 (6 from 2026-01-04), weekly. */
+const tmdbShow = (): ProviderEpisodes['episodes'] => {
+	const week = (from: string, i: number) => new Date(Date.parse(from) + i * 7 * 86_400_000);
+	return [
+		{
+			seasonNumber: 0,
+			number: 1,
+			absoluteNumber: null,
+			title: 'OAV',
+			airDate: null,
+			runtimeMinutes: 24
+		},
+		...[1, 2, 3].map((n) => ({
+			seasonNumber: 1,
+			number: n,
+			absoluteNumber: n,
+			title: `S1E${n}`,
+			airDate: week('2025-01-05T00:00:00Z', n - 1),
+			runtimeMinutes: 24,
+			overview: `Synopsis S1E${n}`,
+			stillUrl: null
+		})),
+		...[1, 2, 3, 4, 5, 6].map((n) => ({
+			seasonNumber: 2,
+			number: n,
+			absoluteNumber: 3 + n,
+			title: `S2E${n}`,
+			airDate: week('2026-01-04T00:00:00Z', n - 1),
+			runtimeMinutes: 24,
+			overview: `Synopsis S2E${n}`,
+			stillUrl: null
+		}))
+	];
+};
+
+describe('anime episodes from TMDB', () => {
+	it('starts the run at the episode aired on the start date, across seasons', () => {
+		// A split cour: the second part starts at TMDB S2E4
+		const run = matchAnimeEpisodes(tmdbShow(), '2026-01-26', 3)!;
+		expect(run.map((e) => [e.number, e.absoluteNumber, e.seasonNumber, e.title])).toEqual([
+			[1, 1, null, 'S2E4'],
+			[2, 2, null, 'S2E5'],
+			[3, 3, null, 'S2E6']
+		]);
+		// Without a count, everything after the start; specials never count
+		expect(matchAnimeEpisodes(tmdbShow(), '2025-01-05', null)!.map((e) => e.title)).toEqual([
+			'S1E1',
+			'S1E2',
+			'S1E3',
+			'S2E1',
+			'S2E2',
+			'S2E3',
+			'S2E4',
+			'S2E5',
+			'S2E6'
+		]);
+	});
+
+	it('gives up when no episode aired near the start date', () => {
+		expect(matchAnimeEpisodes(tmdbShow(), '2026-01-08', 3)).toBeNull();
+		expect(matchAnimeEpisodes([], '2026-01-04', 3)).toBeNull();
+	});
+});
+
 // Integration: needs a migrated database (pnpm db:up && pnpm db:migrate).
 describe('episodes in the database', () => {
 	const url = process.env.DATABASE_URL;
@@ -66,6 +137,90 @@ describe('episodes in the database', () => {
 		created.users.push(u.id);
 		return u.id;
 	}
+
+	it('syncs anime episodes from TMDB with the AniList schedule times, and keeps the match', async () => {
+		const searches: string[] = [];
+		const providers = {
+			tv: {
+				name: 'tmdb',
+				client: {
+					search: async (q: string) => {
+						searches.push(q);
+						return [
+							{ externalId: `other-${run}`, anime: false, year: 2025 },
+							{ externalId: `later-${run}`, anime: true, year: 2027 },
+							{ externalId: `tmdb-${run}`, anime: true, year: 2025 }
+						];
+					},
+					episodes: async (id: string) =>
+						id === `tmdb-${run}` ? { upcomingOnly: false, seasons: [], episodes: tmdbShow() } : null
+				}
+			},
+			anime: {
+				name: 'anilist',
+				client: {
+					episodes: async () => ({
+						upcomingOnly: true,
+						seasons: [],
+						episodes: [3, 4].map((n) => ({
+							seasonNumber: null,
+							number: n,
+							absoluteNumber: n,
+							title: null,
+							airDate: new Date(`2027-02-0${n}T15:30:00Z`),
+							runtimeMinutes: 24
+						}))
+					})
+				}
+			}
+		} as unknown as Providers;
+		const anime: ProviderMedia = {
+			media: {
+				type: 'anime',
+				title: `Anime ${run} Season 2 Part 2`,
+				status: 'releasing',
+				startDate: '2026-01-25',
+				totalUnits: 4,
+				extra: { format: 'TV' }
+			},
+			externalIds: [{ provider: 'anilist', externalId: `test-${run}-anime` }],
+			titles: [{ title: `Anime ${run} Season 2 Part 2`, locale: 'en' }]
+		};
+		const id = await upsertMedia(db, anime);
+		created.media.push(id);
+
+		expect(await syncEpisodes(db, providers, id)).toBe(4);
+		expect(searches).toEqual([`anime ${run} season 2 part 2`]);
+		const rows = await db
+			.select()
+			.from(episodes)
+			.where(eq(episodes.mediaId, id))
+			.orderBy(episodes.number);
+		expect(rows.map((e) => [e.number, e.title, e.overview, e.airDate?.toISOString()])).toEqual([
+			[1, 'S2E4', 'Synopsis S2E4', '2026-01-25T00:00:00.000Z'],
+			[2, 'S2E5', 'Synopsis S2E5', '2026-02-01T00:00:00.000Z'],
+			[3, 'S2E6', 'Synopsis S2E6', '2027-02-03T15:30:00.000Z'],
+			[4, null, null, '2027-02-04T15:30:00.000Z'] // TMDB does not list it yet
+		]);
+
+		// The match survives a refresh from AniList and is reused without searching
+		await upsertMedia(db, anime);
+		const [row] = await db.select({ extra: media.extra }).from(media).where(eq(media.id, id));
+		expect(row.extra).toEqual({ format: 'TV', tmdbId: `tmdb-${run}` });
+		await syncEpisodes(db, providers, id);
+		expect(searches).toHaveLength(1);
+
+		// One group without season; marking it covers the aired episodes
+		const userId = await newUser();
+		const [group] = await seasonList(db, id, userId, null);
+		expect([group.id, group.number, group.episodes.length]).toEqual([0, null, 4]);
+		expect(await markSeason(db, userId, id, 0)).toBe(true);
+		const [entry] = await db
+			.select({ progress: libraryEntries.progress })
+			.from(libraryEntries)
+			.where(and(eq(libraryEntries.userId, userId), eq(libraryEntries.mediaId, id)));
+		expect(entry.progress).toBe(2);
+	});
 
 	afterAll(async () => {
 		await db.delete(users).where(inArray(users.id, created.users));

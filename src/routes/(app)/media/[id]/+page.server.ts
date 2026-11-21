@@ -76,11 +76,16 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			.from(activityEvents)
 			.where(mine),
 		listsForMedia(db, viewerId, id),
-		// Anime episodes come later (#49): AniList only gives the upcoming ones
-		m.type === 'tv' ? seasonList(db, id, viewerId, entry ?? null) : []
+		// Anime without a TMDB match only have their upcoming episodes: the progress grid stays
+		m.type === 'tv' || typeof m.extra.tmdbId === 'string'
+			? seasonList(db, id, viewerId, entry ?? null)
+			: []
 	]);
-	// Imports only fetch episodes of airing shows: fetch a finished show's on its first visit
-	if (m.type === 'tv' && !seasons.length)
+	// Imports only fetch episodes of airing shows: fetch a finished show's on its first visit.
+	// Anime never matched on TMDB (`tmdbId` absent; null once tried) get their first try.
+	const animeUntried =
+		m.type === 'anime' && m.extra.format !== 'MOVIE' && !!m.startDate && !('tmdbId' in m.extra);
+	if ((m.type === 'tv' && !seasons.length) || animeUntried)
 		getBoss()
 			.then((boss) =>
 				boss.send(QUEUES.syncEpisodes, { mediaId: id }, { singletonKey: `episodes:${id}` })
