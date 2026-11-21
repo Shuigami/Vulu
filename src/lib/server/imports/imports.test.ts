@@ -287,4 +287,73 @@ describe('runImport', () => {
 		const after = await db.select().from(activityEvents).where(eq(activityEvents.userId, userId));
 		expect(after).toHaveLength(events.length);
 	});
+
+	it('imports the seasons of a franchise as one entry, fetching the franchise once', async () => {
+		const id = (n: number) => `fr-${run}-${n}`;
+		const season = (n: number): ProviderMedia => ({
+			media: { type: 'anime', title: `Season ${run} ${n}`, extra: { format: 'TV' } },
+			externalIds: [{ provider: 'anilist', externalId: id(n) }],
+			titles: []
+		});
+		const asked: string[] = [];
+		const franchise: ProviderMedia = {
+			media: { type: 'anime', title: `Franchise ${run}`, status: 'finished', totalUnits: 24 },
+			externalIds: [1, 2].map((n) => ({ provider: 'anilist' as const, externalId: id(n) })),
+			titles: [],
+			seasons: [1, 2].map((n) => ({
+				number: n,
+				anilistId: id(n),
+				title: null,
+				airDate: null,
+				status: 'finished' as const,
+				episodeCount: 12,
+				posterUrl: null
+			}))
+		};
+		const withAnime = {
+			...providers,
+			anime: {
+				name: 'anilist',
+				client: {
+					get: async (externalId: string) => {
+						asked.push(externalId);
+						return franchise;
+					}
+				}
+			}
+		} as unknown as Providers;
+		const job = (
+			await db.insert(importJobs).values({ userId, source: 'mal' }).returning({ id: importJobs.id })
+		)[0].id;
+		const stats = await runImport(db, withAnime, {
+			importId: job,
+			userId,
+			source: 'mal',
+			items: [
+				{
+					label: 'S2',
+					type: 'anime',
+					media: season(2),
+					entry: { ...entry, status: 'in_progress', progress: 5, score: 90, completedOn: null }
+				},
+				{ label: 'S1', type: 'anime', media: season(1), entry: { ...entry, score: 70 } }
+			]
+		});
+		expect(stats).toEqual({ total: 2, imported: 2, kept: 0, unmatched: 0 });
+		expect(asked).toEqual([id(2)]);
+		const [m] = await db
+			.select({ id: media.id, title: media.title })
+			.from(media)
+			.where(eq(media.title, `Franchise ${run}`));
+		const entries = await db.select().from(libraryEntries).where(eq(libraryEntries.mediaId, m.id));
+		expect(entries).toHaveLength(1);
+		expect(entries[0]).toMatchObject({
+			userId,
+			status: 'in_progress',
+			progress: 17,
+			progressSecondary: 1,
+			score: 90,
+			notes: 'Saison 1 : 70/100'
+		});
+	});
 });
