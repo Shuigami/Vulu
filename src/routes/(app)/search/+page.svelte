@@ -14,6 +14,10 @@
 
 	const filterHref = (type?: string) =>
 		`${resolve('search')}?${new URLSearchParams({ q: data.q, ...(type && { type }) })}`;
+	// Actions keep the query in the URL: a bare `?/name` drops it, and a failure would then show
+	// an empty search instead of its error
+	const actionUrl = (name: string) =>
+		`?${new URLSearchParams({ q: data.q, ...(data.type && { type: data.type }) })}&/${name}`;
 	// Provider results stream in per type, below the catalogue ones. Each batch is added in arrival
 	// order (most relevant first within it), so what is on screen never moves.
 	type Part = Awaited<NonNullable<typeof data.remote>[number]>;
@@ -31,24 +35,29 @@
 	const failed = $derived(
 		parts.some((p) => p.failed && (p.type !== 'book' || data.type === 'book'))
 	);
-	// Weak catalogue matches (no title starting with the query) go after the provider results, at
-	// the bottom, so a stray local title does not sit above the work searched for.
+	// Titles starting with the query come first (catalogue, then providers); weak matches go to
+	// the bottom, so a stray title never sits above the work searched for and new batches only
+	// push weak matches down.
 	const local = $derived(
 		byRelevance(
 			data.q,
 			data.local.map((m) => ({ ...m, provider: null, externalId: null, key: `local:${m.id}` }))
 		)
 	);
-	const strong = $derived(local.filter((m) => relevance(data.q, m.title) >= 2));
-	const results = $derived([
-		...strong,
-		...parts.flatMap((p) =>
+	const remote = $derived(
+		parts.flatMap((p) =>
 			byRelevance(
 				data.q,
 				p.results.map((r) => ({ ...r, id: null, key: `${r.provider}:${r.externalId}` }))
 			)
-		),
-		...local.slice(strong.length)
+		)
+	);
+	const strong = (r: { title: string }) => relevance(data.q, r.title) >= 2;
+	const results = $derived([
+		...local.filter(strong),
+		...remote.filter(strong),
+		...remote.filter((r) => !strong(r)),
+		...local.filter((r) => !strong(r))
 	]);
 	// Per-type counts, only meaningful on "Tous" (a type filter searches that type alone)
 	const count = (type?: string) =>
@@ -122,14 +131,14 @@
 								{#if r.id}
 									<a
 										href={resolve('/(app)/media/[id]', { id: String(r.id) })}
-										class="text-base font-semibold text-ink no-underline after:absolute after:inset-0 after:rounded-[14px] hover:underline"
+										class="text-base font-semibold text-ink no-underline after:absolute after:inset-0 after:z-10 after:rounded-[14px] hover:underline"
 										>{r.title}</a
 									>
 								{:else}
 									<!-- Not in the catalogue yet: imported without adding, then opened -->
 									<form
 										method="post"
-										action="?/open"
+										action={actionUrl('open')}
 										use:enhance={() => {
 											opening.active = true;
 											return async ({ update }) => {
@@ -142,7 +151,8 @@
 										<input type="hidden" name="provider" value={r.provider} />
 										<input type="hidden" name="externalId" value={r.externalId} />
 										<button
-											class="cursor-pointer text-left text-base font-semibold text-ink after:absolute after:inset-0 after:rounded-[14px] hover:underline"
+											data-stretched
+											class="cursor-pointer text-left text-base font-semibold text-ink after:absolute after:inset-0 after:z-10 after:rounded-[14px] hover:underline"
 											>{r.title}</button
 										>
 									</form>
@@ -157,8 +167,8 @@
 							{#if !(r.id && data.inLibrary.includes(r.id))}
 								<form
 									method="post"
-									class="relative"
-									action={r.id ? '?/add' : '?/import'}
+									class="relative z-20"
+									action={actionUrl(r.id ? 'add' : 'import')}
 									use:enhance={() => {
 										adding = r.key;
 										return async ({ update }) => {

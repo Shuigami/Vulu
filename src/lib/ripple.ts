@@ -7,7 +7,8 @@ export function installRipple(doc: Document = document): () => void {
 	const onDown = (e: PointerEvent) => {
 		if (reduced?.matches || e.button !== 0) return;
 		const el = (e.target as Element | null)?.closest<HTMLElement>(TARGETS);
-		if (!el || el.matches(':disabled')) return;
+		// data-stretched: its ::after covers a whole card, which a relative position would shrink
+		if (!el || el.matches(':disabled, [data-stretched]')) return;
 		if (getComputedStyle(el).position === 'static') el.style.position = 'relative';
 		const box = el.getBoundingClientRect();
 		const x = e.clientX - box.left;
