@@ -16,6 +16,7 @@ import {
 	QUEUES,
 	type DiscoverJob,
 	type EpisodesJob,
+	type FranchiseJob,
 	type JellyfinJob,
 	type LibraryImportJob,
 	type ImportJob,
@@ -23,8 +24,9 @@ import {
 	type SearchJob,
 	type SearchOutput
 } from '../lib/server/jobs';
-import { eq } from 'drizzle-orm';
-import { importJobs } from '../lib/server/db/schema';
+import { and, eq } from 'drizzle-orm';
+import { importJobs, mediaExternalIds } from '../lib/server/db/schema';
+import { animeToGroup, mergeSeasons } from '../lib/server/franchises';
 import { resolveMal } from '../lib/server/imports/mal';
 import { resolveTraktAnime } from '../lib/server/imports/trakt';
 import { runImport } from '../lib/server/imports/run';
@@ -83,7 +85,38 @@ await boss.work<ImportJob, ImportOutput>(
 await boss.work<EpisodesJob>(QUEUES.syncEpisodes, { localConcurrency: 2 }, async ([job]) => {
 	const count = await syncEpisodes(db, providers, job.data.mediaId);
 	console.log(`[worker] episodes media ${job.data.mediaId} -> ${count}`);
+	// Works of the franchise's seasons imported before it (or by a list import) join it now
+	const merged = await mergeSeasons(db, job.data.mediaId);
+	if (merged) console.log(`[worker] franchise ${job.data.mediaId} merged ${merged} works`);
 });
+
+// Anime stored as one work per AniList season (before franchises, docs/franchises-anime.md):
+// re-imported as their franchise, episodes synced, then the season works merged into it.
+// One at a time: each costs a request per season against AniList's 30 a minute.
+await boss.work<FranchiseJob>(QUEUES.animeFranchises, async ([job]) => {
+	const { mediaId } = job.data;
+	if (!mediaId) {
+		const ids = await animeToGroup(db);
+		for (const id of ids)
+			await boss.send(QUEUES.animeFranchises, { mediaId: id }, { singletonKey: `franchise:${id}` });
+		return void console.log(`[worker] franchises queued for ${ids.length} anime`);
+	}
+	const [primary] = await db
+		.select({ externalId: mediaExternalIds.externalId })
+		.from(mediaExternalIds)
+		.where(and(eq(mediaExternalIds.mediaId, mediaId), eq(mediaExternalIds.isPrimary, true)));
+	if (!primary) return; // already merged into its franchise by an earlier job
+	const franchiseId = await importMedia(db, providers, 'anime', primary.externalId, {
+		refresh: true
+	});
+	if (!franchiseId) return;
+	await syncEpisodes(db, providers, franchiseId);
+	const merged = await mergeSeasons(db, franchiseId);
+	console.log(`[worker] franchise of media ${mediaId} -> ${franchiseId}, merged ${merged}`);
+});
+// shortcut: queued at every start; once done only anime that cannot form a franchise (side
+// branches, works AniList dropped) are tried again. Stop it if those become many.
+await boss.send(QUEUES.animeFranchises, {}, { singletonKey: 'franchises:all' });
 
 // Daily: re-import airing media that users follow (status, totals), which re-syncs episodes.
 await boss.work(QUEUES.refreshAiring, async () => {
