@@ -171,6 +171,60 @@ describe('scrobble', () => {
 		expect(await entryOf(movie)).toMatchObject({ status: 'completed' });
 	});
 
+	it('finds the season of an anime franchise by its title, else by the Jellyfin season', async () => {
+		const seasonTitle = (n: number) => `Kaiju ${run} Season ${n}`;
+		const kaiju = await add({
+			...work('anime', `test-${run}-k`, [seasonTitle(1), seasonTitle(2)], { totalUnits: 6 }),
+			seasons: [1, 2].map((number) => ({
+				number,
+				anilistId: `test-${run}-k${number}`,
+				title: seasonTitle(number),
+				airDate: null,
+				status: 'finished' as const,
+				episodeCount: 3,
+				posterUrl: null
+			}))
+		});
+		await storeEpisodes(db, kaiju, {
+			upcomingOnly: false,
+			seasons: [1, 2].map((number) => ({
+				number,
+				title: seasonTitle(number),
+				airDate: null,
+				episodeCount: 3,
+				posterUrl: null
+			})),
+			episodes: [1, 2, 3, 4, 5, 6].map((n) => ({
+				seasonNumber: n <= 3 ? 1 : 2,
+				number: n <= 3 ? n : n - 3,
+				absoluteNumber: n,
+				title: null,
+				airDate: null,
+				runtimeMinutes: 24
+			}))
+		});
+		await db.insert(libraryEntries).values({ userId, mediaId: kaiju });
+
+		// One Jellyfin series per AniList entry: "season 1" of the series named like season 2
+		const named = event({
+			seriesName: seasonTitle(2),
+			season: '1',
+			episode: '1',
+			itemId: `k1${run}`
+		});
+		expect(await scrobble(db, noProviders, userId, named)).toBe('updated');
+		expect(await entryOf(kaiju)).toMatchObject({ progress: 4 });
+		// One series for the franchise: its seasons
+		const s2e2 = event({
+			seriesName: seasonTitle(1),
+			season: '2',
+			episode: '2',
+			itemId: `k2${run}`
+		});
+		expect(await scrobble(db, noProviders, userId, s2e2)).toBe('updated');
+		expect(await entryOf(kaiju)).toMatchObject({ progress: 5 });
+	});
+
 	it('reports unknown shows, and keeps the last 20 events on the integration', async () => {
 		const unknown = event({ seriesName: `Nothing like this ${run}`, itemId: `x${run}` });
 		expect(await scrobble(db, noProviders, userId, unknown)).toBe('unmatched');

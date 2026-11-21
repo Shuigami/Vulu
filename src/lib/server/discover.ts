@@ -14,6 +14,12 @@ export type DiscoverItem = SearchResult & { mediaId: number | null; because?: st
 
 const keyOf = (r: { provider: string; externalId: string }) => `${r.provider}:${r.externalId}`;
 
+/** Seasons of one anime franchise are one work here: keep the first of them. */
+const oncePerWork = (items: DiscoverItem[]) =>
+	items.filter(
+		(r, i) => r.mediaId === null || items.findIndex((o) => o.mediaId === r.mediaId) === i
+	);
+
 /** Catalogue ids of provider results already imported, by `provider:externalId`. */
 async function knownIds(db: Db, results: SearchResult[]) {
 	if (!results.length) return new Map<string, number>();
@@ -44,7 +50,9 @@ const discover = (boss: PgBoss, job: DiscoverJob) =>
 export async function trending(db: Db, boss: PgBoss, type: MediaType) {
 	const list = (await discover(boss, { type })).filter((r) => !r.isAdult).slice(0, 18);
 	const known = await knownIds(db, list);
-	return list.map((r): DiscoverItem => ({ ...r, mediaId: known.get(keyOf(r)) ?? null }));
+	return oncePerWork(
+		list.map((r): DiscoverItem => ({ ...r, mediaId: known.get(keyOf(r)) ?? null }))
+	);
 }
 
 /**
@@ -132,10 +140,12 @@ export async function recommendations(db: Db, boss: PgBoss, userId: string) {
 		: [];
 	const ownedIds = new Set(owned.map((o) => o.mediaId));
 	const exclude = new Set([...known].filter(([, id]) => ownedIds.has(id)).map(([key]) => key));
-	return rankRecommendations(lists, exclude).map((r): DiscoverItem => ({
-		...r,
-		mediaId: known.get(keyOf(r)) ?? null
-	}));
+	return oncePerWork(
+		rankRecommendations(lists, exclude).map((r): DiscoverItem => ({
+			...r,
+			mediaId: known.get(keyOf(r)) ?? null
+		}))
+	);
 }
 
 /** Works with the most members active on them this week (imports left out). */

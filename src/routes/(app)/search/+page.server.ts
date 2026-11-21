@@ -2,7 +2,7 @@ import { error, fail, redirect } from '@sveltejs/kit';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db, getBoss } from '#lib/server/app.ts';
 import { requireUser, viewerId } from '#lib/server/guard.ts';
-import { libraryEntries } from '#lib/server/db/schema.ts';
+import { libraryEntries, seasons } from '#lib/server/db/schema.ts';
 import { QUEUES, requestJob, type ImportOutput } from '#lib/server/jobs.ts';
 import { addToLibrary } from '#lib/server/library.ts';
 import { LOCAL_ENOUGH, searchMedia, searchProviderType } from '#lib/server/search.ts';
@@ -102,8 +102,22 @@ export const actions: Actions = {
 
 	/** Same import, without adding: opens the media page (home page suggestions). */
 	open: async ({ request }) => {
-		const mediaId = await importResult(await request.formData());
+		const form = await request.formData();
+		const mediaId = await importResult(form);
 		if (typeof mediaId !== 'number') return mediaId;
-		redirect(303, `/media/${mediaId}`);
+		// An AniList season opens its franchise on that season
+		const [season] =
+			form.get('provider') === 'anilist'
+				? await db
+						.select({ id: seasons.id })
+						.from(seasons)
+						.where(
+							and(
+								eq(seasons.mediaId, mediaId),
+								eq(seasons.anilistId, String(form.get('externalId')))
+							)
+						)
+				: [];
+		redirect(303, `/media/${mediaId}${season ? `?saison=${season.id}` : ''}`);
 	}
 };
