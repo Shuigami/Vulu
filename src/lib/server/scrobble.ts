@@ -1,5 +1,5 @@
 // Turns a "watched" event from a media server into library progress (runs in the worker).
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { importMedia, type Providers } from './catalogue';
 import type { Db } from './db';
 import {
@@ -118,22 +118,33 @@ async function findSeries(db: Db, providers: Providers, userId: string, e: Jelly
 async function episodeTarget(db: Db, mediaId: number, type: string, e: JellyfinEvent) {
 	const number = e.episodeEnd ?? e.episode; // double episodes ("E01-E02") count to the end
 	if (number === null) return null;
-	if (type === 'anime') return { target: number, episodeId: null }; // one AniList entry per season
+	let season = e.season ?? 1;
+	if (type === 'anime') {
+		const list = await db
+			.select({ number: seasons.number, title: seasons.title })
+			.from(seasons)
+			.where(and(eq(seasons.mediaId, mediaId), isNotNull(seasons.anilistId)));
+		// An anime stored before franchises: one AniList entry, its own numbering
+		if (!list.length) return { target: number, episodeId: null };
+		// Libraries with one series per AniList entry name it like the season; otherwise the
+		// Jellyfin season is taken as the franchise season. Season 1 is named like the franchise
+		// itself, so its name tells nothing.
+		const named = list.find(
+			(s) => s.number > 1 && s.title && normalize(s.title) === normalize(e.seriesName ?? '')
+		);
+		if (named) season = named.number;
+	}
 
 	const [row] = await db
 		.select({ id: episodes.id, absolute: episodes.absoluteNumber })
 		.from(episodes)
 		.innerJoin(seasons, eq(seasons.id, episodes.seasonId))
 		.where(
-			and(
-				eq(episodes.mediaId, mediaId),
-				eq(seasons.number, e.season ?? 1),
-				eq(episodes.number, number)
-			)
+			and(eq(episodes.mediaId, mediaId), eq(seasons.number, season), eq(episodes.number, number))
 		);
 	if (row?.absolute) return { target: row.absolute, episodeId: row.id };
 	// Without synced episodes, season 1 numbering is the absolute one
-	return (e.season ?? 1) <= 1 ? { target: number, episodeId: row?.id ?? null } : null;
+	return season <= 1 ? { target: number, episodeId: row?.id ?? null } : null;
 }
 
 const isUniqueViolation = (err: unknown) => {
