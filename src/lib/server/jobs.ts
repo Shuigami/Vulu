@@ -13,7 +13,8 @@ export const QUEUES = {
 	libraryImport: 'library-import',
 	jellyfin: 'jellyfin-event',
 	purgeCache: 'cache-purge',
-	discover: 'provider-discover'
+	discover: 'provider-discover',
+	animeFranchises: 'anime-franchises'
 } as const;
 
 export type SearchJob = { type: MediaType; query: string };
@@ -28,6 +29,8 @@ export type ImportJob = {
 	refresh?: boolean;
 };
 export type EpisodesJob = { mediaId: number };
+/** One anime work to turn into its franchise; without `mediaId`, queues every one left. */
+export type FranchiseJob = { mediaId?: number };
 /** A user's library import; AniList lists are fetched by the worker, CSV rows come parsed. */
 export type LibraryImportJob = { importId: number; userId: string } & (
 	| { source: 'anilist'; userName: string }
