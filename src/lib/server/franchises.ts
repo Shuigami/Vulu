@@ -24,6 +24,7 @@ type Merged = Pick<
 	| 'startedOn'
 	| 'completedOn'
 	| 'review'
+	| 'reviewSpoiler'
 	| 'notes'
 	| 'isFavorite'
 	| 'isPrivate'
@@ -92,6 +93,7 @@ export function mergeEntries(
 		startedOn: dates('startedOn')[0] ?? null,
 		completedOn: status === 'completed' ? (dates('completedOn').at(-1) ?? null) : null,
 		review: join(texts('review')),
+		reviewSpoiler: parts.some((p) => p.entry.reviewSpoiler),
 		notes: join([...texts('notes'), ...(otherScores.length ? [otherScores.join('\n')] : [])]),
 		isFavorite: parts.some((p) => p.entry.isFavorite),
 		isPrivate: parts.some((p) => p.entry.isPrivate)

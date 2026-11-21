@@ -138,7 +138,7 @@ describe('follows and feed', () => {
 		const [me, a, b, c] = [await user('me4'), await user('ra'), await user('rb'), await user('rc')];
 		const film = await movie('R');
 		await watch(me.id, film, { score: 40 });
-		await watch(a.id, film, { score: 100, review: 'Chef-d’œuvre.' });
+		await watch(a.id, film, { score: 100, review: 'Chef-d’œuvre.', reviewSpoiler: true });
 		await watch(b.id, film, { score: 0, review: '  ' });
 		await watch(c.id, film, { score: 85, review: 'Très bien.', isPrivate: true });
 		await follow(db, me.id, b.username);
@@ -154,7 +154,7 @@ describe('follows and feed', () => {
 			[a.username, false]
 		]);
 		const reviews = await mediaEntries(db, film, me.id, { reviewsOnly: true });
-		expect(reviews.map((e) => e.review)).toEqual(['Chef-d’œuvre.']);
+		expect(reviews.map((e) => [e.review, e.reviewSpoiler])).toEqual([['Chef-d’œuvre.', true]]);
 		expect(await mediaEntries(db, film, me.id, { followedOnly: true })).toHaveLength(1);
 	});
 });

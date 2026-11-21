@@ -1,0 +1,1 @@
+ALTER TABLE "library_entries" ADD COLUMN "review_spoiler" boolean DEFAULT false NOT NULL;

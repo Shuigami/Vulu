@@ -916,6 +916,17 @@
 						onchange={save}
 						class="field rounded-2xl px-4 py-3">{entry.review ?? ''}</textarea
 					>
+					<label class="flex items-center gap-2.5 text-sm">
+						<input
+							form="entry"
+							name="reviewSpoiler"
+							type="checkbox"
+							checked={entry.reviewSpoiler}
+							onchange={save}
+							class="size-4 accent-accent"
+						/>
+						Contient des spoilers <span class="text-muted">· masquée chez les autres</span>
+					</label>
 					<details class="card px-5" open={!!entry.notes}>
 						<summary class="flex min-h-13 cursor-pointer items-center font-semibold"
 							>Notes privées <span class="ml-2 font-normal text-muted">· visibles par toi seul</span
@@ -1107,7 +1118,17 @@
 										>{/if}
 									<span class="text-muted">· {r.when}</span>
 								</p>
-								<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
+								{#if r.reviewSpoiler}
+									<details class="mt-1.5">
+										<summary class="cursor-pointer text-sm text-muted"
+											>Contient des spoilers · <span class="text-ink underline">Afficher</span
+											></summary
+										>
+										<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
+									</details>
+								{:else}
+									<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
+								{/if}
 							</div>
 						</li>
 					{/each}

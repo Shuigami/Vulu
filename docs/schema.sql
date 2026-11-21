@@ -212,6 +212,7 @@ CREATE TABLE library_entries (
   started_on          date,
   completed_on        date,
   review              text,
+  review_spoiler      boolean NOT NULL DEFAULT false,  -- critique masquée chez les autres jusqu'au clic
   notes               text,                   -- privées
   is_favorite         boolean NOT NULL DEFAULT false,
   is_private          boolean NOT NULL DEFAULT false,

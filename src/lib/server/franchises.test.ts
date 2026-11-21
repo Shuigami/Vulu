@@ -24,6 +24,7 @@ const entry = (over: Partial<SeasonEntry['entry']> = {}): SeasonEntry['entry'] =
 	startedOn: null,
 	completedOn: null,
 	review: null,
+	reviewSpoiler: false,
 	notes: null,
 	isFavorite: false,
 	isPrivate: false,
