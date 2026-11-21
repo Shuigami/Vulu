@@ -174,6 +174,8 @@ CREATE TABLE seasons (
   air_date       date,
   episode_count  integer,
   poster_url     text,
+  anilist_id     text,                       -- franchises d'anime : une saison = une entrée AniList
+  status         release_status,
   UNIQUE (media_id, number)
 );
 

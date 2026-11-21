@@ -71,6 +71,13 @@
       "when": 1794950775405,
       "tag": "0009_episode_page_and_ratings",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795276336470,
+      "tag": "0010_anime_franchise_seasons",
+      "breakpoints": true
     }
   ]
 }

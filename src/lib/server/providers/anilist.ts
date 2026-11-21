@@ -7,6 +7,7 @@ import {
 	plainText,
 	uniqueTitles,
 	yearOf,
+	type FranchiseSeason,
 	type MediaType,
 	type ProviderClient,
 	type ProviderMedia,
@@ -36,7 +37,12 @@ type AniMedia = {
 	genres: string[] | null;
 	isAdult: boolean;
 	studios: { nodes: { name: string }[] } | null;
-	relations?: { edges: { relationType: string; node: { id: number; format: string | null } }[] };
+	relations?: {
+		edges: {
+			relationType: string;
+			node: { id: number; format: string | null; startDate?: FuzzyDate };
+		}[];
+	};
 };
 
 const FIELDS = `id idMal type format status title { romaji english native } synonyms
@@ -133,7 +139,48 @@ function toProviderMedia(m: AniMedia): ProviderMedia {
 	};
 }
 
+/**
+ * One work for a chain of AniList seasons (docs/franchises-anime.md): the first season's
+ * details, the last one's end, every season's ids and titles.
+ */
+function toFranchise(chain: AniMedia[]): ProviderMedia {
+	const [first, last] = [chain[0], chain.at(-1)!];
+	const base = toProviderMedia(first);
+	const parts = chain.map(toProviderMedia);
+	const counts = chain.map((m) => m.episodes);
+	return {
+		media: {
+			...base.media,
+			endDate: toDate(last.endDate),
+			// A season airing makes the franchise airing; otherwise the last season tells
+			status: chain.some((m) => m.status === 'RELEASING')
+				? 'releasing'
+				: last.status
+					? STATUS[last.status]
+					: null,
+			totalUnits: counts.every((c) => c !== null) ? counts.reduce((a, b) => a! + b!, 0) : null,
+			totalUnitsSecondary: chain.length,
+			isAdult: chain.some((m) => m.isAdult)
+		},
+		externalIds: parts.flatMap((p) => p.externalIds),
+		titles: uniqueTitles(
+			parts.flatMap((p) => p.titles.map((t) => ({ title: t.title, locale: t.locale ?? null })))
+		),
+		seasons: chain.map((m, i): FranchiseSeason => ({
+			number: i + 1,
+			anilistId: String(m.id),
+			title: displayTitle(m),
+			airDate: toDate(m.startDate),
+			status: m.status ? STATUS[m.status] : null,
+			episodeCount: m.episodes,
+			posterUrl: m.coverImage?.large ?? null
+		}))
+	};
+}
+
 export type AniListClient = ProviderClient & {
+	/** Upcoming episodes of several anime, by AniList id (one request). */
+	schedules(ids: string[]): Promise<Map<string, { episode: number; airingAt: number }[]>>;
 	/** Public lists of an AniList user; null when the profile is private or unknown. */
 	userList(userName: string, type: 'anime' | 'manga'): Promise<ImportItem[] | null>;
 	/** AniList media for MyAnimeList ids (50 per request); ids AniList does not know are absent. */
@@ -236,13 +283,67 @@ export function createAniListClient(
 		},
 
 		async get(id, type) {
-			const data = await query<{ Media: AniMedia }>(
-				`query ($id: Int, $type: MediaType) { Media(id: $id, type: $type) { ${DETAIL_FIELDS} } }`,
-				{ id: Number(id), type: aniType(type) }
-			);
-			const m = data?.Media;
+			const fields = `${DETAIL_FIELDS} relations { edges { relationType node { id format startDate { year month day } } } }`;
+			const byId = new Map<number, AniMedia | null>();
+			const load = async (id: number) => {
+				if (!byId.has(id)) {
+					const data = await query<{ Media: AniMedia | null }>(
+						`query ($id: Int, $type: MediaType) { Media(id: $id, type: $type) { ${fields} } }`,
+						{ id, type: aniType(type) }
+					);
+					byId.set(id, data?.Media ?? null);
+				}
+				return byId.get(id)!;
+			};
+			const m = await load(Number(id));
 			if (!m) return null;
-			return toProviderMedia(m);
+			const isSeries = (f: string | null | undefined) => SERIES_FORMATS.includes(f ?? '');
+			if (type !== 'anime' || !isSeries(m.format)) return toProviderMedia(m);
+
+			// Series seasons around it: back through prequels to the first, then sequels in order.
+			// Several series sequels (rare): the earliest is the next season.
+			const next = (s: AniMedia, relation: 'PREQUEL' | 'SEQUEL') =>
+				s.relations?.edges
+					.filter((e) => e.relationType === relation && isSeries(e.node.format))
+					.map((e) => ({ id: e.node.id, date: toDate(e.node.startDate ?? null) ?? '9999' }))
+					.sort((a, b) => a.date.localeCompare(b.date))[0]?.id;
+			let root = m;
+			for (const seen = new Set([m.id]); seen.size < MAX_SEASONS;) {
+				const id = next(root, 'PREQUEL');
+				const prequel = id && !seen.has(id) ? await load(id) : null;
+				if (!prequel) break;
+				seen.add(prequel.id);
+				root = prequel;
+			}
+			const chain = [root];
+			while (chain.length < MAX_SEASONS) {
+				const id = next(chain.at(-1)!, 'SEQUEL');
+				const sequel = id && !chain.some((s) => s.id === id) ? await load(id) : null;
+				if (!sequel) break;
+				chain.push(sequel);
+			}
+			// A side branch of the chain (a second sequel) stays a work of its own
+			return chain.includes(m) ? toFranchise(chain) : toProviderMedia(m);
+		},
+
+		async schedules(ids) {
+			const found = new Map<string, { episode: number; airingAt: number }[]>();
+			if (!ids.length) return found;
+			const data = await query<{
+				Page: {
+					media: {
+						id: number;
+						airingSchedule: { nodes: { episode: number; airingAt: number }[] };
+					}[];
+				};
+			}>(
+				`query ($ids: [Int]) { Page(perPage: 50) { media(id_in: $ids, type: ANIME) {
+					id airingSchedule(notYetAired: true, perPage: 50) { nodes { episode airingAt } }
+				} } }`,
+				{ ids: ids.map(Number) }
+			);
+			for (const m of data?.Page.media ?? []) found.set(String(m.id), m.airingSchedule.nodes);
+			return found;
 		},
 
 		async byMalIds(ids, type) {

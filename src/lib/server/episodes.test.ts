@@ -104,6 +104,17 @@ describe('anime episodes from TMDB', () => {
 		]);
 	});
 
+	it('opens the run with an episode 0 that TMDB files as a special', () => {
+		const show = tmdbShow();
+		show[0].airDate = new Date('2025-12-28T00:00:00Z'); // the special, a week before S2E1
+		const run = matchAnimeEpisodes(show, '2025-12-28', 3)!;
+		expect(run.map((e) => [e.number, e.title])).toEqual([
+			[1, 'OAV'],
+			[2, 'S2E1'],
+			[3, 'S2E2']
+		]);
+	});
+
 	it('gives up when no episode aired near the start date', () => {
 		expect(matchAnimeEpisodes(tmdbShow(), '2026-01-08', 3)).toBeNull();
 		expect(matchAnimeEpisodes([], '2026-01-04', 3)).toBeNull();
@@ -220,6 +231,74 @@ describe('episodes in the database', () => {
 			.from(libraryEntries)
 			.where(and(eq(libraryEntries.userId, userId), eq(libraryEntries.mediaId, id)));
 		expect(entry.progress).toBe(2);
+	});
+
+	it('syncs a franchise season by season, lined up on the TMDB show', async () => {
+		const providers = {
+			tv: {
+				name: 'tmdb',
+				client: {
+					search: async () => [{ externalId: `fr-${run}`, anime: true, year: 2025 }],
+					episodes: async () => ({ upcomingOnly: false, seasons: [], episodes: tmdbShow() })
+				}
+			},
+			anime: { name: 'anilist', client: { episodes: async () => null } },
+			anilist: {
+				schedules: async (ids: string[]) =>
+					new Map([[ids[0], [{ episode: 4, airingAt: Date.parse('2027-02-04T15:30:00Z') / 1000 }]]])
+			}
+		} as unknown as Providers;
+		const season = (number: number, airDate: string, episodeCount: number | null) => ({
+			number,
+			anilistId: `fr-${run}-${number}`,
+			title: `Franchise ${run} ${number}`,
+			airDate,
+			status: episodeCount === null ? ('releasing' as const) : ('finished' as const),
+			episodeCount,
+			posterUrl: null
+		});
+		const id = await upsertMedia(db, {
+			media: {
+				type: 'anime',
+				title: `Franchise ${run}`,
+				status: 'releasing',
+				runtimeMinutes: 23,
+				totalUnitsSecondary: 3
+			},
+			externalIds: [{ provider: 'anilist', externalId: `fr-${run}-1` }],
+			titles: [{ title: `Franchise ${run}`, locale: 'en' }],
+			// Season 2 is the first cour of TMDB's season 2, season 3 the second (still airing)
+			seasons: [
+				season(1, '2025-01-05', 3),
+				season(2, '2026-01-04', 3),
+				season(3, '2026-01-25', null)
+			]
+		});
+		created.media.push(id);
+
+		expect(await syncEpisodes(db, providers, id)).toBe(10);
+		const userId = await newUser();
+		const list = await seasonList(db, id, userId, null);
+		expect(
+			list.map((s) => [s.number, s.episodes.map((e) => `${e.absolute}:${e.number}:${e.title}`)])
+		).toEqual([
+			[1, ['1:1:S1E1', '2:2:S1E2', '3:3:S1E3']],
+			[2, ['4:1:S2E1', '5:2:S2E2', '6:3:S2E3']],
+			[3, ['7:1:S2E4', '8:2:S2E5', '9:3:S2E6', '10:4:null']]
+		]);
+		const [last] = await db
+			.select({ airDate: episodes.airDate, runtime: episodes.runtimeMinutes })
+			.from(episodes)
+			.where(and(eq(episodes.mediaId, id), eq(episodes.absoluteNumber, 10)));
+		expect(last).toEqual({ airDate: new Date('2027-02-04T15:30:00Z'), runtime: 23 });
+
+		// Marking the last episode of season 2 covers everything before it
+		expect(await markSeason(db, userId, id, list[1].id)).toBe(true);
+		const [entry] = await db
+			.select({ progress: libraryEntries.progress })
+			.from(libraryEntries)
+			.where(and(eq(libraryEntries.userId, userId), eq(libraryEntries.mediaId, id)));
+		expect(entry.progress).toBe(6);
 	});
 
 	afterAll(async () => {

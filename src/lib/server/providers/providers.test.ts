@@ -134,6 +134,104 @@ describe('AniList client', () => {
 		]);
 		expect(await createAniListClient({ fetch, limiter: noWait }).get('1', 'anime')).toBeNull();
 	});
+
+	it('chains series seasons into one franchise, films and side branches left out', async () => {
+		const edge = (relationType: string, id: number, format: string, year: number) => ({
+			relationType,
+			node: { id, format, startDate: { year, month: 1, day: 1 } }
+		});
+		const season = (
+			id: number,
+			format: string,
+			year: number,
+			episodes: number | null,
+			edges: unknown[]
+		) => ({
+			...frieren,
+			id,
+			idMal: id + 100,
+			format,
+			status: episodes === null ? 'RELEASING' : 'FINISHED',
+			title: { romaji: `Romaji ${id}`, english: `Show ${id}`, native: null },
+			synonyms: [],
+			startDate: { year, month: 1, day: 1 },
+			endDate: { year, month: 3, day: 1 },
+			episodes,
+			relations: { edges }
+		});
+		const byId: Record<number, unknown> = {
+			1: season(1, 'TV', 2020, 12, [edge('SEQUEL', 2, 'TV', 2021)]),
+			2: season(2, 'TV', 2021, 13, [
+				edge('PREQUEL', 1, 'TV', 2020),
+				edge('SEQUEL', 3, 'MOVIE', 2022),
+				edge('SEQUEL', 5, 'ONA', 2024), // the later of two series sequels: a side branch
+				edge('SEQUEL', 4, 'TV', 2023)
+			]),
+			4: season(4, 'TV', 2023, null, [edge('PREQUEL', 2, 'TV', 2021)]),
+			5: season(5, 'ONA', 2024, 6, [edge('PREQUEL', 2, 'TV', 2021)])
+		};
+		const asked: number[] = [];
+		const fetch: Fetch = async (_url, init) => {
+			const { id } = JSON.parse(String(init?.body)).variables;
+			asked.push(id);
+			return json({ data: { Media: byId[id] } });
+		};
+		const client = createAniListClient({ fetch, limiter: noWait });
+
+		const result = (await client.get('2', 'anime'))!;
+		expect(asked).toEqual([2, 1, 4]);
+		expect(result.media).toMatchObject({
+			title: 'Show 1',
+			startDate: '2020-01-01',
+			endDate: '2023-03-01',
+			status: 'releasing',
+			totalUnits: null, // the last season's count is not known yet
+			totalUnitsSecondary: 3
+		});
+		expect(result.externalIds.map((e) => `${e.provider}:${e.externalId}`)).toEqual([
+			'anilist:1',
+			'mal:101',
+			'anilist:2',
+			'mal:102',
+			'anilist:4',
+			'mal:104'
+		]);
+		expect(result.titles.map((t) => t.title)).toContain('Show 4');
+		expect(result.seasons).toEqual([
+			{
+				number: 1,
+				anilistId: '1',
+				title: 'Show 1',
+				airDate: '2020-01-01',
+				status: 'finished',
+				episodeCount: 12,
+				posterUrl: 'https://img/l.jpg'
+			},
+			{
+				number: 2,
+				anilistId: '2',
+				title: 'Show 2',
+				airDate: '2021-01-01',
+				status: 'finished',
+				episodeCount: 13,
+				posterUrl: 'https://img/l.jpg'
+			},
+			{
+				number: 3,
+				anilistId: '4',
+				title: 'Show 4',
+				airDate: '2023-01-01',
+				status: 'releasing',
+				episodeCount: null,
+				posterUrl: 'https://img/l.jpg'
+			}
+		]);
+
+		// The side branch stays a work of its own
+		const side = (await client.get('5', 'anime'))!;
+		expect(side.seasons).toBeUndefined();
+		expect(side.media.title).toBe('Show 5');
+	});
 });
 
 describe('Open Library client', () => {
