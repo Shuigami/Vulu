@@ -8,13 +8,45 @@
 
 	let hovered = $state(0);
 	const halves = $derived(hovered || rated);
+
+	// Touch: half stars are small, so sliding a finger along the row previews and sets the rating.
+	// A plain tap still goes through the buttons' click.
+	let startX: number | null = null;
+	let dragging = false;
+	let skipClick = false;
+	const halvesAt = (e: PointerEvent) => {
+		const box = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		return Math.min(10, Math.max(1, Math.ceil(((e.clientX - box.left) / box.width) * 10)));
+	};
+	const endDrag = () => {
+		startX = null;
+		dragging = false;
+		hovered = 0;
+	};
 </script>
 
 <div
-	class="flex text-line"
+	class="flex touch-pan-y text-line"
 	role="group"
 	aria-label="Note en étoiles"
-	onmouseleave={() => (hovered = 0)}
+	onpointerleave={(e) => e.pointerType === 'mouse' && (hovered = 0)}
+	onpointerdown={(e) => {
+		skipClick = false;
+		if (e.pointerType !== 'mouse') startX = e.clientX;
+	}}
+	onpointermove={(e) => {
+		if (startX === null || (!dragging && Math.abs(e.clientX - startX) < 8)) return;
+		dragging = true;
+		hovered = halvesAt(e);
+	}}
+	onpointerup={() => {
+		if (dragging) {
+			skipClick = true;
+			if (hovered !== rated) onrate(hovered);
+		}
+		endDrag();
+	}}
+	onpointercancel={endDrag}
 >
 	{#each [1, 2, 3, 4, 5] as i (i)}
 		{@const fill = Math.min(2, Math.max(0, halves - 2 * (i - 1)))}
@@ -41,11 +73,11 @@
 			{#each [2 * i - 1, 2 * i] as h (h)}
 				<button
 					type="button"
-					class="absolute inset-y-0 w-1/2 cursor-pointer rounded {h % 2 ? 'left-0' : 'right-0'}"
+					class="absolute -inset-y-2 w-1/2 cursor-pointer rounded {h % 2 ? 'left-0' : 'right-0'}"
 					aria-label="{String(h / 2).replace('.', ',')} étoile{h >= 4 ? 's' : ''} sur 5"
 					aria-pressed={h === rated}
-					onmouseenter={() => (hovered = h)}
-					onclick={() => onrate(h)}
+					onpointerenter={(e) => e.pointerType === 'mouse' && (hovered = h)}
+					onclick={() => (skipClick ? (skipClick = false) : onrate(h))}
 				></button>
 			{/each}
 		</span>
