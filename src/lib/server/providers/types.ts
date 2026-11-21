@@ -28,6 +28,18 @@ export type ProviderMedia = {
 	/** The first one is the primary id (source of truth for syncs). */
 	externalIds: { provider: Provider; externalId: string }[];
 	titles: Omit<typeof mediaTitles.$inferInsert, 'id' | 'mediaId'>[];
+	/** Anime franchises: the AniList entries chained as seasons 1…N (docs/franchises-anime.md). */
+	seasons?: FranchiseSeason[];
+};
+
+export type FranchiseSeason = {
+	number: number;
+	anilistId: string;
+	title: string | null;
+	airDate: string | null;
+	status: ProviderMedia['media']['status'];
+	episodeCount: number | null;
+	posterUrl: string | null;
 };
 
 /** Seasons and episodes of a TV show or anime, for episode tracking and the calendar. */

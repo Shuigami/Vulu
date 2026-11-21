@@ -271,7 +271,10 @@ export const seasons = pgTable(
 		title: text(),
 		airDate: date(),
 		episodeCount: integer(),
-		posterUrl: text()
+		posterUrl: text(),
+		// Anime franchises: each season is an AniList entry (docs/franchises-anime.md)
+		anilistId: text(),
+		status: releaseStatus()
 	},
 	(t) => [unique('seasons_media_id_number_key').on(t.mediaId, t.number)]
 );

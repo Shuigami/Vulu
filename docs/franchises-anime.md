@@ -35,12 +35,13 @@ Pas de nouvelle table d'œuvre : la franchise est un `media` de type `anime`.
 - **`media_titles`** : les titres de toutes les saisons (« Frieren Season 2 » trouve la franchise en
   recherche locale).
 - **`seasons`** : une ligne par saison AniList, `number` 1…N. Nouvelles colonnes :
-  `anilist_id` (texte, unique), `status`, `start_date`. `title`, `episode_count` et `poster_url`
-  viennent d'AniList.
+  `anilist_id` (texte) et `status`. `title`, `air_date` (date de début), `episode_count` et
+  `poster_url` viennent d'AniList.
 - **`episodes`** : rattachés à leur saison, `number` dans la saison, `absolute_number` cumulé sur
   la franchise. Chaque saison a toujours ses épisodes 1…`episode_count`, même sans TMDB (titre vide) ;
   TMDB (#49) les enrichit, saison par saison, en calant chaque saison sur sa date de début dans le
-  show TMDB commun (`extra.tmdbId` passe de la saison à la franchise). Le planning AniList donne les
+  show TMDB commun (`extra.tmdbId` passe de la saison à la franchise). Un « épisode 0 » qu'AniList compte et que TMDB range en
+  spécial (saison 0) ouvre la saison, suivi des épisodes numérotés. Le planning AniList donne les
   heures exactes. Les épisodes sans saison (#49) disparaissent pour les franchises.
 - `ProviderEpisodes` d'AniList devient : toutes les saisons, avec leurs épisodes.
 
@@ -119,7 +120,7 @@ saisons 2+ ne marchent plus (404) : pas de table de redirection en V1.
 
 ## Découpage proposé (une PR chacun)
 
-1. Schéma (`seasons.anilist_id`, `status`, `start_date`), client AniList (chaîne de saisons),
+1. Schéma (`seasons.anilist_id`, `status`), client AniList (chaîne de saisons),
    import d'une franchise neuve, épisodes par saison (AniList + TMDB). Nouveaux animes seulement.
 2. Job `anime-franchises` : fusion des œuvres et entrées existantes, puis lancement en production.
 3. Imports (AniList, MAL, Trakt) : agrégation par franchise.

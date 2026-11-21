@@ -54,6 +54,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		...describeAirDate(next.airDate!)
 	};
 	const viewerId = viewerOf(locals);
+	const franchise = m.type === 'anime' && !!m.totalUnitsSecondary;
 	const mine = and(eq(activityEvents.mediaId, id), eq(activityEvents.userId, viewerId));
 	const [ratings, followed, reviews, journal, [time], lists, seasons] = await Promise.all([
 		ratingSummary(db, id, viewerId),
@@ -76,8 +77,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 			.from(activityEvents)
 			.where(mine),
 		listsForMedia(db, viewerId, id),
-		// Anime without a TMDB match only have their upcoming episodes: the progress grid stays
-		m.type === 'tv' || typeof m.extra.tmdbId === 'string'
+		// Anime without a TMDB match only have their upcoming episodes: the progress grid stays.
+		// Franchises (AniList seasons chained, docs/franchises-anime.md) always have theirs.
+		m.type === 'tv' || franchise || typeof m.extra.tmdbId === 'string'
 			? seasonList(db, id, viewerId, entry ?? null)
 			: []
 	]);
@@ -85,7 +87,10 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 	// Anime never matched on TMDB (`tmdbId` absent; null once tried) get their first try.
 	const animeUntried =
 		m.type === 'anime' && m.extra.format !== 'MOVIE' && !!m.startDate && !('tmdbId' in m.extra);
-	if ((m.type === 'tv' && !seasons.length) || animeUntried)
+	if (
+		((m.type === 'tv' || (franchise && m.status !== 'announced')) && !seasons.length) ||
+		animeUntried
+	)
 		getBoss()
 			.then((boss) =>
 				boss.send(QUEUES.syncEpisodes, { mediaId: id }, { singletonKey: `episodes:${id}` })

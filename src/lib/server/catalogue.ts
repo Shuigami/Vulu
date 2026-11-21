@@ -1,6 +1,6 @@
 // Catalogue feeding: provider search, import, episodes and refresh, run by the worker
 // (only it calls the APIs).
-import { and, eq, gt, inArray, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import type { Db } from './db';
 import {
 	episodes,
@@ -16,6 +16,7 @@ import { createOpenLibraryClient } from './providers/openlibrary';
 import { createTmdbClient } from './providers/tmdb';
 import {
 	yearOf,
+	type FranchiseSeason,
 	type MediaType,
 	type Provider,
 	type ProviderClient,
@@ -149,6 +150,26 @@ export function upsertMedia(db: Db, data: ProviderMedia): Promise<number> {
 				.values(data.titles.map((t) => ({ mediaId, ...t })))
 				.onConflictDoNothing();
 		}
+		// Anime franchise: one season per AniList entry; their episodes come with syncEpisodes
+		if (data.seasons?.length) {
+			await tx
+				.insert(seasons)
+				.values(data.seasons.map((s) => ({ mediaId, ...s })))
+				.onConflictDoUpdate({
+					target: [seasons.mediaId, seasons.number],
+					set: {
+						anilistId: sql`excluded.anilist_id`,
+						title: sql`excluded.title`,
+						airDate: sql`excluded.air_date`,
+						status: sql`excluded.status`,
+						episodeCount: sql`excluded.episode_count`,
+						posterUrl: sql`excluded.poster_url`
+					}
+				});
+			await tx
+				.delete(seasons)
+				.where(and(eq(seasons.mediaId, mediaId), gt(seasons.number, data.seasons.length)));
+		}
 		return mediaId;
 	});
 }
@@ -169,6 +190,7 @@ export async function syncEpisodes(
 			externalId: mediaExternalIds.externalId,
 			startDate: media.startDate,
 			totalUnits: media.totalUnits,
+			runtimeMinutes: media.runtimeMinutes,
 			extra: media.extra
 		})
 		.from(media)
@@ -180,14 +202,32 @@ export async function syncEpisodes(
 	if (!row || !hasEpisodes(row.type)) return null;
 	const { name, client } = providers[row.type];
 	if (row.provider !== name || !client.episodes) return null;
+	if (row.type === 'anime') {
+		const list = await db
+			.select({
+				number: seasons.number,
+				anilistId: seasons.anilistId,
+				title: seasons.title,
+				airDate: seasons.airDate,
+				status: seasons.status,
+				episodeCount: seasons.episodeCount,
+				posterUrl: seasons.posterUrl
+			})
+			.from(seasons)
+			.where(and(eq(seasons.mediaId, mediaId), isNotNull(seasons.anilistId)))
+			.orderBy(asc(seasons.number));
+		if (list.length)
+			return storeEpisodes(db, mediaId, await franchiseEpisodes(db, providers, mediaId, row, list));
+	}
 	const data = await client.episodes(row.externalId, row.type);
 	if (!data) return null;
 	if (row.type === 'anime' && row.extra.format !== 'MOVIE' && row.startDate) {
 		try {
-			const full = await tmdbAnimeEpisodes(db, providers, mediaId, {
+			const show = await tmdbAnimeShow(db, providers, mediaId, {
 				...row,
 				startDate: row.startDate
 			});
+			const full = show && matchAnimeEpisodes(show, row.startDate, row.totalUnits);
 			if (full) data.episodes = mergeSchedule(full, data.episodes);
 		} catch (err) {
 			// TMDB is a complement: without it the AniList schedule is still stored
@@ -197,12 +237,82 @@ export async function syncEpisodes(
 	return storeEpisodes(db, mediaId, data);
 }
 
+type FranchiseRow = Omit<FranchiseSeason, 'anilistId'> & { anilistId: string | null };
+
 /**
- * Every episode of an anime from TMDB (titles, synopses, stills), which AniList does not have.
- * The match is stored in `extra.tmdbId` (set it by hand to fix a wrong one): one TMDB show spans
- * several AniList entries, so it cannot be an external id. Null when nothing matches for sure.
+ * Episodes of an anime franchise, season by season (docs/franchises-anime.md): numbered from
+ * AniList's counts, with TMDB titles, synopses and stills where a season lines up with the TMDB
+ * show, and AniList's exact times for scheduled ones. Absolute numbers run across seasons.
  */
-async function tmdbAnimeEpisodes(
+async function franchiseEpisodes(
+	db: Db,
+	providers: Providers,
+	mediaId: number,
+	franchise: { runtimeMinutes: number | null; extra: Record<string, unknown> },
+	list: FranchiseRow[]
+): Promise<ProviderEpisodes> {
+	const airing = list.filter((s) => s.status === 'releasing' || s.status === 'announced');
+	const schedules =
+		airing.length && providers.anilist
+			? await providers.anilist.schedules(airing.map((s) => s.anilistId!))
+			: new Map<string, { episode: number; airingAt: number }[]>();
+	let show: ProviderEpisodes['episodes'] | null = null;
+	const first = list[0];
+	if (first.airDate) {
+		try {
+			show = await tmdbAnimeShow(db, providers, mediaId, {
+				startDate: first.airDate,
+				totalUnits: first.episodeCount,
+				extra: franchise.extra
+			});
+		} catch (err) {
+			// TMDB is a complement: without it, episodes are numbered from AniList alone
+			console.warn(`[episodes] TMDB episodes for anime ${mediaId} failed`, err);
+		}
+	}
+
+	const episodes: ProviderEpisodes['episodes'] = [];
+	let absolute = 0;
+	for (const s of list) {
+		const tmdb = new Map(
+			((show && s.airDate && matchAnimeEpisodes(show, s.airDate, s.episodeCount)) || []).map(
+				(e) => [e.number, e]
+			)
+		);
+		const schedule = new Map(
+			(schedules.get(s.anilistId!) ?? []).map((n) => [n.episode, new Date(n.airingAt * 1000)])
+		);
+		// A finished season has its count; an airing one goes as far as TMDB or the schedule
+		const known = Math.max(tmdb.size, ...schedule.keys(), 0);
+		const count =
+			s.status === 'releasing' || s.status === 'announced'
+				? Math.min(known, s.episodeCount ?? known)
+				: (s.episodeCount ?? known);
+		for (let n = 1; n <= count; n++) {
+			const t = tmdb.get(n);
+			episodes.push({
+				seasonNumber: s.number,
+				number: n,
+				absoluteNumber: absolute + n,
+				title: t?.title ?? null,
+				airDate: schedule.get(n) ?? t?.airDate ?? null,
+				runtimeMinutes: t?.runtimeMinutes ?? franchise.runtimeMinutes,
+				overview: t?.overview ?? null,
+				stillUrl: t?.stillUrl ?? null
+			});
+		}
+		absolute += count;
+	}
+	return { upcomingOnly: false, seasons: list, episodes };
+}
+
+/**
+ * Every episode of the TMDB show of an anime (titles, synopses, stills), which AniList does not
+ * have; the show is checked by an episode aired on the anime's start date. The match is stored in
+ * `extra.tmdbId` (set it by hand to fix a wrong one): one TMDB show spans several AniList entries,
+ * so it cannot be an external id. Null when nothing matches for sure.
+ */
+async function tmdbAnimeShow(
 	db: Db,
 	providers: Providers,
 	mediaId: number,
@@ -214,7 +324,9 @@ async function tmdbAnimeEpisodes(
 	const attempt = async (id: string) => {
 		tried.add(id);
 		const show = await tmdb.episodes!(id, 'tv');
-		return show && matchAnimeEpisodes(show.episodes, anime.startDate, anime.totalUnits);
+		return show && matchAnimeEpisodes(show.episodes, anime.startDate, anime.totalUnits)
+			? show.episodes
+			: null;
 	};
 	const known = anime.extra.tmdbId;
 	if (typeof known === 'string') return attempt(known);
@@ -274,13 +386,23 @@ export function matchAnimeEpisodes(
 		.filter((e) => e.absoluteNumber !== null)
 		.sort((a, b) => a.absoluteNumber! - b.absoluteNumber!);
 	const start = Date.parse(`${startDate}T00:00:00Z`);
-	const first = eps.findIndex(
-		(e) => e.airDate && Math.abs(new Date(e.airDate).getTime() - start) <= 2 * DAY_MS
-	);
-	if (first < 0) return null;
+	const time = (e: (typeof eps)[number]) => (e.airDate ? new Date(e.airDate).getTime() : NaN);
+	const near = (e: (typeof eps)[number]) => Math.abs(time(e) - start) <= 2 * DAY_MS;
 	// shortcut: without an AniList episode count (still airing) every later TMDB episode is taken,
 	// which may run into the next AniList entry; cap it if that shows up
-	const run = eps.slice(first, total ? first + total : undefined);
+	const take = (from: number, count: number | null) =>
+		eps.slice(from, count === null ? undefined : from + count);
+	let run: ProviderEpisodes['episodes'];
+	const first = eps.findIndex(near);
+	if (first >= 0) run = take(first, total);
+	else {
+		// An "episode 0" AniList counts and TMDB files as a special: it opens the run, the
+		// numbered episodes of the following week go on
+		const zero = tmdb.find((e) => e.absoluteNumber === null && near(e));
+		const next = eps.findIndex((e) => time(e) > start && time(e) - start <= 9 * DAY_MS);
+		if (!zero || next < 0) return null;
+		run = [zero, ...take(next, total === null ? null : total - 1)];
+	}
 	return run.map((e, i) => ({ ...e, seasonNumber: null, number: i + 1, absoluteNumber: i + 1 }));
 }
 
