@@ -6,7 +6,7 @@
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, typePlural } from '#lib/labels.ts';
 	import { opening } from '#lib/opening.svelte.ts';
-	import { byRelevance } from '#lib/relevance.ts';
+	import { byRelevance, relevance } from '#lib/relevance.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -31,17 +31,24 @@
 	const failed = $derived(
 		parts.some((p) => p.failed && (p.type !== 'book' || data.type === 'book'))
 	);
-	const results = $derived([
-		...byRelevance(
+	// Weak catalogue matches (no title starting with the query) go after the provider results, at
+	// the bottom, so a stray local title does not sit above the work searched for.
+	const local = $derived(
+		byRelevance(
 			data.q,
 			data.local.map((m) => ({ ...m, provider: null, externalId: null, key: `local:${m.id}` }))
-		),
+		)
+	);
+	const strong = $derived(local.filter((m) => relevance(data.q, m.title) >= 2));
+	const results = $derived([
+		...strong,
 		...parts.flatMap((p) =>
 			byRelevance(
 				data.q,
 				p.results.map((r) => ({ ...r, id: null, key: `${r.provider}:${r.externalId}` }))
 			)
-		)
+		),
+		...local.slice(strong.length)
 	]);
 	// Per-type counts, only meaningful on "Tous" (a type filter searches that type alone)
 	const count = (type?: string) =>

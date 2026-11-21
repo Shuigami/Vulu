@@ -19,9 +19,22 @@ export function relevance(query: string, title: string) {
 	return ` ${t} `.includes(` ${q} `) ? 1 : 0;
 }
 
-/** Sorted copy, most relevant first; ties keep their order (providers rank them already). */
+/** Titles of a later season, part or volume ("Season 2", "2nd Season", "Part 2", "II"). */
+const SEQUEL =
+	/\b(season|saison|part|partie|cour|tome|vol|volume) \d+\b|\b\d+(st|nd|rd|th) season\b| (ii|iii|iv)$/;
+export const isSequel = (title: string) => SEQUEL.test(normalize(title));
+
+/**
+ * Sorted copy, most relevant first, then works before their sequels; other ties keep their
+ * order (providers rank them already).
+ */
 export const byRelevance = <T extends { title: string }>(query: string, items: T[]) =>
 	items
-		.map((item, i) => ({ item, i, r: relevance(query, item.title) }))
-		.sort((a, b) => b.r - a.r || a.i - b.i)
+		.map((item, i) => ({
+			item,
+			i,
+			r: relevance(query, item.title),
+			sequel: +isSequel(item.title)
+		}))
+		.sort((a, b) => b.r - a.r || a.sequel - b.sequel || a.i - b.i)
 		.map((x) => x.item);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { byRelevance, relevance } from './relevance';
+import { byRelevance, isSequel, relevance } from './relevance';
 
 describe('relevance', () => {
 	it('ranks exact, prefix, whole word, then other matches', () => {
@@ -18,5 +18,27 @@ describe('relevance', () => {
 				items.map((title) => ({ title }))
 			).map((i) => i.title)
 		).toEqual(['Frieren', 'Frieren 2', 'Kleine Frieren auch im Sommer', 'Sousou no Frieren']);
+	});
+
+	it('puts a work before its sequels on ties', () => {
+		const items = [
+			'Frieren: Beyond Journey’s End Season 2',
+			'Sousou no Frieren 3rd Season',
+			'Frieren: Beyond Journey’s End',
+			'Frieren Part 2'
+		];
+		expect(
+			byRelevance(
+				'frieren',
+				items.map((title) => ({ title }))
+			).map((i) => i.title)
+		).toEqual([
+			'Frieren: Beyond Journey’s End',
+			'Frieren: Beyond Journey’s End Season 2',
+			'Frieren Part 2',
+			'Sousou no Frieren 3rd Season'
+		]);
+		expect(isSequel('Rocky II')).toBe(true);
+		expect(isSequel('Part of the World')).toBe(false);
 	});
 });
