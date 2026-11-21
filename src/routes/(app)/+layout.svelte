@@ -72,6 +72,23 @@
 		searchUi.open = false;
 	});
 
+	// Phones: the tab bar slides away while scrolling down and comes back on the way up
+	let navHidden = $state(false);
+	let lastY = 0;
+	function onScroll() {
+		const y = scrollY;
+		if (Math.abs(y - lastY) < 10) return;
+		navHidden = y > lastY && y > 80;
+		lastY = y;
+	}
+	$effect(() => {
+		void page.url.pathname;
+		navHidden = false;
+	});
+	$effect(() => {
+		document.documentElement.classList.toggle('nav-hidden', navHidden);
+	});
+
 	async function signOut() {
 		await authClient.signOut();
 		await invalidateAll();
@@ -80,6 +97,7 @@
 </script>
 
 <svelte:window
+	onscroll={onScroll}
 	onclick={(e) => {
 		if (menu?.open && !e.composedPath().includes(menu)) menu.open = false;
 	}}
@@ -265,7 +283,9 @@
 	aria-label="Navigation principale"
 	class="fixed inset-x-0 bottom-0 z-40 grid {data.user
 		? 'grid-cols-5'
-		: 'grid-cols-4'} border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+		: 'grid-cols-4'} border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur transition-transform md:hidden {navHidden
+		? 'translate-y-[calc(100%+1.5rem)]'
+		: ''}"
 >
 	{#each links.slice(0, 2) as link (link.href)}{@render navLink(link)}{/each}
 	{#if data.user}
