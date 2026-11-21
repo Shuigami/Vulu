@@ -114,13 +114,13 @@ async function franchiseEntry(
 	// While a season airs, how many episodes aired is unknown: nothing gets completed
 	const finished =
 		counted && list.every((s) => s.status === 'finished' || s.status === 'cancelled');
-	// Favourite and private stay false, their defaults: the sources do not carry them
+	// Favourite, private and spoiler stay false, their defaults: the sources do not carry them
 	return mergeEntries(
 		parts.map((p) => ({
 			season: p.season,
 			offset: starts.get(p.season) ?? 0,
 			count: list.find((s) => s.number === p.season)?.count ?? 0,
-			entry: { ...p.entry, isFavorite: false, isPrivate: false }
+			entry: { ...p.entry, isFavorite: false, isPrivate: false, reviewSpoiler: false }
 		})),
 		{ aired: finished ? end : 0, total: counted ? end : 0, seasonEnds }
 	);

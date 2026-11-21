@@ -276,6 +276,7 @@ export function mediaEntries(
 			status: libraryEntries.status,
 			score: libraryEntries.score,
 			review: libraryEntries.review,
+			reviewSpoiler: libraryEntries.reviewSpoiler,
 			updatedAt: libraryEntries.updatedAt,
 			followed
 		})

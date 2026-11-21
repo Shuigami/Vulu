@@ -323,6 +323,7 @@ export const libraryEntries = pgTable(
 		startedOn: date(),
 		completedOn: date(),
 		review: text(),
+		reviewSpoiler: boolean().notNull().default(false), // others see the review hidden until clicked
 		notes: text(),
 		isFavorite: boolean().notNull().default(false),
 		isPrivate: boolean().notNull().default(false),

@@ -26,6 +26,7 @@ const entry = (over: Partial<typeof libraryEntries.$inferSelect> = {}) => ({
 	startedOn: null,
 	completedOn: null,
 	review: null,
+	reviewSpoiler: false,
 	notes: null,
 	isFavorite: false,
 	isPrivate: false,

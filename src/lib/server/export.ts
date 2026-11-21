@@ -57,6 +57,7 @@ export async function exportData(db: Db, userId: string, type?: MediaType, now =
 			isFavorite: libraryEntries.isFavorite,
 			isPrivate: libraryEntries.isPrivate,
 			review: libraryEntries.review,
+			reviewSpoiler: libraryEntries.reviewSpoiler,
 			notes: libraryEntries.notes,
 			addedAt: libraryEntries.createdAt,
 			updatedAt: libraryEntries.updatedAt,
