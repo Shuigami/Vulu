@@ -104,7 +104,10 @@
 		:where(button, label:has(> input:is([type='checkbox'], [type='radio']))) {
 			transition: transform 120ms ease-out;
 		}
-		:where(button:not(:disabled), label:has(> input:is([type='checkbox'], [type='radio']))):active {
+		:where(
+			button:not(:disabled, [data-stretched]),
+			label:has(> input:is([type='checkbox'], [type='radio']))
+		):active {
 			transform: scale(0.95);
 		}
 	}
