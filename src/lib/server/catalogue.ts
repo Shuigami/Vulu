@@ -240,7 +240,7 @@ async function tmdbAnimeEpisodes(
 			.slice(0, 2)
 			.map((r) => r.externalId);
 		for (const id of ids) {
-			if (tried.size >= 3) return null;
+			if (tried.size >= 3) break;
 			const found = await attempt(id);
 			if (!found) continue;
 			await db
@@ -250,6 +250,11 @@ async function tmdbAnimeEpisodes(
 			return found;
 		}
 	}
+	// Tried: pages stop queueing syncs for it; the daily refresh of airing anime still retries
+	await db
+		.update(media)
+		.set({ extra: sql`${media.extra} || '{"tmdbId": null}'::jsonb` })
+		.where(eq(media.id, mediaId));
 	return null;
 }
 

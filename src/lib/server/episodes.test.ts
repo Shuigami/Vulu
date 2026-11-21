@@ -209,6 +209,17 @@ describe('episodes in the database', () => {
 		expect(row.extra).toEqual({ format: 'TV', tmdbId: `tmdb-${run}` });
 		await syncEpisodes(db, providers, id);
 		expect(searches).toHaveLength(1);
+
+		// One group without season; marking it covers the aired episodes
+		const userId = await newUser();
+		const [group] = await seasonList(db, id, userId, null);
+		expect([group.id, group.number, group.episodes.length]).toEqual([0, null, 4]);
+		expect(await markSeason(db, userId, id, 0)).toBe(true);
+		const [entry] = await db
+			.select({ progress: libraryEntries.progress })
+			.from(libraryEntries)
+			.where(and(eq(libraryEntries.userId, userId), eq(libraryEntries.mediaId, id)));
+		expect(entry.progress).toBe(2);
 	});
 
 	afterAll(async () => {

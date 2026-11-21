@@ -159,7 +159,10 @@
 		for (const s of data.seasons)
 			for (const e of s.episodes)
 				if (e.absolute !== null && e.aired && !e.seen)
-					return { ...e, label: `S${s.number}E${e.number}` };
+					return {
+						...e,
+						label: s.number === null ? `Ép. ${e.number}` : `S${s.number}E${e.number}`
+					};
 		return null;
 	});
 	// "Everything seen": the last aired numbered episode, which covers all those before it
@@ -173,9 +176,11 @@
 		});
 	type Season = (typeof data.seasons)[number];
 	const seasonName = (s: Season) =>
-		s.number === 0
-			? 'Épisodes spéciaux'
-			: `Saison ${s.number}${s.title && s.title !== `Saison ${s.number}` ? ` · ${s.title}` : ''}`;
+		s.number === null
+			? 'Tous les épisodes'
+			: s.number === 0
+				? 'Épisodes spéciaux'
+				: `Saison ${s.number}${s.title && s.title !== `Saison ${s.number}` ? ` · ${s.title}` : ''}`;
 	let marking = $state(false);
 	async function mark(action: 'episode' | 'season', fields: Record<string, string | number>) {
 		marking = true;
@@ -771,7 +776,7 @@
 									stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg
 								>
 							</label>
-						{:else}
+						{:else if season.number !== null}
 							<h3 class="font-semibold">{seasonName(season)}</h3>
 						{/if}
 						{#if data.user}
@@ -795,9 +800,13 @@
 							class="btn-ghost self-start text-sm"
 							disabled={marking}
 							onclick={() => mark('season', { seasonId: season.id })}
-							>Marquer {season.number === 0
-								? 'les épisodes spéciaux'
-								: `la saison ${season.number}`} comme vue</button
+							>Marquer {season.number === null
+								? 'tous les épisodes diffusés'
+								: season.number === 0
+									? 'les épisodes spéciaux'
+									: `la saison ${season.number}`} comme vu{season.number === null
+								? 's'
+								: 'e'}</button
 						>
 					{/if}
 					<ol

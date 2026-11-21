@@ -235,7 +235,9 @@
 	{#if ep.season && ep.season.episodes.length > 1}
 		<section aria-labelledby="season-strip" class="flex flex-col gap-3">
 			<div class="flex items-baseline justify-between gap-3">
-				<h2 id="season-strip" class="h2 text-xl">Dans cette saison</h2>
+				<h2 id="season-strip" class="h2 text-xl">
+					{ep.seasonNumber === null ? 'Épisodes' : 'Dans cette saison'}
+				</h2>
 				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query on a resolved path -->
 				<a href={backHref} class="text-sm font-semibold">Tous les épisodes</a>
 			</div>

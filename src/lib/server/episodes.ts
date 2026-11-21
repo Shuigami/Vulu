@@ -1,7 +1,7 @@
-// Episodes by season and per-episode tracking (TV shows). Progress stays the single counter
+// Episodes by season and per-episode tracking (TV shows, and anime as one group without season). Progress stays the single counter
 // of library_entries: marking an episode means "seen up to here" (its absolute number).
 // episode_views only add dates, and track specials, which have no absolute number.
-import { and, asc, desc, eq, gt, gte, inArray, lte, max, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lte, max, or, sql } from 'drizzle-orm';
 import type { Db } from './db';
 import {
 	episodeRatings,
@@ -21,7 +21,10 @@ type Entry = { progress: number; startedOn: string | null } | null;
 const sinceRun = (startedOn: string | null) =>
 	startedOn ? gte(episodeViews.viewedAt, new Date(`${startedOn}T00:00:00Z`)) : undefined;
 
-/** Seasons (specials last) with their episodes and, for a viewer with an entry, what they saw. */
+/**
+ * Seasons (specials last) with their episodes and, for a viewer with an entry, what they saw.
+ * Anime episodes have no season: they come as one group, id 0 and number null.
+ */
 export async function seasonList(db: Db, mediaId: number, userId: string, entry: Entry) {
 	const rows = await db
 		.select({
@@ -38,7 +41,7 @@ export async function seasonList(db: Db, mediaId: number, userId: string, entry:
 			seenAt: max(episodeViews.viewedAt)
 		})
 		.from(episodes)
-		.innerJoin(seasons, eq(seasons.id, episodes.seasonId))
+		.leftJoin(seasons, eq(seasons.id, episodes.seasonId))
 		.leftJoin(
 			episodeViews,
 			and(
@@ -58,7 +61,7 @@ export async function seasonList(db: Db, mediaId: number, userId: string, entry:
 	const progress = entry?.progress ?? 0;
 	const list: {
 		id: number;
-		number: number;
+		number: number | null;
 		title: string | null;
 		seen: number;
 		episodes: {
@@ -78,9 +81,10 @@ export async function seasonList(db: Db, mediaId: number, userId: string, entry:
 	}[] = [];
 	for (const r of rows) {
 		let s = list.at(-1);
-		if (s?.id !== r.seasonId)
+		const seasonId = r.seasonId ?? 0;
+		if (s?.id !== seasonId)
 			list.push(
-				(s = { id: r.seasonId, number: r.season, title: r.seasonTitle, seen: 0, episodes: [] })
+				(s = { id: seasonId, number: r.season, title: r.seasonTitle, seen: 0, episodes: [] })
 			);
 		// Numbered episodes follow the counter; specials only have their views
 		const seen = !!entry && (r.absolute ? r.absolute <= progress : !!r.seenAt);
@@ -186,7 +190,7 @@ export async function markEpisode(
 	return true;
 }
 
-/** Marks every aired episode of a season seen (specials: each one gets a view). */
+/** Marks every aired episode of a season (0: anime episodes) seen (specials: each one gets a view). */
 export async function markSeason(db: Db, userId: string, mediaId: number, seasonId: number) {
 	const aired = await db
 		.select({ id: episodes.id, absolute: episodes.absoluteNumber })
@@ -194,7 +198,7 @@ export async function markSeason(db: Db, userId: string, mediaId: number, season
 		.where(
 			and(
 				eq(episodes.mediaId, mediaId),
-				eq(episodes.seasonId, seasonId),
+				seasonId ? eq(episodes.seasonId, seasonId) : isNull(episodes.seasonId),
 				or(sql`${episodes.airDate} is null`, lte(episodes.airDate, new Date()))
 			)
 		)
@@ -245,7 +249,7 @@ export async function episodePage(
 		}))
 	);
 	const i = list.findIndex((e) => e.id === episodeId);
-	const season = all.find((s) => s.id === ep.seasonId);
+	const season = all.find((s) => s.id === (ep.seasonId ?? 0));
 	const [views, [mine], community] = await Promise.all([
 		db
 			.select({ viewedAt: episodeViews.viewedAt })
