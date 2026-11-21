@@ -5,6 +5,7 @@
 	import Poster from '#lib/components/Poster.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, typePlural } from '#lib/labels.ts';
+	import { opening } from '#lib/opening.svelte.ts';
 	import { byRelevance } from '#lib/relevance.ts';
 	import type { PageProps } from './$types';
 
@@ -105,17 +106,39 @@
 			{#if results.length}
 				<ul class="flex flex-col gap-2">
 					{#each results as r (r.key)}
-						<li class="flex items-center gap-4 card rounded-[14px] py-2.5 pr-3.5 pl-2.5">
+						<!-- The title's ::after covers the card, so the whole card opens the work -->
+						<li
+							class="relative flex items-center gap-4 card rounded-[14px] py-2.5 pr-3.5 pl-2.5 hover:border-muted"
+						>
 							<Poster src={r.posterUrl} title={r.title} type={r.type} class="w-13 rounded-lg" />
 							<div class="min-w-0 flex-1">
 								{#if r.id}
 									<a
 										href={resolve('/(app)/media/[id]', { id: String(r.id) })}
-										class="text-base font-semibold text-ink no-underline hover:underline"
+										class="text-base font-semibold text-ink no-underline after:absolute after:inset-0 after:rounded-[14px] hover:underline"
 										>{r.title}</a
 									>
 								{:else}
-									<p class="text-base font-semibold">{r.title}</p>
+									<!-- Not in the catalogue yet: imported without adding, then opened -->
+									<form
+										method="post"
+										action="?/open"
+										use:enhance={() => {
+											opening.active = true;
+											return async ({ update }) => {
+												await update();
+												opening.active = false;
+											};
+										}}
+									>
+										<input type="hidden" name="type" value={r.type} />
+										<input type="hidden" name="provider" value={r.provider} />
+										<input type="hidden" name="externalId" value={r.externalId} />
+										<button
+											class="cursor-pointer text-left text-base font-semibold text-ink after:absolute after:inset-0 after:rounded-[14px] hover:underline"
+											>{r.title}</button
+										>
+									</form>
 								{/if}
 								<p class="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-muted">
 									<TypeTag type={r.type} />{r.year ?? ''}
@@ -127,6 +150,7 @@
 							{#if !(r.id && data.inLibrary.includes(r.id))}
 								<form
 									method="post"
+									class="relative"
 									action={r.id ? '?/add' : '?/import'}
 									use:enhance={() => {
 										adding = r.key;
