@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Meta from '#lib/components/Meta.svelte';
 	import { tick } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -212,7 +213,11 @@
 	const zoneLabel = 'text-[13px] text-muted';
 </script>
 
-<svelte:head><title>{m.title} · Vulu</title></svelte:head>
+<Meta
+	title={year ? `${m.title} (${year})` : m.title}
+	description={m.overview}
+	image={m.posterUrl}
+/>
 
 <svelte:window
 	onscroll={closeMenu}

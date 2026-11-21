@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Meta from '#lib/components/Meta.svelte';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
@@ -42,7 +43,11 @@
 	}
 </script>
 
-<svelte:head><title>{list.name} · Vulu</title></svelte:head>
+<Meta
+	title={list.name}
+	description={`Liste de ${list.displayName || list.username} · ${list.items.length} ${list.items.length > 1 ? 'œuvres' : 'œuvre'}${list.description ? ` · ${list.description}` : ''}`}
+	image={list.items.find((i) => i.posterUrl)?.posterUrl}
+/>
 
 <div class="flex flex-col gap-9">
 	<div class="flex flex-col gap-3">

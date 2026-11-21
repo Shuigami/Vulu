@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Meta from '#lib/components/Meta.svelte';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import ActivityFeed from '#lib/components/ActivityFeed.svelte';
@@ -12,11 +13,17 @@
 	const p = $derived(data.profile);
 	const name = $derived(p.user.displayName || p.user.username);
 	const scale = $derived(data.ratingScale);
+	const completedCount = $derived(p.completed.reduce((n, c) => n + c.count, 0));
 	const list = (which: 'followers' | 'following') =>
 		resolve('/(app)/u/[username]/[which]', { username: p.user.username, which });
 </script>
 
-<svelte:head><title>{name} · Vulu</title></svelte:head>
+<Meta
+	title={name}
+	description={`@${p.user.username} · ${p.followers} ${p.followers > 1 ? 'abonnés' : 'abonné'} · ${completedCount} ${completedCount > 1 ? 'œuvres terminées' : 'œuvre terminée'}`}
+	image={p.user.avatarUrl}
+	type="profile"
+/>
 
 <div class="flex flex-col gap-12">
 	<section class="flex flex-wrap items-center gap-x-6 gap-y-4">
