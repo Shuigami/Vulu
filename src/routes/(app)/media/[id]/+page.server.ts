@@ -26,7 +26,7 @@ import {
 	removeFromList
 } from '#lib/server/lists.ts';
 import { markEpisode, markSeason, seasonList } from '#lib/server/episodes.ts';
-import { mediaEntries, ratingSummary } from '#lib/server/social.ts';
+import { likeReview, mediaEntries, ratingSummary } from '#lib/server/social.ts';
 import { fromScale, isEntryStatus } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -161,6 +161,13 @@ function parseEntryForm(form: FormData, ratingScale: number): EntryPatch | strin
 }
 
 export const actions: Actions = {
+	like: async ({ request, locals, url }) => {
+		const form = await request.formData();
+		const entryId = Number(form.get('entryId'));
+		if (!Number.isInteger(entryId) || entryId <= 0) return fail(400);
+		if (!(await likeReview(db, requireUser(locals, url).id, entryId, form.get('like') === 'true')))
+			return fail(404);
+	},
 	toggleList: async ({ params, request, locals, url }) => {
 		const form = await request.formData();
 		const listId = Number(form.get('listId'));

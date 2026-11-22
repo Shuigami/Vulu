@@ -407,6 +407,22 @@ export const follows = pgTable(
 	]
 );
 
+// Likes on written reviews (a review is the library entry's `review`)
+export const reviewLikes = pgTable(
+	'review_likes',
+	{
+		userId: userRef(),
+		entryId: bigint({ mode: 'number' })
+			.notNull()
+			.references(() => libraryEntries.id, { onDelete: 'cascade' }),
+		createdAt: createdAt()
+	},
+	(t) => [
+		primaryKey({ name: 'review_likes_pkey', columns: [t.userId, t.entryId] }),
+		index('review_likes_entry_idx').on(t.entryId)
+	]
+);
+
 // ---------------------------------------------------------------------------
 // Custom lists
 // ---------------------------------------------------------------------------

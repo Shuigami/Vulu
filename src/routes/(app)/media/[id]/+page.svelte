@@ -1237,6 +1237,29 @@
 									{:else}
 										<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
 									{/if}
+									<form method="post" action="?/like" use:enhance class="mt-2">
+										<input type="hidden" name="entryId" value={r.entryId} />
+										<input type="hidden" name="like" value={String(!r.liked)} />
+										<button
+											aria-pressed={r.liked}
+											aria-label={r.liked ? 'Je n’aime plus' : 'J’aime'}
+											class="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-2 text-sm {r.liked
+												? 'text-anime'
+												: 'text-muted hover:text-ink'}"
+											><svg
+												aria-hidden="true"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												stroke="currentColor"
+												stroke-width="2"
+												class={r.liked ? 'fill-current' : 'fill-none'}
+												><path
+													d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"
+												></path></svg
+											>{#if r.likes}<span class="tabular-nums">{r.likes}</span>{/if}</button
+										>
+									</form>
 								</div>
 							</li>
 						{/each}
