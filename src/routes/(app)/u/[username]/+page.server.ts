@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import { db } from '#lib/server/app.ts';
 import { requireUser, viewerId as viewerOf } from '#lib/server/guard.ts';
 import { listsOf } from '#lib/server/lists.ts';
+import { RECAP_YEAR } from '#lib/server/recap.ts';
 import { feed, feedView, follow, profileByUsername, unfollow } from '#lib/server/social.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -13,7 +14,7 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		feed(db, { viewerId, userId: profile.user.id, limit: 20 }),
 		listsOf(db, profile.user.id, viewerId)
 	]);
-	return { profile, activity: feedView(items), lists };
+	return { profile, activity: feedView(items), lists, recapYear: RECAP_YEAR };
 };
 
 export const actions: Actions = {

@@ -26,7 +26,7 @@ import {
 	removeFromList
 } from '#lib/server/lists.ts';
 import { markEpisode, markSeason, seasonList } from '#lib/server/episodes.ts';
-import { mediaEntries, ratingSummary } from '#lib/server/social.ts';
+import { likeReview, mediaEntries, ratingSummary } from '#lib/server/social.ts';
 import { fromScale, isEntryStatus } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -36,7 +36,7 @@ const parseId = (raw: string) => {
 	return id;
 };
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const id = parseId(params.id);
 	const [m] = await db.select().from(media).where(eq(media.id, id));
 	if (!m) error(404, 'Œuvre introuvable');
@@ -107,7 +107,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		journal: journal.map(({ occurredAt, ...e }) => ({ ...e, when: timeAgo(occurredAt) })),
 		minutesSpent: time?.minutes ?? 0,
 		lists,
-		seasons
+		seasons,
+		// Shared link of someone's entry: the preview shows their card (checked by the card itself)
+		by: url.searchParams.get('par')?.slice(0, 30) ?? null
 	};
 };
 
@@ -159,6 +161,13 @@ function parseEntryForm(form: FormData, ratingScale: number): EntryPatch | strin
 }
 
 export const actions: Actions = {
+	like: async ({ request, locals, url }) => {
+		const form = await request.formData();
+		const entryId = Number(form.get('entryId'));
+		if (!Number.isInteger(entryId) || entryId <= 0) return fail(400);
+		if (!(await likeReview(db, requireUser(locals, url).id, entryId, form.get('like') === 'true')))
+			return fail(404);
+	},
 	toggleList: async ({ params, request, locals, url }) => {
 		const form = await request.formData();
 		const listId = Number(form.get('listId'));

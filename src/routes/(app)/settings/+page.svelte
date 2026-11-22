@@ -23,20 +23,23 @@
 		const side = Math.min(bitmap.width, bitmap.height);
 		const canvas = document.createElement('canvas');
 		canvas.width = canvas.height = 256;
-		canvas
-			.getContext('2d')!
-			.drawImage(
-				bitmap,
-				(bitmap.width - side) / 2,
-				(bitmap.height - side) / 2,
-				side,
-				side,
-				0,
-				0,
-				256,
-				256
-			);
-		const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/webp', 0.85));
+		const ctx = canvas.getContext('2d')!;
+		// JPEG has no transparency: a transparent PNG gets a white background, not black
+		ctx.fillStyle = '#fff';
+		ctx.fillRect(0, 0, 256, 256);
+		ctx.drawImage(
+			bitmap,
+			(bitmap.width - side) / 2,
+			(bitmap.height - side) / 2,
+			side,
+			side,
+			0,
+			0,
+			256,
+			256
+		);
+		// JPEG, not WebP: share cards (resvg) cannot draw WebP avatars
+		const blob = await new Promise<Blob | null>((r) => canvas.toBlob(r, 'image/jpeg', 0.88));
 		if (!blob) return;
 		const files = new DataTransfer();
 		files.items.add(new File([blob], 'avatar', { type: blob.type }));

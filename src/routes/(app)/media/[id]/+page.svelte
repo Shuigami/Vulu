@@ -11,6 +11,7 @@
 	import RatingHistogram from '#lib/components/RatingHistogram.svelte';
 	import EpisodeStill from '#lib/components/EpisodeStill.svelte';
 	import Progress from '#lib/components/Progress.svelte';
+	import ShareButton from '#lib/components/ShareButton.svelte';
 	import StarRating from '#lib/components/StarRating.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import {
@@ -234,7 +235,7 @@
 <Meta
 	title={year ? `${m.title} (${year})` : m.title}
 	description={m.overview}
-	image={m.posterUrl}
+	card={`/media/${m.id}/card.png${data.by ? `?par=${encodeURIComponent(data.by)}` : ''}`}
 />
 
 <svelte:window
@@ -541,6 +542,12 @@
 							style:top="{menuAt.top}px"
 							style:right="{menuAt.right}px"
 						>
+							<!-- Shares the viewer's own card (status and score) unless the entry is private -->
+							<ShareButton
+								title={m.title}
+								path={`/media/${m.id}${!entry.isPrivate && data.user ? `?par=${encodeURIComponent(data.user.username)}` : ''}`}
+								class="min-h-11 cursor-pointer rounded-lg px-2 text-left text-sm hover:bg-surface-2"
+							/>
 							{#if nextUp && lastAired && lastAired.id !== nextUp.id}
 								<button
 									type="button"
@@ -1230,6 +1237,29 @@
 									{:else}
 										<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
 									{/if}
+									<form method="post" action="?/like" use:enhance class="mt-2">
+										<input type="hidden" name="entryId" value={r.entryId} />
+										<input type="hidden" name="like" value={String(!r.liked)} />
+										<button
+											aria-pressed={r.liked}
+											aria-label={r.liked ? 'Je n’aime plus' : 'J’aime'}
+											class="inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-full px-2 text-sm {r.liked
+												? 'text-anime'
+												: 'text-muted hover:text-ink'}"
+											><svg
+												aria-hidden="true"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												stroke="currentColor"
+												stroke-width="2"
+												class={r.liked ? 'fill-current' : 'fill-none'}
+												><path
+													d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"
+												></path></svg
+											>{#if r.likes}<span class="tabular-nums">{r.likes}</span>{/if}</button
+										>
+									</form>
 								</div>
 							</li>
 						{/each}

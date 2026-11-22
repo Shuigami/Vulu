@@ -9,6 +9,7 @@ import {
 	feed,
 	follow,
 	followList,
+	likeReview,
 	mediaEntries,
 	profileByUsername,
 	ratingSummary,
@@ -156,5 +157,18 @@ describe('follows and feed', () => {
 		const reviews = await mediaEntries(db, film, me.id, { reviewsOnly: true });
 		expect(reviews.map((e) => [e.review, e.reviewSpoiler])).toEqual([['Chef-d’œuvre.', true]]);
 		expect(await mediaEntries(db, film, me.id, { followedOnly: true })).toHaveLength(1);
+
+		// Likes: only someone else's visible, non-blank review
+		const [review] = reviews;
+		expect(await likeReview(db, me.id, review.entryId, true)).toBe(true);
+		expect(await likeReview(db, me.id, review.entryId, true)).toBe(true);
+		expect(await mediaEntries(db, film, me.id, { reviewsOnly: true })).toMatchObject([
+			{ likes: 1, liked: true }
+		]);
+		expect(await likeReview(db, a.id, review.entryId, true)).toBe(false);
+		const [blank] = await mediaEntries(db, film, me.id, { followedOnly: true });
+		expect(await likeReview(db, me.id, blank.entryId, true)).toBe(false);
+		await likeReview(db, me.id, review.entryId, false);
+		expect((await mediaEntries(db, film, me.id, { reviewsOnly: true }))[0].likes).toBe(0);
 	});
 });

@@ -3,7 +3,7 @@ import { and, desc, eq, ilike, inArray, lt, ne, or, sql } from 'drizzle-orm';
 import { activityVerb } from '../labels';
 import { timeAgo } from './calendar';
 import type { Db } from './db';
-import { activityEvents, follows, libraryEntries, media, users } from './db/schema';
+import { activityEvents, follows, libraryEntries, media, reviewLikes, users } from './db/schema';
 
 /**
  * Visibility rule for entries and events (needs `users` and `library_entries` in the query):
@@ -48,6 +48,16 @@ export async function unfollow(db: Db, followerId: string, username: string) {
 				)
 			)
 		);
+}
+
+/** A member's public fields, or null when unknown or private to `viewerId`. */
+export async function findUser(db: Db, username: string, viewerId: string) {
+	const [user] = await db
+		.select({ ...publicUser, profileVisibility: users.profileVisibility })
+		.from(users)
+		.where(eq(users.username, username));
+	if (!user || (user.profileVisibility === 'private' && user.id !== viewerId)) return null;
+	return user;
 }
 
 /** A profile as seen by `viewerId`, or null when it does not exist or is private. */
@@ -270,9 +280,13 @@ export function mediaEntries(
 	opts: { reviewsOnly?: boolean; followedOnly?: boolean; limit?: number } = {}
 ) {
 	const followed = sql<boolean>`exists (select 1 from ${follows} where ${follows.followerId} = ${viewerId} and ${follows.followeeId} = ${users.id})`;
+	const likes = sql<number>`(select count(*) from ${reviewLikes} where ${reviewLikes.entryId} = ${libraryEntries.id})::int`;
 	return db
 		.select({
 			...publicUser,
+			entryId: libraryEntries.id,
+			likes,
+			liked: sql<boolean>`exists (select 1 from ${reviewLikes} where ${reviewLikes.entryId} = ${libraryEntries.id} and ${reviewLikes.userId} = ${viewerId})`,
 			status: libraryEntries.status,
 			score: libraryEntries.score,
 			review: libraryEntries.review,
@@ -291,6 +305,29 @@ export function mediaEntries(
 				opts.followedOnly ? followed : undefined
 			)
 		)
-		.orderBy(desc(followed), desc(libraryEntries.updatedAt))
+		.orderBy(desc(followed), desc(likes), desc(libraryEntries.updatedAt))
 		.limit(opts.limit ?? 20);
+}
+
+/** Likes (or unlikes) someone else's review that `userId` can see; false otherwise. */
+export async function likeReview(db: Db, userId: string, entryId: number, like: boolean) {
+	const [entry] = await db
+		.select({ id: libraryEntries.id })
+		.from(libraryEntries)
+		.innerJoin(users, eq(users.id, libraryEntries.userId))
+		.where(
+			and(
+				eq(libraryEntries.id, entryId),
+				ne(libraryEntries.userId, userId),
+				sql`btrim(coalesce(${libraryEntries.review}, '')) <> ''`,
+				visibleTo(userId)
+			)
+		);
+	if (!entry) return false;
+	if (like) await db.insert(reviewLikes).values({ userId, entryId }).onConflictDoNothing();
+	else
+		await db
+			.delete(reviewLikes)
+			.where(and(eq(reviewLikes.userId, userId), eq(reviewLikes.entryId, entryId)));
+	return true;
 }

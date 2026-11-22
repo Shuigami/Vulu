@@ -270,6 +270,15 @@ CREATE TABLE follows (
 );
 CREATE INDEX follows_followee_idx ON follows (followee_id);
 
+-- J'aime sur les critiques écrites (la critique est library_entries.review)
+CREATE TABLE review_likes (
+  user_id    uuid   NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  entry_id   bigint NOT NULL REFERENCES library_entries(id) ON DELETE CASCADE,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, entry_id)
+);
+CREATE INDEX review_likes_entry_idx ON review_likes (entry_id);
+
 -- ---------------------------------------------------------------------------
 -- Listes personnalisées
 -- ---------------------------------------------------------------------------
