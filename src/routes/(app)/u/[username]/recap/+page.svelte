@@ -80,6 +80,38 @@
 		}
 		return { ...best, w: Math.floor(Math.min(best.w, 220)), gap };
 	});
+	// The hours laid end to end from 1 January: which days they cover, in each type's colour
+	const year = $derived(r?.year ?? data.year);
+	const yearDays = $derived(
+		Array.from({ length: 12 }, (_, m) => new Date(Date.UTC(year, m + 1, 0)).getUTCDate())
+	);
+	const litDays = $derived(Math.min(365, (r?.hours ?? 0) / 24));
+	const dayType = (d: number): MediaType | null => {
+		if (d >= Math.ceil(litDays)) return null;
+		let acc = 0;
+		for (const x of hoursByType) {
+			acc += x.h / totalHours;
+			if ((d + 0.5) / Math.ceil(litDays) <= acc) return x.t;
+		}
+		return hoursByType.at(-1)?.t ?? null;
+	};
+	const litUntil = $derived(
+		new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(
+			new Date(Date.UTC(year, 0, 1) + Math.max(0, Math.ceil(litDays) - 1) * 86_400_000)
+		)
+	);
+	const stub = $derived(
+		r
+			? [
+					{ label: 'Heures', value: fmt(r.hours) },
+					{ label: 'Œuvres terminées', value: fmt(completedTotal) },
+					r.favoritesCount
+						? { label: 'Notées 5/5', value: fmt(r.favoritesCount) }
+						: { label: 'Jours actifs', value: fmt(r.activeDays) },
+					r.genre ? { label: 'Genre fétiche', value: r.genre } : null
+				].filter((x) => x !== null)
+			: []
+	);
 	const doneTypes = $derived(r ? MEDIA_TYPES.filter((t) => r.completed[t] > 0) : []);
 	const totalHours = $derived(
 		Math.max(
@@ -286,63 +318,72 @@
 						</p>
 					</div>
 				{:else if active === 'time'}
-					<div class="my-auto grid items-end gap-10 md:grid-cols-[1fr_1.15fr]">
+					<div class="my-auto grid items-center gap-8 lg:grid-cols-[1fr_1.1fr] lg:gap-14">
 						<div>
 							<p
-								class="font-display text-[clamp(72px,min(15vw,24vh),176px)] leading-[0.82] font-extrabold tracking-[-0.04em] text-accent-ink tabular-nums"
+								class="font-display text-[clamp(72px,min(14vw,22vh),168px)] leading-[0.82] font-extrabold tracking-[-0.04em] text-accent-ink tabular-nums"
 							>
 								{fmt(r.hours)}
 							</p>
 							<h2 class="mt-4 font-display text-2xl font-bold sm:text-3xl">
 								heures devant l’écran
 							</h2>
-							{#if r.hours >= 24}
-								<p class="mt-2 text-muted">
-									Soit {fmt(r.hours / 24)} jours entiers, sans dormir ni manger.
-								</p>
-							{/if}
-						</div>
-						<div class="flex flex-col gap-4">
-							<div
-								class="flex h-14 overflow-hidden rounded-2xl sm:h-16"
-								role="img"
-								aria-label={hoursByType.map((x) => `${typePlural[x.t]} : ${fmt(x.h)} h`).join(', ')}
-							>
-								{#each hoursByType as x (x.t)}
-									<span class={bg[x.t]} style:width="{(x.h / totalHours) * 100}%"></span>
-								{/each}
-							</div>
-							<ul class="flex flex-wrap gap-x-6 gap-y-2">
+							<p class="mt-3 max-w-md text-lg text-muted">
+								{#if litDays >= 365}
+									Bout à bout, plus d’une année entière, sans dormir.
+								{:else if litDays >= 1}
+									Bout à bout, du 1er janvier au {litUntil}, sans dormir ni manger.
+								{:else}
+									Moins d’une journée bout à bout.
+								{/if}
+							</p>
+							<ul class="mt-6 flex flex-wrap gap-x-5 gap-y-2">
 								{#each hoursByType as x (x.t)}
 									<li class="flex items-center gap-2">
-										<span class="size-3 rounded-full {bg[x.t]}" aria-hidden="true"></span>
+										<span class="size-3 rounded-sm {bg[x.t]}" aria-hidden="true"></span>
 										<span>{typePlural[x.t]}</span>
 										<span class="text-muted tabular-nums">{fmt(x.h)} h</span>
 									</li>
 								{/each}
 							</ul>
-							{#if r.activeDays >= 10}
-								<p class="text-sm text-muted">Actif {r.activeDays} jours sur 365.</p>
-							{/if}
 						</div>
+						<!-- The year, one row per month: the days the hours fill are lit -->
+						<ol
+							class="flex flex-col gap-[3px] sm:gap-1"
+							aria-label="Les jours de {year} couverts, du 1er janvier au {litUntil}"
+						>
+							{#each yearDays as n, m (m)}
+								{@const start = yearDays.slice(0, m).reduce((a, b) => a + b, 0)}
+								<li class="flex items-center gap-2" aria-hidden="true">
+									<span class="w-4 shrink-0 text-[11px] text-muted"
+										>{month(m + 1)
+											.slice(0, 1)
+											.toUpperCase()}</span
+									>
+									<span class="grid flex-1 grid-cols-31 gap-[3px] sm:gap-1">
+										{#each { length: n }, d (d)}
+											{@const t = dayType(start + d)}
+											<span class="aspect-square rounded-[2px] {t ? bg[t] : 'bg-ink/8'}"></span>
+										{/each}
+									</span>
+								</li>
+							{/each}
+						</ol>
 					</div>
 				{:else if active === 'done'}
-					<div class="my-auto flex flex-col gap-5">
-						<h2 class="text-lg text-muted">Terminés cette année</h2>
-						<p
-							class="max-w-5xl font-display text-[clamp(36px,min(6.5vw,10vh),80px)] leading-[1.02] font-extrabold tracking-[-0.03em]"
+					<div class="my-auto flex flex-col gap-6">
+						<h2 class="text-lg text-muted">Terminés en {r.year}</h2>
+						<!-- Like closing credits: one line per type -->
+						<dl
+							class="grid grid-cols-[auto_1fr] items-baseline gap-x-5 font-display text-[clamp(40px,min(9vw,13vh),112px)] leading-[0.95] font-extrabold tracking-[-0.04em] sm:gap-x-8"
 						>
-							{#each doneTypes as t, i (t)}<span class={text[t]}
-									>{fmt(r.completed[t])}&nbsp;{(r.completed[t] > 1
-										? typePlural[t]
-										: typeLabel[t]
-									).toLowerCase()}</span
-								>{i < doneTypes.length - 2
-									? ', '
-									: i === doneTypes.length - 2
-										? ' et '
-										: '.'}{/each}
-						</p>
+							{#each doneTypes as t (t)}
+								<dd class="text-right tabular-nums {text[t]}">{fmt(r.completed[t])}</dd>
+								<dt>
+									{(r.completed[t] > 1 ? typePlural[t] : typeLabel[t]).toLowerCase()}
+								</dt>
+							{/each}
+						</dl>
 						{#if unitsLine}<p class="max-w-2xl text-lg text-muted">
 								Et en chemin : {unitsLine}.
 							</p>{/if}
@@ -357,17 +398,28 @@
 								? `, avec ${fmt(peak)} heures`
 								: ''}.
 						</h2>
-						<ol class="grid h-[32vh] grid-cols-12 items-end gap-1.5 sm:gap-3">
+						<ol class="grid h-[38vh] grid-cols-12 gap-1.5 pt-6 sm:gap-3">
 							{#each r.perMonth as h, i (i)}
 								{@const busiest = i + 1 === r.busiestMonth}
 								<li
 									class="flex h-full flex-col justify-end gap-2"
 									aria-label="{capitalize(month(i + 1))} : {fmt(h)} heures"
 								>
-									<span
-										class="block min-h-1 rounded-t-lg {busiest ? 'bg-accent' : 'bg-surface-2'}"
-										style:height="{(h / maxMonth) * 100}%"
-									></span>
+									<span class="relative flex flex-1 flex-col justify-end rounded-lg bg-ink/[0.03]">
+										{#if h}
+											<span
+												class="absolute inset-x-0 -translate-y-full pb-1 text-center text-[11px] tabular-nums sm:text-xs {busiest
+													? 'font-bold text-ink'
+													: 'text-muted'}"
+												style:bottom="{(h / maxMonth) * 100}%"
+												aria-hidden="true">{fmt(h)}</span
+											>
+										{/if}
+										<span
+											class="block rounded-lg {busiest ? 'bg-accent' : 'bg-ink/25'}"
+											style:height="{(h / maxMonth) * 100}%"
+										></span>
+									</span>
 									<span
 										class="text-center text-xs {busiest ? 'font-bold text-ink' : 'text-muted'}"
 										aria-hidden="true"
@@ -491,15 +543,25 @@
 								{r.personality.title}
 							</p>
 							<p class="max-w-xl text-xl">
-								{r.personality.text}{#if r.genre}
-									Genre fétiche : {r.genre}.{/if}
+								{r.personality.text}
 							</p>
 						{:else}
 							<p class="font-display text-[clamp(36px,6vw,64px)] leading-none font-extrabold">
 								L’année {r.year + 1} commence bientôt.
 							</p>
 						{/if}
-						<div class="mt-4 flex flex-wrap gap-2">
+						<!-- The ticket stub: the year in four lines, for a screenshot -->
+						<dl
+							class="mt-2 grid w-full max-w-3xl grid-cols-2 gap-x-6 gap-y-3 border-t-2 border-dashed border-on-accent/35 pt-5 sm:grid-cols-4"
+						>
+							{#each stub as x (x.label)}
+								<div>
+									<dt class="text-sm text-on-accent/70">{x.label}</dt>
+									<dd class="font-display text-2xl font-extrabold tabular-nums">{x.value}</dd>
+								</div>
+							{/each}
+						</dl>
+						<div class="mt-2 flex flex-wrap gap-2">
 							<ShareButton
 								title={`Récap ${r.year} de ${name}`}
 								{path}
