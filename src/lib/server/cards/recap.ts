@@ -105,7 +105,21 @@ const verdict = (r: YearRecap, size: number) =>
 		h({ fontSize: size * 0.7 }, r.personality.text)
 	);
 
-export function recapCard(o: { recap: YearRecap; name: string; footer: string; posters: Posters }) {
+const fiveStars = (count: number, size: number) =>
+	h(
+		{ alignItems: 'center', gap: size * 0.5 },
+		h({ gap: size * 0.12 }, ...Array.from({ length: 5 }, () => star(size, C.accent))),
+		label(`${count} notées 5/5`, size)
+	);
+
+export function recapCard(o: {
+	recap: YearRecap;
+	name: string;
+	footer: string;
+	/** The posters are the year's perfect scores, not the top 3 */
+	stars?: boolean;
+	posters: Posters;
+}) {
 	const r = o.recap;
 	return page(
 		OG,
@@ -123,10 +137,19 @@ export function recapCard(o: { recap: YearRecap; name: string; footer: string; p
 				),
 				r.personality && h({ fontSize: 30, fontWeight: 600 }, `Verdict : ${r.personality.title}`)
 			),
-			h(
-				{ gap: 14, alignItems: 'center' },
-				...o.posters.slice(0, 3).map((p) => poster(p.poster, p.title, 150, 225))
-			)
+			o.stars
+				? h(
+						{ flexDirection: 'column', gap: 16, width: 384 },
+						fiveStars(r.favoritesCount, 22),
+						h(
+							{ gap: 12, flexWrap: 'wrap' },
+							...o.posters.slice(0, 6).map((p) => poster(p.poster, p.title, 120, 180))
+						)
+					)
+				: h(
+						{ gap: 14, alignItems: 'center' },
+						...o.posters.slice(0, 3).map((p) => poster(p.poster, p.title, 150, 225))
+					)
 		)
 	);
 }
@@ -143,11 +166,7 @@ export function recapStory(o: {
 	const posters = o.stars
 		? h(
 				{ flexDirection: 'column', gap: 24 },
-				h(
-					{ alignItems: 'center', gap: 16 },
-					h({ gap: 4 }, ...Array.from({ length: 5 }, () => star(30, C.accent))),
-					label(`${r.favoritesCount} notées 5/5`, 30)
-				),
+				fiveStars(r.favoritesCount, 30),
 				// Six per row, as many rows as the posters fill (up to three)
 				h(
 					{ gap: 14, flexWrap: 'wrap' },
