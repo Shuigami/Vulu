@@ -101,6 +101,33 @@
 		<h1 class="sr-only">Accueil</h1>
 	{/if}
 
+	{#if data.recap}
+		<a
+			href={resolve('recap')}
+			class="group relative isolate flex flex-wrap items-center justify-between gap-x-6 gap-y-2 overflow-hidden rounded-[22px] bg-ink px-6 py-5 text-bg no-underline"
+		>
+			<span
+				aria-hidden="true"
+				class="absolute -top-10 -right-6 -z-10 size-40 rounded-full bg-accent/40 blur-2xl"
+			></span>
+			<span class="flex flex-col">
+				<span class="text-[13px] font-semibold tracking-widest uppercase opacity-70"
+					>{data.recap.open ? 'C’est sorti' : 'Bientôt'}</span
+				>
+				<span class="font-display text-2xl font-extrabold">Ton Récap {data.recap.year}</span>
+			</span>
+			<span class="font-semibold text-accent group-hover:underline">
+				{#if data.recap.open}
+					Découvrir ton année →
+				{:else if data.recap.days <= 1}
+					Demain →
+				{:else}
+					Dans {data.recap.days} jours, le {data.recap.release} →
+				{/if}
+			</span>
+		</a>
+	{/if}
+
 	{#if data.user}
 		<section aria-labelledby="resume" class="flex flex-col gap-2.5 sm:gap-4">
 			<h2 id="resume" class="h2">Reprendre</h2>

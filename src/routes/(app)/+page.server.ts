@@ -16,6 +16,13 @@ import {
 } from '#lib/server/discover.ts';
 import { incrementProgress, listEntries } from '#lib/server/library.ts';
 import { feed, feedView } from '#lib/server/social.ts';
+import {
+	daysToRelease,
+	RECAP_BANNER_END,
+	RECAP_YEAR,
+	recapOpen,
+	releaseLabel
+} from '#lib/server/recap.ts';
 import type { Actions, PageServerLoad } from './$types';
 
 const WEEK = 7 * 24 * 3600 * 1000;
@@ -91,7 +98,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 			return null;
 		});
 	const boss = getBoss();
+	const now = new Date();
 	return {
+		// Teaser until the release, then a link to one's recap, until the banner's end date
+		recap:
+			userId && now < RECAP_BANNER_END
+				? {
+						year: RECAP_YEAR,
+						open: recapOpen(now),
+						days: daysToRelease(now),
+						release: releaseLabel()
+					}
+				: null,
 		friends: feedView(friends.items).slice(0, 8),
 		popular,
 		// One promise per type, each streamed on its own: the shown type does not wait for the others
