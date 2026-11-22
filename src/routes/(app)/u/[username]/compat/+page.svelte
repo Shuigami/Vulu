@@ -59,7 +59,10 @@
 		</p>
 		<div class="flex flex-wrap justify-center gap-2">
 			<a href={resolve('signup')} class="btn-accent px-6">Créer mon compte</a>
-			<a href={`/login?redirectTo=${encodeURIComponent(back)}`} class="btn-ghost">Se connecter</a>
+			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query on a resolved path -->
+			<a href={`${resolve('login')}?redirectTo=${encodeURIComponent(back)}`} class="btn-ghost"
+				>Se connecter</a
+			>
 		</div>
 	{:else if !r}
 		<p class="text-muted">C’est toi ! Compare-toi plutôt avec quelqu’un d’autre.</p>

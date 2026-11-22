@@ -3,6 +3,8 @@
 import { typeLabel, typePlural, type MediaType } from '../../labels';
 import { C, h, img, OG, type El } from './render';
 
+const NBSP = String.fromCharCode(160);
+
 export const clip = (s: string, n: number) =>
 	s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s;
 
@@ -204,7 +206,7 @@ export function mediaCard(m: {
 			h(
 				{ fontSize: 22, fontWeight: 600, color: C[m.type] },
 				// Non-breaking spaces: satori drops plain ones around the dot
-				`${typeLabel[m.type].toUpperCase()}${m.year ? ` · ${m.year}` : ''}`
+				`${typeLabel[m.type].toUpperCase()}${m.year ? `${NBSP}·${NBSP}${m.year}` : ''}`
 			),
 			h({ fontFamily: 'Display', fontSize: 60, lineHeight: 1.05 }, clip(m.title, 60)),
 			rating

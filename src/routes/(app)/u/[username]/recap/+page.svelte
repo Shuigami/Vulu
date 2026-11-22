@@ -13,6 +13,9 @@
 	const scale = $derived(data.ratingScale);
 	const path = $derived(`/u/${data.owner.username}/recap`);
 	// A different URL once open, so previews cached during the teaser are not reused
+	const storyHref = $derived(
+		`${resolve('/(app)/u/[username]/recap/card.png', { username: data.owner.username })}?format=story${data.preview ? '&apercu' : ''}`
+	);
 	const cardQuery = $derived(data.preview ? '?apercu' : r ? '?v=open' : '');
 
 	// Countdown to the release, ticking every second (server time is the reference)
@@ -238,10 +241,9 @@
 
 		<section class="flex flex-wrap items-center justify-center gap-2 py-4">
 			<ShareButton title={`Récap ${r.year} de ${name}`} {path} class="btn-accent" />
-			<a
-				href={`${path}/card.png?format=story${data.preview ? '&apercu' : ''}`}
-				download={`recap-${r.year}-${data.owner.username}.png`}
-				class="btn-ghost">Image pour ta story</a
+			<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query on a resolved path -->
+			<a href={storyHref} download={`recap-${r.year}-${data.owner.username}.png`} class="btn-ghost"
+				>Image pour ta story</a
 			>
 			{#if !data.isSelf}
 				<a href={resolve('recap')} class="btn-ghost">Voir mon récap</a>
