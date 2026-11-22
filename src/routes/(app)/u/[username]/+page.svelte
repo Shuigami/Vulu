@@ -6,6 +6,7 @@
 	import Avatar from '#lib/components/Avatar.svelte';
 	import ListCard from '#lib/components/ListCard.svelte';
 	import Poster from '#lib/components/Poster.svelte';
+	import ShareButton from '#lib/components/ShareButton.svelte';
 	import { toScale, typePlural } from '#lib/labels.ts';
 	import type { PageProps } from './$types';
 
@@ -21,7 +22,7 @@
 <Meta
 	title={name}
 	description={`@${p.user.username} · ${p.followers} ${p.followers > 1 ? 'abonnés' : 'abonné'} · ${completedCount} ${completedCount > 1 ? 'œuvres terminées' : 'œuvre terminée'}`}
-	image={p.user.avatarUrl}
+	card={`/u/${p.user.username}/card.png`}
 	type="profile"
 />
 
@@ -44,6 +45,7 @@
 				>
 			</p>
 		</div>
+		<ShareButton title={name} />
 		{#if p.isSelf}
 			<a href={resolve('settings')} class="btn-ghost">Réglages</a>
 		{:else}

@@ -36,7 +36,7 @@ const parseId = (raw: string) => {
 	return id;
 };
 
-export const load: PageServerLoad = async ({ params, locals }) => {
+export const load: PageServerLoad = async ({ params, locals, url }) => {
 	const id = parseId(params.id);
 	const [m] = await db.select().from(media).where(eq(media.id, id));
 	if (!m) error(404, 'Œuvre introuvable');
@@ -107,7 +107,9 @@ export const load: PageServerLoad = async ({ params, locals }) => {
 		journal: journal.map(({ occurredAt, ...e }) => ({ ...e, when: timeAgo(occurredAt) })),
 		minutesSpent: time?.minutes ?? 0,
 		lists,
-		seasons
+		seasons,
+		// Shared link of someone's entry: the preview shows their card (checked by the card itself)
+		by: url.searchParams.get('par')?.slice(0, 30) ?? null
 	};
 };
 

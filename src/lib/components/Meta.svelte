@@ -7,18 +7,22 @@
 		title,
 		description = '',
 		image = null,
+		card = null,
 		type = 'website'
 	}: {
 		title: string;
 		description?: string | null;
 		image?: string | null;
+		/** A generated 1200x630 card (`…/card.png`), preferred over `image` */
+		card?: string | null;
 		type?: string;
 	} = $props();
 
 	const flat = $derived((description ?? '').replace(/\s+/g, ' ').trim());
 	const desc = $derived(flat.length > 200 ? `${flat.slice(0, 199)}…` : flat);
 	// Avatars are served by the app (relative URL); previews need absolute ones
-	const img = $derived(image ? new URL(image, page.url.origin).href : null);
+	const src = $derived(card ?? image);
+	const img = $derived(src ? new URL(src, page.url.origin).href : null);
 </script>
 
 <svelte:head>

@@ -11,6 +11,7 @@
 	import RatingHistogram from '#lib/components/RatingHistogram.svelte';
 	import EpisodeStill from '#lib/components/EpisodeStill.svelte';
 	import Progress from '#lib/components/Progress.svelte';
+	import ShareButton from '#lib/components/ShareButton.svelte';
 	import StarRating from '#lib/components/StarRating.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import {
@@ -234,7 +235,7 @@
 <Meta
 	title={year ? `${m.title} (${year})` : m.title}
 	description={m.overview}
-	image={m.posterUrl}
+	card={`/media/${m.id}/card.png${data.by ? `?par=${encodeURIComponent(data.by)}` : ''}`}
 />
 
 <svelte:window
@@ -541,6 +542,12 @@
 							style:top="{menuAt.top}px"
 							style:right="{menuAt.right}px"
 						>
+							<!-- Shares the viewer's own card (status and score) unless the entry is private -->
+							<ShareButton
+								title={m.title}
+								path={`/media/${m.id}${!entry.isPrivate && data.user ? `?par=${encodeURIComponent(data.user.username)}` : ''}`}
+								class="min-h-11 cursor-pointer rounded-lg px-2 text-left text-sm hover:bg-surface-2"
+							/>
 							{#if nextUp && lastAired && lastAired.id !== nextUp.id}
 								<button
 									type="button"

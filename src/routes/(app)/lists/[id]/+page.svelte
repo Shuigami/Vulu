@@ -3,6 +3,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
+	import ShareButton from '#lib/components/ShareButton.svelte';
 	import { MEDIA_TYPES, toScale, typeLabel, typePlural } from '#lib/labels.ts';
 	import type { PageProps } from './$types';
 
@@ -46,7 +47,7 @@
 <Meta
 	title={list.name}
 	description={`Liste de ${list.displayName || list.username} · ${list.items.length} ${list.items.length > 1 ? 'œuvres' : 'œuvre'}${list.description ? ` · ${list.description}` : ''}`}
-	image={list.items.find((i) => i.posterUrl)?.posterUrl}
+	card={`/lists/${list.id}/card.png`}
 />
 
 <div class="flex flex-col gap-9">
@@ -72,8 +73,12 @@
 					: ' · privée'
 				: ''}
 		</p>
+		{#if !list.isOwner}
+			<div class="flex"><ShareButton title={list.name} /></div>
+		{/if}
 		{#if list.isOwner && !editing}
 			<div class="flex flex-wrap gap-2">
+				{#if list.visibility === 'public'}<ShareButton title={list.name} />{/if}
 				<button type="button" class="btn-ghost" onclick={() => (editing = true)}>Modifier</button>
 				<!-- Confirmed in the page: native confirm() is blocked in some browsers and webviews -->
 				{#if confirmDelete}
