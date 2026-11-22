@@ -69,7 +69,7 @@ export async function loadImage(url: string | null | undefined, origin: string) 
 	try {
 		const res = await fetch(new URL(url, origin), { signal: AbortSignal.timeout(4000) });
 		const type = res.headers.get('content-type') ?? '';
-		// satori decodes neither WebP nor AVIF: those avatars fall back to an initial
+		// resvg decodes neither WebP nor AVIF: those avatars fall back to an initial
 		if (!res.ok || !/^image\/(jpeg|png|gif)/.test(type)) return null;
 		const bytes = Buffer.from(await res.arrayBuffer());
 		if (bytes.length > IMAGE_MAX) return null;
