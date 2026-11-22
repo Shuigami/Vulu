@@ -62,7 +62,6 @@
 			: []
 	);
 	// The perfect scores make their own poster once there are enough of them; otherwise the top 5
-	const STARS_MIN = 3;
 	// The posters fill the space left under the title: the column count that gives the largest poster
 	let gridW = $state(0);
 	let gridH = $state(0);
@@ -144,7 +143,7 @@
 						r.hours ? 'time' : null,
 						completedTotal ? 'done' : null,
 						r.busiestMonth ? 'months' : null,
-						r.favoritesCount >= STARS_MIN ? 'stars' : r.top.length ? 'top' : null,
+						r.favoritesCount >= data.starsMin ? 'stars' : r.top.length ? 'top' : null,
 						'verdict'
 					] as (Slide | null)[]
 				).filter((s): s is Slide => s !== null)

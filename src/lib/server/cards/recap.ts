@@ -2,7 +2,7 @@
 // release, drawn without any data.
 import { MEDIA_TYPES, typePlural } from '../../labels';
 import type { YearRecap } from '../recap';
-import { clip, poster, wordmark } from './cards';
+import { clip, poster, star, wordmark } from './cards';
 import { C, h, OG, STORY, type El } from './render';
 
 type Size = { width: number; height: number };
@@ -135,9 +135,30 @@ export function recapStory(o: {
 	recap: YearRecap;
 	name: string;
 	footer: string;
+	/** The posters are the year's perfect scores, not the top 5 */
+	stars?: boolean;
 	posters: Posters;
 }) {
 	const r = o.recap;
+	const posters = o.stars
+		? h(
+				{ flexDirection: 'column', gap: 24 },
+				h(
+					{ alignItems: 'center', gap: 16 },
+					h({ gap: 4 }, ...Array.from({ length: 5 }, () => star(30, C.accent))),
+					label(`${r.favoritesCount} notées 5/5`, 30)
+				),
+				// Six per row, as many rows as the posters fill (up to three)
+				h(
+					{ gap: 14, flexWrap: 'wrap' },
+					...o.posters.map((p) => poster(p.poster, p.title, 140, 210))
+				)
+			)
+		: h(
+				{ flexDirection: 'column', gap: 24 },
+				label(`Top ${o.posters.length}`, 30),
+				h({ gap: 14 }, ...o.posters.slice(0, 5).map((p) => poster(p.poster, p.title, 176, 264)))
+			);
 	return page(
 		STORY,
 		o.footer,
@@ -152,13 +173,7 @@ export function recapStory(o: {
 			),
 			completedLine(r, 34)
 		),
-		o.posters.length
-			? h(
-					{ flexDirection: 'column', gap: 24 },
-					label(`Top ${o.posters.length}`, 30),
-					h({ gap: 14 }, ...o.posters.slice(0, 5).map((p) => poster(p.poster, p.title, 176, 264)))
-				)
-			: h({}),
+		o.posters.length ? posters : h({}),
 		verdict(r, 44) || h({})
 	);
 }

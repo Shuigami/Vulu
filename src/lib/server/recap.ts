@@ -17,6 +17,8 @@ export const RECAP_BANNER_END = new Date('2027-02-01T00:00:00+01:00');
 export const RECAP_WALL = 32;
 /** Posters shown on the perfect-scores slide */
 export const RECAP_FAVORITES = 60;
+/** Perfect scores needed for their own slide and story block (otherwise the top 5) */
+export const RECAP_STARS_MIN = 3;
 
 export const recapOpen = (now = new Date()) => now >= RECAP_RELEASE;
 

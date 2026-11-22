@@ -5,6 +5,7 @@ import { findUser } from '#lib/server/social.ts';
 import { viewerId as viewerOf } from '#lib/server/guard.ts';
 import {
 	RECAP_RELEASE,
+	RECAP_STARS_MIN,
 	RECAP_YEAR,
 	recapOpen,
 	releaseLabel,
@@ -30,6 +31,7 @@ export const load: PageServerLoad = async ({ params, locals, url }) => {
 		release: RECAP_RELEASE.toISOString(),
 		releaseLabel: releaseLabel(),
 		preview,
+		starsMin: RECAP_STARS_MIN,
 		// Before the release nothing is computed, so nothing can leak into the page
 		recap: open ? await yearRecap(db, user.id, viewerId) : null
 	};
