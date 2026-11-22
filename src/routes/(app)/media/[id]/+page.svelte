@@ -275,7 +275,10 @@
 						>{/if}
 				</div>
 				<h1
-					class="font-display text-[26px] leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[48px]"
+					class="font-display leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[48px] {m
+						.title.length > 28
+						? 'text-[22px]'
+						: 'text-[26px]'}"
 				>
 					{m.title}
 				</h1>
@@ -295,7 +298,9 @@
 						<span
 							class="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5 font-bold text-accent-ink"
 							><span aria-hidden="true">★</span>
-							{toScale(data.ratings.average, scale)}<span class="sr-only">sur {scale}</span></span
+							{toScale(data.ratings.average, scale)}<span class="font-semibold opacity-70"
+								>/{scale}</span
+							></span
 						>
 						{data.ratings.count} note{data.ratings.count > 1 ? 's' : ''} sur Vulu
 					</a>
@@ -410,17 +415,27 @@
 			class="flex flex-wrap items-center gap-x-7 gap-y-4 card rounded-[22px] px-6 py-5 max-md:fixed max-md:inset-x-0 max-md:bottom-(--nav-h) max-md:z-30 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:bg-surface/95 max-md:px-4 max-md:pt-3 max-md:pb-[calc(0.75rem+var(--nav-pad))] max-md:backdrop-blur max-md:transition-[bottom]"
 		>
 			<!-- Phones: a bar fixed above the tab bar, so the synopsis stays in view -->
-			<div class="flex-[1_1_260px] max-md:sr-only">
-				<h2 class="h2 text-xl">Ajouter à ma bibliothèque</h2>
-				<p class="text-sm text-muted">Choisis directement où tu en es.</p>
-			</div>
+			{#if data.user}
+				<div class="flex-[1_1_260px] max-md:sr-only">
+					<h2 class="h2 text-xl">Ajouter à ma bibliothèque</h2>
+					<p class="text-sm text-muted">Choisis directement où tu en es.</p>
+				</div>
+			{:else}
+				<!-- Signed out: the buttons lead to the login page, say so before -->
+				<div class="flex-[1_1_260px] max-md:-mb-2">
+					<h2 class="h2 text-xl max-md:sr-only">Ajouter à ma bibliothèque</h2>
+					<p class="text-sm text-muted">Crée un compte gratuit pour suivre cette œuvre.</p>
+				</div>
+			{/if}
 			<div class="flex flex-wrap gap-2 max-md:w-full max-md:flex-nowrap">
 				<button name="status" value="planned" class="btn-accent px-5 max-md:flex-[1.4]"
 					>{statusLabel.planned}</button
 				>
-				<button name="status" value="in_progress" class="btn-ghost max-md:flex-1 max-md:px-2"
-					>{statusLabel.in_progress}</button
-				>
+				{#if m.type !== 'movie'}
+					<button name="status" value="in_progress" class="btn-ghost max-md:flex-1 max-md:px-2"
+						>{statusLabel.in_progress}</button
+					>
+				{/if}
 				<button name="status" value="completed" class="btn-ghost max-md:flex-1 max-md:px-2"
 					>Déjà {m.type === 'manga' || m.type === 'book' ? 'lu' : 'vu'}</button
 				>
@@ -1034,8 +1049,8 @@
 				<dl class="card px-4.5 py-1">
 					{#each facts as [k, v] (k)}
 						<div class="flex justify-between gap-4 border-b border-line py-2.75 text-sm">
-							<dt class="text-muted">{k}</dt>
-							<dd class="text-right font-semibold">{v}</dd>
+							<dt class="shrink-0 text-muted">{k}</dt>
+							<dd class="min-w-0 text-right font-semibold break-words">{v}</dd>
 						</div>
 					{/each}
 					{#if data.minutesSpent}
@@ -1061,81 +1076,83 @@
 		</aside>
 	</div>
 
-	<section aria-labelledby="members-title" class="flex flex-col gap-8 border-t border-line pt-10">
-		<h2 id="members-title" class="h2 text-[28px]">Chez les membres</h2>
-		<div class="flex flex-wrap gap-8">
-			<div class="flex flex-[1_1_280px] flex-col gap-3">
-				<h3 class="eyebrow">Notes</h3>
-				{#if data.ratings.count}
-					<RatingHistogram {...data.ratings} {scale} />
-				{:else}
-					<p class="text-sm text-muted">Pas encore de note.</p>
+	{#if data.ratings.count || data.followed.length || data.reviews.length}
+		<section aria-labelledby="members-title" class="flex flex-col gap-8 border-t border-line pt-10">
+			<h2 id="members-title" class="h2 text-[28px]">Chez les membres</h2>
+			<div class="flex flex-wrap gap-8">
+				<div class="flex flex-[1_1_280px] flex-col gap-3">
+					<h3 class="eyebrow">Notes</h3>
+					{#if data.ratings.count}
+						<RatingHistogram {...data.ratings} {scale} />
+					{:else}
+						<p class="text-sm text-muted">Pas encore de note.</p>
+					{/if}
+				</div>
+				{#if data.followed.length}
+					<div class="flex flex-[2_1_340px] flex-col gap-3">
+						<h3 class="eyebrow">Tes abonnements</h3>
+						<ul class="flex flex-wrap gap-2">
+							{#each data.followed as f (f.id)}
+								{@const name = f.displayName || f.username}
+								<li>
+									<a
+										href={resolve('/(app)/u/[username]', { username: f.username })}
+										class="flex items-center gap-2 card rounded-full py-1 pr-3.5 pl-1 text-sm text-ink no-underline hover:border-muted"
+										title="{name} · {statusLabel[f.status]}"
+									>
+										<Avatar src={f.avatarUrl} {name} class="size-7 text-xs" />
+										<span class="font-semibold">{name}</span>
+										<span class="text-muted"
+											>{f.score !== null
+												? `★ ${toScale(f.score, scale)}`
+												: statusLabel[f.status]}</span
+										>
+									</a>
+								</li>
+							{/each}
+						</ul>
+					</div>
 				{/if}
 			</div>
-			{#if data.followed.length}
-				<div class="flex flex-[2_1_340px] flex-col gap-3">
-					<h3 class="eyebrow">Tes abonnements</h3>
-					<ul class="flex flex-wrap gap-2">
-						{#each data.followed as f (f.id)}
-							{@const name = f.displayName || f.username}
-							<li>
-								<a
-									href={resolve('/(app)/u/[username]', { username: f.username })}
-									class="flex items-center gap-2 card rounded-full py-1 pr-3.5 pl-1 text-sm text-ink no-underline hover:border-muted"
-									title="{name} · {statusLabel[f.status]}"
-								>
-									<Avatar src={f.avatarUrl} {name} class="size-7 text-xs" />
-									<span class="font-semibold">{name}</span>
-									<span class="text-muted"
-										>{f.score !== null
-											? `★ ${toScale(f.score, scale)}`
-											: statusLabel[f.status]}</span
-									>
-								</a>
+
+			{#if data.reviews.length}
+				<div class="flex flex-col gap-3">
+					<h3 class="eyebrow">Critiques</h3>
+					<ul class="flex flex-col divide-y divide-line">
+						{#each data.reviews as r (r.id)}
+							{@const name = r.displayName || r.username}
+							<li class="flex gap-3.5 py-4">
+								<Avatar src={r.avatarUrl} {name} />
+								<div class="min-w-0 flex-1">
+									<p class="text-sm">
+										<a
+											href={resolve('/(app)/u/[username]', { username: r.username })}
+											class="font-semibold text-ink no-underline hover:underline">{name}</a
+										>
+										{#if r.score !== null}<span class="text-accent-ink"
+												>★ {toScale(r.score, scale)}/{scale}</span
+											>{/if}
+										<span class="text-muted">· {r.when}</span>
+									</p>
+									{#if r.reviewSpoiler}
+										<details class="mt-1.5">
+											<summary class="cursor-pointer text-sm text-muted"
+												>Contient des spoilers · <span class="text-ink underline">Afficher</span
+												></summary
+											>
+											<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
+										</details>
+									{:else}
+										<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
+									{/if}
+								</div>
 							</li>
 						{/each}
 					</ul>
 				</div>
 			{/if}
-		</div>
-
-		{#if data.reviews.length}
-			<div class="flex flex-col gap-3">
-				<h3 class="eyebrow">Critiques</h3>
-				<ul class="flex flex-col divide-y divide-line">
-					{#each data.reviews as r (r.id)}
-						{@const name = r.displayName || r.username}
-						<li class="flex gap-3.5 py-4">
-							<Avatar src={r.avatarUrl} {name} />
-							<div class="min-w-0 flex-1">
-								<p class="text-sm">
-									<a
-										href={resolve('/(app)/u/[username]', { username: r.username })}
-										class="font-semibold text-ink no-underline hover:underline">{name}</a
-									>
-									{#if r.score !== null}<span class="text-accent-ink"
-											>★ {toScale(r.score, scale)}/{scale}</span
-										>{/if}
-									<span class="text-muted">· {r.when}</span>
-								</p>
-								{#if r.reviewSpoiler}
-									<details class="mt-1.5">
-										<summary class="cursor-pointer text-sm text-muted"
-											>Contient des spoilers · <span class="text-ink underline">Afficher</span
-											></summary
-										>
-										<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
-									</details>
-								{:else}
-									<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
-								{/if}
-							</div>
-						</li>
-					{/each}
-				</ul>
-			</div>
-		{/if}
-	</section>
+		</section>
+	{/if}
 </div>
 
 {#if entry && unit && !trackingVisible && (!m.totalUnits || progress < m.totalUnits)}

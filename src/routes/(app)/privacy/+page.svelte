@@ -69,6 +69,15 @@
 		</li>
 	</ul>
 
+	<h2 id="sources" class="h2">Sources des données</h2>
+	<p>
+		Les informations et images des œuvres viennent de
+		<a href="https://www.themoviedb.org" rel="external">TMDB</a> (films et séries),
+		<a href="https://anilist.co" rel="external">AniList</a> (animés et mangas) et
+		<a href="https://openlibrary.org" rel="external">Open Library</a> (livres). Ce produit utilise l’API
+		TMDB mais n’est ni approuvé ni certifié par TMDB.
+	</p>
+
 	<h2 class="h2">Conservation et droits</h2>
 	<p>
 		Les données sont gardées tant que ton compte existe. Tu peux exporter toutes tes données depuis

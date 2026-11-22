@@ -237,14 +237,11 @@
 <footer
 	class="mx-auto max-w-6xl border-t border-line px-4 pt-8 pb-36 text-xs text-muted sm:px-6 md:pb-12"
 >
+	<!-- The TMDB attribution sits on the privacy page, under Sources -->
 	<p>
-		Données et images :
-		<a href="https://www.themoviedb.org" rel="external">TMDB</a>,
-		<a href="https://anilist.co" rel="external">AniList</a> et
-		<a href="https://openlibrary.org" rel="external">Open Library</a>. Ce produit utilise l’API TMDB
-		mais n’est ni approuvé ni certifié par TMDB.
+		Données : TMDB, AniList et Open Library ·
+		<a href="{resolve('privacy')}#sources">Sources et confidentialité</a>
 	</p>
-	<p class="mt-2"><a href={resolve('privacy')}>Confidentialité</a></p>
 </footer>
 
 {#if data.user}

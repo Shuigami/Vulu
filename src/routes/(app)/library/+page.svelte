@@ -55,6 +55,9 @@
 	const tab = (active: boolean) =>
 		`border-b-2 px-3.5 py-2.5 text-sm no-underline ${active ? 'border-accent font-semibold text-ink' : 'border-transparent text-muted hover:text-ink'}`;
 	const scale = $derived(data.ratingScale);
+	// Phones: search and sort fold behind a button, open while in use
+	let tools = $state(false);
+	const toolsOpen = $derived(tools || !!data.q || data.sort !== 'updated');
 	const allCount = $derived(Object.values(data.counts).reduce((a, b) => a + b, 0));
 </script>
 
@@ -97,6 +100,25 @@
 					></path></svg
 				>Favoris</a
 			>
+			<button
+				type="button"
+				class="{toolsOpen ? 'chip-on' : 'chip'} shrink-0 px-3 md:hidden"
+				aria-label="Chercher et trier"
+				aria-expanded={toolsOpen}
+				aria-controls="library-tools"
+				onclick={() => (tools = !toolsOpen)}
+				><svg
+					aria-hidden="true"
+					width="17"
+					height="17"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+					stroke-linecap="round"
+					><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg
+				></button
+			>
 		</div>
 		<!-- Inset line rather than a border: the scrolling row would clip tabs overlapping it -->
 		<nav
@@ -119,10 +141,12 @@
 				>
 			{/each}
 		</nav>
+		<!-- No submit button: Enter searches, the sort applies on change -->
 		<form
+			id="library-tools"
 			method="get"
 			role="search"
-			class="flex flex-wrap items-center gap-3"
+			class="flex-wrap items-center gap-3 {toolsOpen ? 'flex' : 'hidden md:flex'}"
 			data-sveltekit-reset="false"
 		>
 			{#if data.type}<input type="hidden" name="type" value={data.type} />{/if}
@@ -148,7 +172,6 @@
 					{/each}
 				</select>
 			</label>
-			<button class="btn-ghost">Chercher</button>
 		</form>
 	</div>
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
@@ -169,19 +192,18 @@
 					>
 						<div class="relative overflow-hidden rounded-xl tile-frame">
 							<Poster src={e.posterUrl} title={e.title} type={e.type} class="w-full" />
-							<div class="absolute top-2.5 left-2.5 flex flex-col items-start gap-1">
-								<span
-									class="flex items-center gap-1.5 rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold text-white"
-									><span class="size-2 rounded-full {typeDot[e.type]}" aria-hidden="true"
-									></span>{typeLabel[e.type]}</span
-								>
-								<span class="rounded-md bg-black/75 px-2 py-0.5 text-xs font-semibold text-white"
+							<!-- One badge to keep small posters visible: the type is the dot's colour -->
+							<span
+								class="absolute top-2 left-2 flex max-w-[calc(100%-2.75rem)] items-center gap-1.5 rounded-md bg-black/75 px-1.5 py-0.5 text-[11px] font-semibold text-white sm:text-xs"
+								title={typeLabel[e.type]}
+								><span class="size-2 shrink-0 rounded-full {typeDot[e.type]}" aria-hidden="true"
+								></span><span class="sr-only">{typeLabel[e.type]} ·</span><span class="truncate"
 									>{statusLabel[e.status]}</span
-								>
-							</div>
+								></span
+							>
 							{#if e.isFavorite}
 								<span
-									class="absolute top-2.5 right-2.5 grid size-7 place-items-center rounded-full bg-black/75 text-[#f59ac0]"
+									class="absolute top-2 right-2 grid size-6 place-items-center rounded-full bg-black/75 text-[#f59ac0]"
 									title="Favori"
 									><svg
 										width="15"
