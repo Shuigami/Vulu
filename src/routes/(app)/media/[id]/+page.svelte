@@ -209,8 +209,26 @@
 	const closeMenu = () => moreMenu?.open && (moreMenu.open = false);
 	// Unit hovered (or focused) in the grid: the units it would mark as seen are tinted
 	let previewTo = $state(0);
-	const zone = 'flex flex-col gap-2.5 bg-surface px-4 py-3.5 sm:px-6 sm:py-5';
-	const zoneLabel = 'text-[13px] text-muted';
+	// Dates fold under the stars; the summary says what is set
+	let datesOpen = $state(false);
+	const dayFormat = new Intl.DateTimeFormat('fr-FR', {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+		timeZone: 'UTC'
+	});
+	const datesSummary = $derived.by(() => {
+		if (!entry) return '';
+		const day = (d: string) => dayFormat.format(new Date(d));
+		const dates = entry.completedOn
+			? `Terminé le ${day(entry.completedOn)}`
+			: entry.startedOn
+				? `Commencé le ${day(entry.startedOn)}`
+				: 'Dates';
+		return entry.repeatCount
+			? `${dates} · ${rewatchLabel[m.type].done.toLowerCase()} ${entry.repeatCount} fois`
+			: dates;
+	});
 </script>
 
 <Meta
@@ -275,7 +293,10 @@
 						>{/if}
 				</div>
 				<h1
-					class="font-display text-[26px] leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[48px]"
+					class="font-display leading-[1.05] font-extrabold tracking-tight text-balance sm:text-[48px] {m
+						.title.length > 28
+						? 'text-[22px]'
+						: 'text-[26px]'}"
 				>
 					{m.title}
 				</h1>
@@ -295,7 +316,9 @@
 						<span
 							class="inline-flex items-center gap-1 rounded-full bg-accent/15 px-2.5 py-0.5 font-bold text-accent-ink"
 							><span aria-hidden="true">★</span>
-							{toScale(data.ratings.average, scale)}<span class="sr-only">sur {scale}</span></span
+							{toScale(data.ratings.average, scale)}<span class="font-semibold opacity-70"
+								>/{scale}</span
+							></span
 						>
 						{data.ratings.count} note{data.ratings.count > 1 ? 's' : ''} sur Vulu
 					</a>
@@ -335,7 +358,8 @@
 		</section>
 	</div>
 
-	{#if data.user && nextUp}
+	{#if data.user && nextUp && !entry}
+		<!-- In the library, the next episode lives in the tracking card below -->
 		<section
 			aria-labelledby="next-up"
 			class="flex flex-wrap items-center gap-4 card rounded-[22px] p-4 sm:gap-5 sm:p-5"
@@ -410,17 +434,27 @@
 			class="flex flex-wrap items-center gap-x-7 gap-y-4 card rounded-[22px] px-6 py-5 max-md:fixed max-md:inset-x-0 max-md:bottom-(--nav-h) max-md:z-30 max-md:rounded-none max-md:border-x-0 max-md:border-b-0 max-md:bg-surface/95 max-md:px-4 max-md:pt-3 max-md:pb-[calc(0.75rem+var(--nav-pad))] max-md:backdrop-blur max-md:transition-[bottom]"
 		>
 			<!-- Phones: a bar fixed above the tab bar, so the synopsis stays in view -->
-			<div class="flex-[1_1_260px] max-md:sr-only">
-				<h2 class="h2 text-xl">Ajouter à ma bibliothèque</h2>
-				<p class="text-sm text-muted">Choisis directement où tu en es.</p>
-			</div>
+			{#if data.user}
+				<div class="flex-[1_1_260px] max-md:sr-only">
+					<h2 class="h2 text-xl">Ajouter à ma bibliothèque</h2>
+					<p class="text-sm text-muted">Choisis directement où tu en es.</p>
+				</div>
+			{:else}
+				<!-- Signed out: the buttons lead to the login page, say so before -->
+				<div class="flex-[1_1_260px] max-md:-mb-2">
+					<h2 class="h2 text-xl max-md:sr-only">Ajouter à ma bibliothèque</h2>
+					<p class="text-sm text-muted">Crée un compte gratuit pour suivre cette œuvre.</p>
+				</div>
+			{/if}
 			<div class="flex flex-wrap gap-2 max-md:w-full max-md:flex-nowrap">
 				<button name="status" value="planned" class="btn-accent px-5 max-md:flex-[1.4]"
 					>{statusLabel.planned}</button
 				>
-				<button name="status" value="in_progress" class="btn-ghost max-md:flex-1 max-md:px-2"
-					>{statusLabel.in_progress}</button
-				>
+				{#if m.type !== 'movie'}
+					<button name="status" value="in_progress" class="btn-ghost max-md:flex-1 max-md:px-2"
+						>{statusLabel.in_progress}</button
+					>
+				{/if}
 				<button name="status" value="completed" class="btn-ghost max-md:flex-1 max-md:px-2"
 					>Déjà {m.type === 'manga' || m.type === 'book' ? 'lu' : 'vu'}</button
 				>
@@ -445,33 +479,146 @@
 		>
 			<h2 class="sr-only">Mon suivi</h2>
 			<input type="hidden" name="entryId" value={entry.id} />
-			<div class="flex flex-wrap gap-px bg-line">
-				<!-- Phones: the label sits beside the select, to keep the card short -->
-				<label
-					class="{zone} flex-[1_1_200px] max-sm:flex-row max-sm:items-center max-sm:justify-between"
-				>
-					<span class={zoneLabel}>Statut</span>
-					<select name="status" value={entry.status} class="field font-semibold max-sm:min-w-44">
-						{#each ENTRY_STATUSES as s (s)}
-							<option value={s}>{statusLabel[s]}</option>
-						{/each}
-					</select>
-				</label>
+			{#if !unit}<input type="hidden" name="progress" value={entry.progress} />{/if}
+			{#if !secondary}<input
+					type="hidden"
+					name="progressSecondary"
+					value={entry.progressSecondary}
+				/>{/if}
 
-				{#if unit}
-					<div class="{zone} flex-[3_1_380px]">
-						<div class="flex flex-wrap items-baseline justify-between gap-3">
-							<label for="progress" class={zoneLabel}>Progression · {unit}</label>
-							{#if m.totalUnits && progress < m.totalUnits}
-								<span class="text-[13px] text-muted"
-									>Prochain : <strong class="text-ink">{singular(unit)} {progress + 1}</strong
-									></span
+			<!-- One compact card: status and actions, progress, then stars and dates -->
+			<div class="flex flex-col gap-3.5 p-4 sm:gap-4 sm:p-5">
+				<div class="flex items-center gap-2">
+					<label class="flex min-w-0 items-center gap-2.5">
+						<span class="sr-only sm:not-sr-only sm:text-[13px] sm:text-muted">Statut</span>
+						<select name="status" value={entry.status} class="field min-h-10 font-semibold">
+							{#each ENTRY_STATUSES as s (s)}
+								<option value={s}>{statusLabel[s]}</option>
+							{/each}
+						</select>
+					</label>
+					<label
+						class="ml-auto btn-ghost min-h-10 w-10 bg-surface px-0 has-checked:border-anime has-focus-visible:outline-2 has-focus-visible:outline-accent"
+						title="Favori"
+					>
+						<input
+							name="isFavorite"
+							type="checkbox"
+							checked={entry.isFavorite}
+							class="peer sr-only"
+						/>
+						<svg
+							aria-hidden="true"
+							width="17"
+							height="17"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							class="fill-none text-muted peer-checked:fill-current peer-checked:text-anime"
+							><path
+								d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"
+							></path></svg
+						>
+						<span class="sr-only">Favori</span>
+					</label>
+					<details bind:this={moreMenu}>
+						<summary
+							aria-label="Plus d’options"
+							class="btn-ghost min-h-10 w-10 list-none bg-surface px-0 [&::-webkit-details-marker]:hidden"
+							onclick={(e) => {
+								const r = e.currentTarget.getBoundingClientRect();
+								menuAt = { top: r.bottom + 8, right: innerWidth - r.right };
+							}}
+						>
+							<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
+								><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"
+								></circle><circle cx="19" cy="12" r="2"></circle></svg
+							>
+						</summary>
+						<!-- Fixed, so the tracking card's rounded clipping (overflow-hidden) does not cut it -->
+						<div
+							class="fixed z-40 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-1 card p-2 shadow-xl"
+							style:top="{menuAt.top}px"
+							style:right="{menuAt.right}px"
+						>
+							{#if nextUp && lastAired && lastAired.id !== nextUp.id}
+								<button
+									type="button"
+									class="min-h-11 cursor-pointer rounded-lg px-2 text-left text-sm hover:bg-surface-2"
+									disabled={marking}
+									onclick={() => {
+										if (moreMenu) moreMenu.open = false;
+										mark('episode', { episodeId: lastAired.id, seen: 'true' });
+									}}>Marquer toute la série comme vue</button
+								>
+							{/if}
+							<label class="flex min-h-11 items-center gap-2.5 px-2 text-sm">
+								<input
+									name="isPrivate"
+									type="checkbox"
+									checked={entry.isPrivate}
+									class="size-4 accent-accent"
+								/>
+								Masquer de mon profil
+							</label>
+							<!-- Confirmed in the page: native confirm() is blocked in some browsers and webviews -->
+							{#if confirmRemove}
+								<div class="flex flex-col gap-2 border-t border-line p-2">
+									<p class="text-sm">Retirer cette œuvre de ta bibliothèque ?</p>
+									<div class="flex gap-2">
+										<button formaction="?/remove" class="btn bg-danger text-sm text-bg"
+											>Retirer</button
+										>
+										<button
+											type="button"
+											class="btn-ghost text-sm"
+											onclick={() => (confirmRemove = false)}>Annuler</button
+										>
+									</div>
+								</div>
+							{:else}
+								<button
+									type="button"
+									class="min-h-11 cursor-pointer rounded-lg px-2 text-left text-sm text-danger hover:bg-surface-2"
+									onclick={() => (confirmRemove = true)}>Retirer de ma bibliothèque</button
 								>
 							{/if}
 						</div>
-						<div class="flex flex-wrap items-center gap-4">
+					</details>
+				</div>
+
+				{#if unit}
+					<div class="flex flex-col gap-2">
+						{#if nextUp}
+							<div class="flex items-center gap-3 pb-1">
+								<a
+									href={episodeHref(nextUp.id)}
+									tabindex="-1"
+									aria-hidden="true"
+									class="w-24 shrink-0 sm:w-32"
+									><EpisodeStill src={nextUp.stillUrl} class="rounded-lg" /></a
+								>
+								<div class="flex min-w-0 flex-1 flex-col gap-0.5">
+									<span class="text-[11px] font-bold tracking-widest text-accent-ink uppercase"
+										>À voir ensuite</span
+									>
+									<a
+										href={episodeHref(nextUp.id)}
+										class="line-clamp-2 leading-snug font-semibold text-ink no-underline hover:underline"
+										>{nextUp.label} · {nextUp.title ?? `Épisode ${nextUp.number}`}</a
+									>
+									<span class="text-xs text-muted"
+										>{[nextUp.airDate, nextUp.runtime && `${nextUp.runtime} min`]
+											.filter(Boolean)
+											.join(' · ')}</span
+									>
+								</div>
+							</div>
+						{/if}
+						<div class="flex items-center gap-3">
+							<label for="progress" class="sr-only">Progression · {unit}</label>
 							<p
-								class="flex items-baseline font-display text-[32px] leading-none font-extrabold tabular-nums sm:text-[40px]"
+								class="flex min-w-0 items-baseline gap-1.5 font-display text-[28px] leading-none font-extrabold tabular-nums sm:text-[34px]"
 							>
 								<input
 									id="progress"
@@ -483,36 +630,59 @@
 									style:width="{String(progress).length + 0.6}ch"
 									class="rounded-lg bg-transparent text-right outline-offset-4"
 								/>
-								{#if m.totalUnits}<span class="text-lg font-semibold text-muted sm:text-[22px]"
-										>&nbsp;/ {m.totalUnits}</span
-									>{/if}
-							</p>
-							{#if m.totalUnits}
-								<div
-									class="flex min-w-36 flex-1 flex-col gap-1.5 max-sm:order-last max-sm:basis-full"
+								<span class="truncate font-sans text-[15px] font-semibold text-muted"
+									>{#if m.totalUnits}/ {m.totalUnits}{/if}
+									{unit}</span
 								>
-									<Progress value={progress} max={m.totalUnits} label="Progression" />
-									<span class="text-xs text-muted"
-										>{Math.round((progress / m.totalUnits) * 100)} %{#if progress < m.totalUnits}
-											· reste {m.totalUnits - progress}
-											{unit}{#if m.runtimeMinutes}, environ {duration(
-													(m.totalUnits - progress) * m.runtimeMinutes
-												)}{/if}{/if}</span
-									>
-								</div>
-							{/if}
-							<div class="flex gap-2 max-sm:ml-auto">
+							</p>
+							<div class="ml-auto flex shrink-0 gap-2">
 								<button
 									type="button"
-									class="btn-ghost w-12 px-0 text-xl"
+									class="btn-ghost w-11 px-0 text-xl"
 									aria-label="Retirer un"
 									onclick={() => setProgress(progress - 1)}>−</button
 								>
-								<button type="button" class="btn-accent" onclick={() => setProgress(progress + 1)}
-									>+1 {singular(unit)}</button
-								>
+								{#if nextUp}
+									<button
+										type="button"
+										class="btn-accent px-3.5"
+										disabled={marking}
+										aria-label="Marquer {nextUp.label} vu"
+										onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}
+										><svg
+											aria-hidden="true"
+											width="18"
+											height="18"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="3"
+											stroke-linecap="round"
+											stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg
+										>Vu</button
+									>
+								{:else}
+									<button
+										type="button"
+										class="btn-accent px-3.5"
+										onclick={() => setProgress(progress + 1)}
+										>+1<span class="max-[360px]:sr-only">{singular(unit)}</span></button
+									>
+								{/if}
 							</div>
 						</div>
+						{#if m.totalUnits}
+							<Progress value={progress} max={m.totalUnits} label="Progression" />
+							<span class="text-xs text-muted"
+								>{Math.round((progress / m.totalUnits) * 100)} %{#if progress < m.totalUnits}
+									· reste {m.totalUnits - progress}{#if m.runtimeMinutes}, environ {duration(
+											(m.totalUnits - progress) * m.runtimeMinutes
+										)}{/if}<span class="max-sm:hidden">
+										· prochain : <strong class="text-ink">{singular(unit)} {progress + 1}</strong
+										></span
+									>{/if}</span
+							>
+						{/if}
 						{#if secondary}
 							<label class="flex items-center gap-2 text-[13px] text-muted">
 								{capitalize(secondary)}
@@ -529,115 +699,42 @@
 					</div>
 				{/if}
 
-				<!-- Phones: stars and the two icon buttons on a single line -->
-				<div
-					class="{zone} flex-[1_1_220px] max-sm:flex-row max-sm:flex-wrap max-sm:items-center max-sm:justify-between max-sm:gap-x-1.5"
-				>
-					<div class="flex flex-col gap-1">
-						<span class="{zoneLabel} max-sm:sr-only">Ma note</span>
-						<div class="flex items-center">
-							<StarRating {rated} onrate={rate} />
-							<!-- The stars are the only control; the score travels in the user's scale -->
-							<input type="hidden" name="score" value={score ?? ''} />
-						</div>
+				<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+					<div class="flex items-center">
+						<span class="sr-only">Ma note</span>
+						<StarRating {rated} onrate={rate} size={28} />
+						<!-- The stars are the only control; the score travels in the user's scale -->
+						<input type="hidden" name="score" value={score ?? ''} />
 					</div>
-					<div class="flex gap-1 sm:gap-2">
-						<label
-							class="btn-ghost min-h-10 flex-1 bg-surface text-[13px] has-checked:border-anime has-focus-visible:outline-2 has-focus-visible:outline-accent max-sm:w-10 max-sm:flex-none max-sm:px-0"
-						>
-							<input
-								name="isFavorite"
-								type="checkbox"
-								checked={entry.isFavorite}
-								class="peer sr-only"
-							/>
-							<svg
-								aria-hidden="true"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								stroke="currentColor"
-								stroke-width="2"
-								class="fill-none text-muted peer-checked:fill-current peer-checked:text-anime"
-								><path
-									d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"
-								></path></svg
-							>
-							<span class="max-sm:sr-only">Favori</span>
-						</label>
-						<details bind:this={moreMenu}>
-							<summary
-								aria-label="Plus d’options"
-								class="btn-ghost min-h-10 w-10 list-none bg-surface px-0 sm:w-11 [&::-webkit-details-marker]:hidden"
-								onclick={(e) => {
-									const r = e.currentTarget.getBoundingClientRect();
-									menuAt = { top: r.bottom + 8, right: innerWidth - r.right };
-								}}
-							>
-								<svg
-									aria-hidden="true"
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="currentColor"
-									><circle cx="5" cy="12" r="2"></circle><circle cx="12" cy="12" r="2"
-									></circle><circle cx="19" cy="12" r="2"></circle></svg
-								>
-							</summary>
-							<!-- Fixed, so the tracking card's rounded clipping (overflow-hidden) does not cut it -->
-							<div
-								class="fixed z-40 flex w-72 max-w-[calc(100vw-2rem)] flex-col gap-1 card p-2 shadow-xl"
-								style:top="{menuAt.top}px"
-								style:right="{menuAt.right}px"
-							>
-								<label class="flex min-h-11 items-center gap-2.5 px-2 text-sm">
-									<input
-										name="isPrivate"
-										type="checkbox"
-										checked={entry.isPrivate}
-										class="size-4 accent-accent"
-									/>
-									Masquer de mon profil
-								</label>
-								<!-- Confirmed in the page: native confirm() is blocked in some browsers and webviews -->
-								{#if confirmRemove}
-									<div class="flex flex-col gap-2 border-t border-line p-2">
-										<p class="text-sm">Retirer cette œuvre de ta bibliothèque ?</p>
-										<div class="flex gap-2">
-											<button formaction="?/remove" class="btn bg-danger text-sm text-bg"
-												>Retirer</button
-											>
-											<button
-												type="button"
-												class="btn-ghost text-sm"
-												onclick={() => (confirmRemove = false)}>Annuler</button
-											>
-										</div>
-									</div>
-								{:else}
-									<button
-										type="button"
-										class="min-h-11 cursor-pointer rounded-lg px-2 text-left text-sm text-danger hover:bg-surface-2"
-										onclick={() => (confirmRemove = true)}>Retirer de ma bibliothèque</button
-									>
-								{/if}
-							</div>
-						</details>
-					</div>
+					<button
+						type="button"
+						class="flex min-h-10 cursor-pointer items-center gap-1 text-[13px] text-muted hover:text-ink"
+						aria-expanded={datesOpen}
+						aria-controls="entry-dates"
+						onclick={() => (datesOpen = !datesOpen)}
+						>{datesSummary}<svg
+							aria-hidden="true"
+							width="14"
+							height="14"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.4"
+							stroke-linecap="round"
+							class="transition-transform {datesOpen ? 'rotate-180' : ''}"
+							><path d="m6 9 6 6 6-6"></path></svg
+						></button
+					>
 				</div>
 			</div>
 
-			{#if !unit}<input type="hidden" name="progress" value={entry.progress} />{/if}
-			{#if !secondary}<input
-					type="hidden"
-					name="progressSecondary"
-					value={entry.progressSecondary}
-				/>{/if}
-
+			<!-- Dates and rewatches: folded, they change rarely -->
 			<div
-				class="grid grid-cols-2 items-center gap-x-3 gap-y-2 border-t border-line bg-bg/50 px-4 py-3 text-[13px] text-muted sm:flex sm:flex-wrap sm:gap-x-7 sm:px-6"
+				id="entry-dates"
+				class="grid-cols-2 items-center gap-x-3 gap-y-2 border-t border-line bg-bg/50 px-4 py-3 text-[13px] text-muted sm:flex-wrap sm:gap-x-7 sm:px-5 {datesOpen
+					? 'grid sm:flex'
+					: 'hidden'}"
 			>
-				<!-- Phones: the two dates side by side, labels above -->
 				<label class="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
 					Commencé le
 					<input
@@ -672,9 +769,12 @@
 						>{rewatchLabel[m.type].verb}</button
 					>
 				{/if}
-				{#if form?.error}<p role="alert" class="col-span-2 text-danger">{form.error}</p>{/if}
-				{#if form?.saved}<p role="status" class="col-span-2 text-success">Enregistré.</p>{/if}
 			</div>
+			{#if form?.error}<p role="alert" class="px-4 pb-3 text-[13px] text-danger sm:px-5">
+					{form.error}
+				</p>{/if}
+			<!-- Saving is instant and visible in the card itself: announced to screen readers only -->
+			{#if form?.saved}<p role="status" class="sr-only">Enregistré.</p>{/if}
 		</form>
 	{/if}
 
@@ -1034,8 +1134,8 @@
 				<dl class="card px-4.5 py-1">
 					{#each facts as [k, v] (k)}
 						<div class="flex justify-between gap-4 border-b border-line py-2.75 text-sm">
-							<dt class="text-muted">{k}</dt>
-							<dd class="text-right font-semibold">{v}</dd>
+							<dt class="shrink-0 text-muted">{k}</dt>
+							<dd class="min-w-0 text-right font-semibold break-words">{v}</dd>
 						</div>
 					{/each}
 					{#if data.minutesSpent}
@@ -1061,81 +1161,83 @@
 		</aside>
 	</div>
 
-	<section aria-labelledby="members-title" class="flex flex-col gap-8 border-t border-line pt-10">
-		<h2 id="members-title" class="h2 text-[28px]">Chez les membres</h2>
-		<div class="flex flex-wrap gap-8">
-			<div class="flex flex-[1_1_280px] flex-col gap-3">
-				<h3 class="eyebrow">Notes</h3>
-				{#if data.ratings.count}
-					<RatingHistogram {...data.ratings} {scale} />
-				{:else}
-					<p class="text-sm text-muted">Pas encore de note.</p>
+	{#if data.ratings.count || data.followed.length || data.reviews.length}
+		<section aria-labelledby="members-title" class="flex flex-col gap-8 border-t border-line pt-10">
+			<h2 id="members-title" class="h2 text-[28px]">Chez les membres</h2>
+			<div class="flex flex-wrap gap-8">
+				<div class="flex flex-[1_1_280px] flex-col gap-3">
+					<h3 class="eyebrow">Notes</h3>
+					{#if data.ratings.count}
+						<RatingHistogram {...data.ratings} {scale} />
+					{:else}
+						<p class="text-sm text-muted">Pas encore de note.</p>
+					{/if}
+				</div>
+				{#if data.followed.length}
+					<div class="flex flex-[2_1_340px] flex-col gap-3">
+						<h3 class="eyebrow">Tes abonnements</h3>
+						<ul class="flex flex-wrap gap-2">
+							{#each data.followed as f (f.id)}
+								{@const name = f.displayName || f.username}
+								<li>
+									<a
+										href={resolve('/(app)/u/[username]', { username: f.username })}
+										class="flex items-center gap-2 card rounded-full py-1 pr-3.5 pl-1 text-sm text-ink no-underline hover:border-muted"
+										title="{name} · {statusLabel[f.status]}"
+									>
+										<Avatar src={f.avatarUrl} {name} class="size-7 text-xs" />
+										<span class="font-semibold">{name}</span>
+										<span class="text-muted"
+											>{f.score !== null
+												? `★ ${toScale(f.score, scale)}`
+												: statusLabel[f.status]}</span
+										>
+									</a>
+								</li>
+							{/each}
+						</ul>
+					</div>
 				{/if}
 			</div>
-			{#if data.followed.length}
-				<div class="flex flex-[2_1_340px] flex-col gap-3">
-					<h3 class="eyebrow">Tes abonnements</h3>
-					<ul class="flex flex-wrap gap-2">
-						{#each data.followed as f (f.id)}
-							{@const name = f.displayName || f.username}
-							<li>
-								<a
-									href={resolve('/(app)/u/[username]', { username: f.username })}
-									class="flex items-center gap-2 card rounded-full py-1 pr-3.5 pl-1 text-sm text-ink no-underline hover:border-muted"
-									title="{name} · {statusLabel[f.status]}"
-								>
-									<Avatar src={f.avatarUrl} {name} class="size-7 text-xs" />
-									<span class="font-semibold">{name}</span>
-									<span class="text-muted"
-										>{f.score !== null
-											? `★ ${toScale(f.score, scale)}`
-											: statusLabel[f.status]}</span
-									>
-								</a>
+
+			{#if data.reviews.length}
+				<div class="flex flex-col gap-3">
+					<h3 class="eyebrow">Critiques</h3>
+					<ul class="flex flex-col divide-y divide-line">
+						{#each data.reviews as r (r.id)}
+							{@const name = r.displayName || r.username}
+							<li class="flex gap-3.5 py-4">
+								<Avatar src={r.avatarUrl} {name} />
+								<div class="min-w-0 flex-1">
+									<p class="text-sm">
+										<a
+											href={resolve('/(app)/u/[username]', { username: r.username })}
+											class="font-semibold text-ink no-underline hover:underline">{name}</a
+										>
+										{#if r.score !== null}<span class="text-accent-ink"
+												>★ {toScale(r.score, scale)}/{scale}</span
+											>{/if}
+										<span class="text-muted">· {r.when}</span>
+									</p>
+									{#if r.reviewSpoiler}
+										<details class="mt-1.5">
+											<summary class="cursor-pointer text-sm text-muted"
+												>Contient des spoilers · <span class="text-ink underline">Afficher</span
+												></summary
+											>
+											<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
+										</details>
+									{:else}
+										<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
+									{/if}
+								</div>
 							</li>
 						{/each}
 					</ul>
 				</div>
 			{/if}
-		</div>
-
-		{#if data.reviews.length}
-			<div class="flex flex-col gap-3">
-				<h3 class="eyebrow">Critiques</h3>
-				<ul class="flex flex-col divide-y divide-line">
-					{#each data.reviews as r (r.id)}
-						{@const name = r.displayName || r.username}
-						<li class="flex gap-3.5 py-4">
-							<Avatar src={r.avatarUrl} {name} />
-							<div class="min-w-0 flex-1">
-								<p class="text-sm">
-									<a
-										href={resolve('/(app)/u/[username]', { username: r.username })}
-										class="font-semibold text-ink no-underline hover:underline">{name}</a
-									>
-									{#if r.score !== null}<span class="text-accent-ink"
-											>★ {toScale(r.score, scale)}/{scale}</span
-										>{/if}
-									<span class="text-muted">· {r.when}</span>
-								</p>
-								{#if r.reviewSpoiler}
-									<details class="mt-1.5">
-										<summary class="cursor-pointer text-sm text-muted"
-											>Contient des spoilers · <span class="text-ink underline">Afficher</span
-											></summary
-										>
-										<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
-									</details>
-								{:else}
-									<p class="mt-1.5 max-w-[70ch] whitespace-pre-line">{r.review}</p>
-								{/if}
-							</div>
-						</li>
-					{/each}
-				</ul>
-			</div>
-		{/if}
-	</section>
+		</section>
+	{/if}
 </div>
 
 {#if entry && unit && !trackingVisible && (!m.totalUnits || progress < m.totalUnits)}

@@ -73,23 +73,25 @@
 	{:else}
 		<div class="flex flex-col gap-4">
 			<h1
-				class="font-display text-[34px] leading-tight font-extrabold tracking-tight sm:text-[44px]"
+				class="font-display text-2xl leading-tight font-extrabold tracking-tight break-words sm:text-[40px]"
 			>
-				Résultats pour <span class="text-accent-ink">« {data.q} »</span>
+				<span class="text-muted">Résultats pour</span>
+				<span class="text-accent-ink">« {data.q} »</span>
 			</h1>
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- filterHref() builds on resolve() -->
 			<nav class="scroll-row" aria-label="Filtrer par type">
 				{#each [undefined, ...MEDIA_TYPES] as type (type ?? 'all')}
-					<a
-						href={filterHref(type)}
-						class={data.type === type ? 'chip-on' : 'chip'}
-						aria-current={data.type === type ? 'page' : undefined}
-					>
-						{type ? typePlural[type] : 'Tous'}
-						{#if count(type) !== null}<span class="font-medium tabular-nums opacity-60"
-								>{count(type)}</span
-							>{/if}
-					</a>
+					<!-- Empty types hide once every provider answered (before, chips would jump) -->
+					{#if searching || count(type) !== 0 || data.type === type}<a
+							href={filterHref(type)}
+							class={data.type === type ? 'chip-on' : 'chip'}
+							aria-current={data.type === type ? 'page' : undefined}
+						>
+							{type ? typePlural[type] : 'Tous'}
+							{#if count(type) !== null}<span class="font-medium tabular-nums opacity-60"
+									>{count(type)}</span
+								>{/if}
+						</a>{/if}
 				{/each}
 			</nav>
 			<!-- eslint-enable svelte/no-navigation-without-resolve -->
@@ -124,7 +126,10 @@
 					{#each results as r (r.key)}
 						<!-- The title's ::after covers the card, so the whole card opens the work -->
 						<li
-							class="relative flex items-center gap-4 card rounded-[14px] py-2.5 pr-3.5 pl-2.5 hover:border-muted"
+							aria-busy={adding === r.key}
+							class="{adding === r.key
+								? 'animate-pulse border-accent'
+								: ''} relative flex items-center gap-4 card rounded-[14px] py-2.5 pr-3.5 pl-2.5 hover:border-muted"
 						>
 							<Poster src={r.posterUrl} title={r.title} type={r.type} class="w-13 rounded-lg" />
 							<div class="min-w-0 flex-1">
@@ -189,7 +194,17 @@
 										aria-label="Ajouter {r.title} à ma bibliothèque"
 										title="Ajouter à ma bibliothèque"
 										class="btn-ghost size-11 rounded-full px-0"
-										>{#if adding === r.key}<span class="text-xs">…</span>{:else}<svg
+										>{#if adding === r.key}<svg
+												aria-hidden="true"
+												class="animate-spin"
+												width="20"
+												height="20"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2.2"
+												stroke-linecap="round"><path d="M12 3a9 9 0 1 0 9 9"></path></svg
+											><span class="sr-only">Ajout en cours</span>{:else}<svg
 												aria-hidden="true"
 												width="20"
 												height="20"

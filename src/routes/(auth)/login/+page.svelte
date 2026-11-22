@@ -40,6 +40,12 @@
 <svelte:head><title>Connexion · Vulu</title></svelte:head>
 
 <h1 class="font-display text-[40px] font-extrabold tracking-tight">Connexion</h1>
+{#if redirectTo !== '/'}
+	<!-- Sent here by an action that needs an account (add, rate, follow…) -->
+	<p class="-mt-3 text-muted">
+		Connecte-toi ou crée un compte gratuit pour suivre tes films, séries et lectures.
+	</p>
+{/if}
 
 <form class="flex flex-col gap-3.5" onsubmit={submit}>
 	<label class="flex flex-col gap-1.5 text-sm font-medium">
