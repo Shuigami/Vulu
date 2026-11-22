@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fade } from 'svelte/transition';
 	import { resolve } from '$app/paths';
 	import Meta from '#lib/components/Meta.svelte';
 	import Poster from '#lib/components/Poster.svelte';
@@ -79,8 +80,61 @@
 					.join(', ')
 			: ''
 	);
+	const storyFile = $derived(`recap-${data.year}-${data.owner.username}.png`);
 	const ghost = 'btn border border-on-accent/30 text-on-accent hover:border-on-accent';
+
+	// Slides: only those with something to show
+	type Slide = 'open' | 'time' | 'done' | 'months' | 'top' | 'verdict';
+	const slides = $derived<Slide[]>(
+		r
+			? (
+					[
+						'open',
+						r.hours ? 'time' : null,
+						completedTotal ? 'done' : null,
+						r.busiestMonth ? 'months' : null,
+						r.top.length ? 'top' : null,
+						'verdict'
+					] as (Slide | null)[]
+				).filter((s): s is Slide => s !== null)
+			: []
+	);
+	let current = $state(0);
+	const active = $derived(slides[current]);
+	const go = (i: number) => (current = Math.max(0, Math.min(slides.length - 1, i)));
+	const reduced =
+		typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	function onKey(e: KeyboardEvent) {
+		if (e.altKey || e.ctrlKey || e.metaKey) return;
+		if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable]')) return;
+		const step = { ArrowRight: 1, PageDown: 1, ' ': 1, ArrowLeft: -1, PageUp: -1 }[e.key];
+		if (step) {
+			e.preventDefault();
+			go(current + step);
+		} else if (e.key === 'Home') go(0);
+		else if (e.key === 'End') go(slides.length - 1);
+	}
+
+	// A click on the slide moves on, on its left third goes back; links and buttons keep theirs
+	function onDeckClick(e: MouseEvent & { currentTarget: HTMLElement }) {
+		if ((e.target as HTMLElement).closest('a, button')) return;
+		const box = e.currentTarget.getBoundingClientRect();
+		go(current + (e.clientX - box.left < box.width / 3 ? -1 : 1));
+	}
+
+	// The wheel turns the slides, one per gesture, unless the slide itself has to scroll
+	let wheelLock = 0;
+	function onWheel(e: WheelEvent & { currentTarget: HTMLElement }) {
+		const slide = e.currentTarget.querySelector<HTMLElement>('[data-slide]');
+		if (slide && slide.scrollHeight > slide.clientHeight + 4) return;
+		if (Math.abs(e.deltaY) < 20 || Date.now() < wheelLock) return;
+		wheelLock = Date.now() + 700;
+		go(current + Math.sign(e.deltaY));
+	}
 </script>
+
+<svelte:window onkeydown={(e) => r && onKey(e)} />
 
 <Meta
 	title={r ? `Récap ${data.year} de ${name}` : `Récap ${data.year}`}
@@ -138,228 +192,298 @@
 		</div>
 	</section>
 {:else}
-	<div class="flex flex-col gap-20 sm:gap-28">
-		<!-- Opening: a wall of the year's posters, the name set over it -->
-		<section
-			class="relative isolate -mx-4 -mt-10 flex min-h-[72vh] items-end overflow-hidden sm:-mx-6 sm:-mt-12 sm:min-h-[80vh] sm:rounded-b-[32px]"
-		>
-			{#if wallPosters.length}
-				<div aria-hidden="true" class="absolute inset-0 -z-10 overflow-hidden">
-					<div
-						class="recap-wall grid w-[130%] -translate-x-[12%] -translate-y-[6%] -rotate-6 grid-cols-5 gap-2 sm:grid-cols-8 sm:gap-3"
-					>
-						{#each wallPosters as w, i (i)}
-							<img
-								src={w.posterUrl}
-								alt=""
-								loading={i < 16 ? 'eager' : 'lazy'}
-								referrerpolicy="no-referrer"
-								class="aspect-[2/3] w-full rounded-lg bg-surface-2 object-cover"
-							/>
-						{/each}
-					</div>
-				</div>
-				<div
-					aria-hidden="true"
-					class="absolute inset-0 -z-10 bg-linear-to-t from-bg via-bg/80 via-45% to-bg/10"
-				></div>
-			{/if}
-			<div class="flex flex-col gap-4 px-4 pb-10 sm:px-12 sm:pb-16">
-				<p class="text-lg text-muted sm:text-xl">L’année {r.year} de</p>
-				<h1
-					class="font-display text-[clamp(56px,13vw,168px)] leading-[0.85] font-extrabold tracking-[-0.04em] break-words"
-				>
-					{name}
-				</h1>
-				{#if completedTotal}
-					<p class="max-w-xl text-lg sm:text-xl">
-						{fmt(completedTotal)}
-						{completedTotal > 1 ? 'œuvres terminées' : 'œuvre terminée'} en douze mois. Voici ce qu’il
-						en reste.
-					</p>
-				{:else}
-					<p class="max-w-xl text-lg text-muted">Rien de terminé cette année, pour l’instant.</p>
-				{/if}
-			</div>
-		</section>
+	<!-- One slide at a time, like a story: keys, wheel, click (left third goes back) or the dots.
+		 The keys are handled on the window, so the click here is not the only way in. -->
+	<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
+	<div
+		class="relative isolate -mt-4 h-[calc(100dvh-8.5rem-var(--nav-h))] overflow-hidden rounded-[28px] border border-line bg-surface select-none sm:-mt-6 md:h-[calc(100dvh-9rem)]"
+		role="region"
+		aria-roledescription="diaporama"
+		aria-label="Récap {r.year} de {name}"
+		onclick={onDeckClick}
+		onwheel={onWheel}
+	>
+		<div class="absolute inset-x-4 top-3 z-20 flex gap-1.5 sm:inset-x-6 sm:top-4">
+			{#each slides as s, i (s)}
+				<button
+					type="button"
+					class="h-1.5 flex-1 cursor-pointer rounded-full motion-safe:transition-colors {i <=
+					current
+						? 'bg-ink'
+						: 'bg-ink/15'}"
+					aria-label="Diapositive {i + 1} sur {slides.length}"
+					aria-current={i === current ? 'step' : undefined}
+					onclick={() => go(i)}
+				></button>
+			{/each}
+		</div>
 
-		{#if r.hours}
-			<section aria-labelledby="time" class="grid items-end gap-10 md:grid-cols-[1fr_1.15fr]">
-				<div>
-					<p
-						class="font-display text-[clamp(80px,15vw,176px)] leading-[0.82] font-extrabold tracking-[-0.04em] text-accent-ink tabular-nums"
-					>
-						{fmt(r.hours)}
-					</p>
-					<h2 id="time" class="mt-4 font-display text-2xl font-bold sm:text-3xl">
-						heures devant l’écran
-					</h2>
-					{#if r.hours >= 24}
-						<p class="mt-2 text-muted">
-							Soit {fmt(r.hours / 24)} jours entiers, sans dormir ni manger.
-						</p>
+		{#key current}
+			<section
+				data-slide
+				aria-label="{current + 1} sur {slides.length}"
+				class="absolute inset-0 flex flex-col overflow-y-auto px-5 pt-12 pb-20 sm:px-14 sm:pt-16 {active ===
+				'verdict'
+					? 'bg-accent text-on-accent'
+					: ''}"
+				in:fade={{ duration: reduced ? 0 : 280 }}
+			>
+				{#if active === 'open'}
+					{#if wallPosters.length}
+						<div aria-hidden="true" class="absolute inset-0 -z-10 overflow-hidden">
+							<div
+								class="recap-wall grid w-[130%] -translate-x-[12%] -translate-y-[6%] -rotate-6 grid-cols-5 gap-2 sm:grid-cols-8 sm:gap-3"
+							>
+								{#each wallPosters as w, i (i)}
+									<img
+										src={w.posterUrl}
+										alt=""
+										referrerpolicy="no-referrer"
+										class="aspect-[2/3] w-full rounded-lg bg-surface-2 object-cover"
+									/>
+								{/each}
+							</div>
+						</div>
+						<div
+							aria-hidden="true"
+							class="absolute inset-0 -z-10 bg-linear-to-t from-surface via-surface/80 via-45% to-surface/10"
+						></div>
 					{/if}
-				</div>
-				<div class="flex flex-col gap-4">
-					<div
-						class="flex h-16 overflow-hidden rounded-2xl"
-						role="img"
-						aria-label={hoursByType.map((x) => `${typePlural[x.t]} : ${fmt(x.h)} h`).join(', ')}
-					>
-						{#each hoursByType as x (x.t)}
-							<span class={bg[x.t]} style:width="{(x.h / totalHours) * 100}%"></span>
-						{/each}
-					</div>
-					<ul class="flex flex-wrap gap-x-6 gap-y-2">
-						{#each hoursByType as x (x.t)}
-							<li class="flex items-center gap-2">
-								<span class="size-3 rounded-full {bg[x.t]}" aria-hidden="true"></span>
-								<span>{typePlural[x.t]}</span>
-								<span class="text-muted tabular-nums">{fmt(x.h)} h</span>
-							</li>
-						{/each}
-					</ul>
-					{#if r.activeDays >= 10}
-						<p class="text-sm text-muted">Actif {r.activeDays} jours sur 365.</p>
-					{/if}
-				</div>
-			</section>
-		{/if}
-
-		{#if completedTotal}
-			<section aria-labelledby="done" class="flex flex-col gap-5">
-				<h2 id="done" class="text-lg text-muted">Terminés cette année</h2>
-				<p
-					class="max-w-5xl font-display text-[clamp(36px,6.5vw,80px)] leading-[1.02] font-extrabold tracking-[-0.03em]"
-				>
-					{#each doneTypes as t, i (t)}<span class={text[t]}
-							>{fmt(r.completed[t])}&nbsp;{(r.completed[t] > 1
-								? typePlural[t]
-								: typeLabel[t]
-							).toLowerCase()}</span
-						>{i < doneTypes.length - 2 ? ', ' : i === doneTypes.length - 2 ? ' et ' : '.'}{/each}
-				</p>
-				{#if unitsLine}<p class="max-w-2xl text-lg text-muted">Et en chemin : {unitsLine}.</p>{/if}
-			</section>
-		{/if}
-
-		{#if r.busiestMonth}
-			{@const peak = r.perMonth[r.busiestMonth - 1]}
-			<section aria-labelledby="months" class="flex flex-col gap-8">
-				<h2
-					id="months"
-					class="max-w-3xl font-display text-[clamp(28px,4.5vw,48px)] leading-[1.05] font-extrabold"
-				>
-					{capitalize(month(r.busiestMonth))} a été le mois le plus chargé{peak
-						? `, avec ${fmt(peak)} heures`
-						: ''}.
-				</h2>
-				<ol class="grid h-56 grid-cols-12 items-end gap-1.5 sm:gap-3">
-					{#each r.perMonth as h, i (i)}
-						{@const busiest = i + 1 === r.busiestMonth}
-						<li
-							class="flex h-full flex-col justify-end gap-2"
-							aria-label="{capitalize(month(i + 1))} : {fmt(h)} heures"
+					<div class="mt-auto flex flex-col gap-4">
+						<p class="text-lg text-muted sm:text-xl">L’année {r.year} de</p>
+						<h1
+							class="font-display text-[clamp(56px,min(13vw,20vh),168px)] leading-[0.85] font-extrabold tracking-[-0.04em] break-words"
 						>
-							<span
-								class="block min-h-1 rounded-t-lg {busiest ? 'bg-accent' : 'bg-surface-2'}"
-								style:height="{(h / maxMonth) * 100}%"
-							></span>
-							<span
-								class="text-center text-xs {busiest ? 'font-bold text-ink' : 'text-muted'}"
-								aria-hidden="true"
-								>{month(i + 1)
-									.slice(0, 1)
-									.toUpperCase()}</span
+							{name}
+						</h1>
+						<p class="max-w-xl text-lg sm:text-xl">
+							{#if completedTotal}
+								{fmt(completedTotal)}
+								{completedTotal > 1 ? 'œuvres terminées' : 'œuvre terminée'} en douze mois. Voici ce qu’il
+								en reste.
+							{:else}
+								Rien de terminé cette année, pour l’instant.
+							{/if}
+						</p>
+					</div>
+				{:else if active === 'time'}
+					<div class="my-auto grid items-end gap-10 md:grid-cols-[1fr_1.15fr]">
+						<div>
+							<p
+								class="font-display text-[clamp(72px,min(15vw,24vh),176px)] leading-[0.82] font-extrabold tracking-[-0.04em] text-accent-ink tabular-nums"
 							>
-						</li>
-					{/each}
-				</ol>
-			</section>
-		{/if}
-
-		{#if r.top.length}
-			<section aria-labelledby="top" class="flex flex-col gap-8">
-				<h2
-					id="top"
-					class="font-display text-[clamp(28px,4.5vw,48px)] leading-[1.05] font-extrabold"
-				>
-					Le top {r.top.length} de l’année
-				</h2>
-				<ol class="grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-[1.35fr_1fr_1fr] sm:gap-x-6">
-					{#each r.top as t, i (t.mediaId)}
-						<li class={i === 0 ? 'col-span-2 sm:col-span-1 sm:row-span-2' : ''}>
-							<a
-								href={resolve('/(app)/media/[id]', { id: String(t.mediaId) })}
-								class="group flex gap-4 text-ink no-underline {i === 0
-									? 'max-sm:items-end sm:flex-col'
-									: 'flex-col'}"
+								{fmt(r.hours)}
+							</p>
+							<h2 class="mt-4 font-display text-2xl font-bold sm:text-3xl">
+								heures devant l’écran
+							</h2>
+							{#if r.hours >= 24}
+								<p class="mt-2 text-muted">
+									Soit {fmt(r.hours / 24)} jours entiers, sans dormir ni manger.
+								</p>
+							{/if}
+						</div>
+						<div class="flex flex-col gap-4">
+							<div
+								class="flex h-14 overflow-hidden rounded-2xl sm:h-16"
+								role="img"
+								aria-label={hoursByType.map((x) => `${typePlural[x.t]} : ${fmt(x.h)} h`).join(', ')}
 							>
-								<Poster
-									src={t.posterUrl}
-									title={t.title}
-									class="rounded-xl tile-frame {i === 0 ? 'w-40 shrink-0 sm:w-full' : 'w-full'}"
-								/>
-								<span class="flex items-baseline gap-3">
+								{#each hoursByType as x (x.t)}
+									<span class={bg[x.t]} style:width="{(x.h / totalHours) * 100}%"></span>
+								{/each}
+							</div>
+							<ul class="flex flex-wrap gap-x-6 gap-y-2">
+								{#each hoursByType as x (x.t)}
+									<li class="flex items-center gap-2">
+										<span class="size-3 rounded-full {bg[x.t]}" aria-hidden="true"></span>
+										<span>{typePlural[x.t]}</span>
+										<span class="text-muted tabular-nums">{fmt(x.h)} h</span>
+									</li>
+								{/each}
+							</ul>
+							{#if r.activeDays >= 10}
+								<p class="text-sm text-muted">Actif {r.activeDays} jours sur 365.</p>
+							{/if}
+						</div>
+					</div>
+				{:else if active === 'done'}
+					<div class="my-auto flex flex-col gap-5">
+						<h2 class="text-lg text-muted">Terminés cette année</h2>
+						<p
+							class="max-w-5xl font-display text-[clamp(36px,min(6.5vw,10vh),80px)] leading-[1.02] font-extrabold tracking-[-0.03em]"
+						>
+							{#each doneTypes as t, i (t)}<span class={text[t]}
+									>{fmt(r.completed[t])}&nbsp;{(r.completed[t] > 1
+										? typePlural[t]
+										: typeLabel[t]
+									).toLowerCase()}</span
+								>{i < doneTypes.length - 2
+									? ', '
+									: i === doneTypes.length - 2
+										? ' et '
+										: '.'}{/each}
+						</p>
+						{#if unitsLine}<p class="max-w-2xl text-lg text-muted">
+								Et en chemin : {unitsLine}.
+							</p>{/if}
+					</div>
+				{:else if active === 'months' && r.busiestMonth}
+					{@const peak = r.perMonth[r.busiestMonth - 1]}
+					<div class="my-auto flex flex-col gap-8">
+						<h2
+							class="max-w-3xl font-display text-[clamp(28px,min(4.5vw,7vh),48px)] leading-[1.05] font-extrabold"
+						>
+							{capitalize(month(r.busiestMonth))} a été le mois le plus chargé{peak
+								? `, avec ${fmt(peak)} heures`
+								: ''}.
+						</h2>
+						<ol class="grid h-[32vh] grid-cols-12 items-end gap-1.5 sm:gap-3">
+							{#each r.perMonth as h, i (i)}
+								{@const busiest = i + 1 === r.busiestMonth}
+								<li
+									class="flex h-full flex-col justify-end gap-2"
+									aria-label="{capitalize(month(i + 1))} : {fmt(h)} heures"
+								>
 									<span
-										class="font-display leading-none font-extrabold text-accent-ink tabular-nums {i ===
-										0
-											? 'text-[64px]'
-											: 'text-[36px]'}">{i + 1}</span
+										class="block min-h-1 rounded-t-lg {busiest ? 'bg-accent' : 'bg-surface-2'}"
+										style:height="{(h / maxMonth) * 100}%"
+									></span>
+									<span
+										class="text-center text-xs {busiest ? 'font-bold text-ink' : 'text-muted'}"
+										aria-hidden="true"
+										>{month(i + 1)
+											.slice(0, 1)
+											.toUpperCase()}</span
 									>
-									<span class="flex min-w-0 flex-col">
-										<span
-											class="leading-tight font-semibold group-hover:underline {i === 0
-												? 'text-xl'
-												: ''}">{t.title}</span
-										>
-										{#if t.score !== null}<span class="text-sm text-muted"
-												>★ {toScale(t.score, scale)}/{scale}</span
-											>{/if}
-									</span>
-								</span>
-							</a>
-						</li>
-					{/each}
-				</ol>
-			</section>
-		{/if}
-
-		<!-- Finale: the verdict, then what to do with it -->
-		<section
-			class="-mx-4 flex flex-col items-start gap-6 bg-accent px-6 py-14 text-on-accent sm:mx-0 sm:rounded-[32px] sm:px-12 sm:py-20"
-		>
-			{#if r.personality}
-				<p class="text-lg">Le verdict</p>
-				<p
-					class="font-display text-[clamp(48px,10vw,128px)] leading-[0.88] font-extrabold tracking-[-0.04em]"
-				>
-					{r.personality.title}
-				</p>
-				<p class="max-w-xl text-xl">
-					{r.personality.text}{#if r.genre}
-						Genre fétiche : {r.genre}.{/if}
-				</p>
-			{:else}
-				<p class="font-display text-[clamp(36px,6vw,64px)] leading-none font-extrabold">
-					L’année {r.year + 1} commence bientôt.
-				</p>
-			{/if}
-			<div class="mt-4 flex flex-wrap gap-2">
-				<ShareButton
-					title={`Récap ${r.year} de ${name}`}
-					{path}
-					class="btn bg-on-accent text-accent"
-				/>
-				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query on a resolved path -->
-				<a href={storyHref} download={`recap-${r.year}-${data.owner.username}.png`} class={ghost}
-					>Télécharger l’image pour ta story</a
-				>
-				{#if !data.isSelf}
-					<a href={resolve('recap')} class={ghost}>Voir mon récap</a>
+								</li>
+							{/each}
+						</ol>
+					</div>
+				{:else if active === 'top'}
+					<div class="my-auto flex flex-col gap-6 sm:gap-8">
+						<h2
+							class="font-display text-[clamp(28px,min(4.5vw,7vh),48px)] leading-[1.05] font-extrabold"
+						>
+							Le top {r.top.length} de l’année
+						</h2>
+						<!-- A podium: the first stands taller, the rest line up beside it -->
+						<ol class="grid grid-cols-4 gap-3 sm:flex sm:items-end sm:gap-5">
+							{#each r.top as t, i (t.mediaId)}
+								<li class={i === 0 ? 'col-span-4 sm:w-[min(28vh,20vw)]' : 'sm:w-[min(19vh,13vw)]'}>
+									<a
+										href={resolve('/(app)/media/[id]', { id: String(t.mediaId) })}
+										class="group flex text-ink no-underline {i === 0
+											? 'items-end gap-4 sm:flex-col sm:items-start sm:gap-3'
+											: 'flex-col gap-2'}"
+									>
+										<Poster
+											src={t.posterUrl}
+											title={t.title}
+											class="rounded-xl tile-frame {i === 0 ? 'w-28 sm:w-full' : 'w-full'}"
+										/>
+										<span class="flex items-baseline gap-2">
+											<span
+												class="font-display leading-none font-extrabold text-accent-ink tabular-nums {i ===
+												0
+													? 'text-[52px]'
+													: 'text-[26px]'}">{i + 1}</span
+											>
+											<span class="flex min-w-0 flex-col">
+												<span
+													class="line-clamp-2 leading-tight font-semibold group-hover:underline {i ===
+													0
+														? 'text-lg'
+														: 'text-sm max-sm:sr-only'}">{t.title}</span
+												>
+												{#if t.score !== null && i === 0}<span class="text-sm text-muted"
+														>★ {toScale(t.score, scale)}/{scale}</span
+													>{/if}
+											</span>
+										</span>
+									</a>
+								</li>
+							{/each}
+						</ol>
+					</div>
+				{:else if active === 'verdict'}
+					<div class="my-auto flex flex-col items-start gap-6">
+						{#if r.personality}
+							<p class="text-lg">Le verdict</p>
+							<p
+								class="font-display text-[clamp(48px,min(10vw,16vh),128px)] leading-[0.88] font-extrabold tracking-[-0.04em]"
+							>
+								{r.personality.title}
+							</p>
+							<p class="max-w-xl text-xl">
+								{r.personality.text}{#if r.genre}
+									Genre fétiche : {r.genre}.{/if}
+							</p>
+						{:else}
+							<p class="font-display text-[clamp(36px,6vw,64px)] leading-none font-extrabold">
+								L’année {r.year + 1} commence bientôt.
+							</p>
+						{/if}
+						<div class="mt-4 flex flex-wrap gap-2">
+							<ShareButton
+								title={`Récap ${r.year} de ${name}`}
+								{path}
+								class="btn bg-on-accent text-accent"
+							/>
+							<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- query on a resolved path -->
+							<a href={storyHref} download={storyFile} class={ghost}>Image pour ta story</a>
+							{#if !data.isSelf}
+								<a href={resolve('recap')} class={ghost}>Voir mon récap</a>
+							{/if}
+						</div>
+					</div>
 				{/if}
-			</div>
-		</section>
+			</section>
+		{/key}
+
+		<div class="absolute right-4 bottom-4 z-20 flex items-center gap-2 sm:right-6 sm:bottom-6">
+			<span
+				class="mr-1 text-sm tabular-nums {active === 'verdict'
+					? 'text-on-accent/70'
+					: 'text-muted'}">{current + 1} / {slides.length}</span
+			>
+			<button
+				type="button"
+				class="btn-ghost size-11 rounded-full px-0"
+				aria-label="Précédente"
+				disabled={current === 0}
+				onclick={() => go(current - 1)}
+				><svg
+					aria-hidden="true"
+					width="20"
+					height="20"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg
+				></button
+			>
+			<button
+				type="button"
+				class="btn-accent size-11 rounded-full px-0"
+				aria-label="Suivante"
+				disabled={current === slides.length - 1}
+				onclick={() => go(current + 1)}
+				><svg
+					aria-hidden="true"
+					width="20"
+					height="20"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2.5"
+					stroke-linecap="round"
+					stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg
+				></button
+			>
+		</div>
 	</div>
 {/if}
 
