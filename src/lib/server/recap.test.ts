@@ -71,7 +71,7 @@ describe('yearRecap in the database', () => {
 		const [open, secret] = mediaIds;
 		await db.insert(libraryEntries).values([
 			{ userId, mediaId: open, status: 'completed', score: 80 },
-			{ userId, mediaId: secret, status: 'completed', score: 95, isPrivate: true }
+			{ userId, mediaId: secret, status: 'completed', score: 100, isPrivate: true }
 		]);
 		await db.insert(activityEvents).values([
 			{
@@ -109,10 +109,13 @@ describe('yearRecap in the database', () => {
 		expect(own.perMonth[2]).toBe(2); // March: 120 min
 		expect(own.perMonth).toHaveLength(12);
 		expect(own.wall).toEqual([]); // no posters on the test media
+		expect(own.favorites.map((f) => f.mediaId)).toEqual([secret]); // 100 only, not 80
+		expect(own.favoritesCount).toBe(1);
 
 		const seen = await yearRecap(db, userId, ANONYMOUS_ID);
 		expect(seen.completed.movie).toBe(1);
 		expect(seen.top.map((t) => t.mediaId)).toEqual([open]);
 		expect(seen.minutes.movie).toBe(120);
+		expect(seen.favoritesCount).toBe(0); // the private 5/5 stays hidden
 	});
 });

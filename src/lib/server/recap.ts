@@ -15,6 +15,8 @@ export const RECAP_BANNER_END = new Date('2027-02-01T00:00:00+01:00');
 
 /** Posters on the page's opening wall. */
 export const RECAP_WALL = 32;
+/** Posters shown on the perfect-scores slide */
+export const RECAP_FAVORITES = 60;
 
 export const recapOpen = (now = new Date()) => now >= RECAP_RELEASE;
 
@@ -89,7 +91,7 @@ export async function yearRecap(db: Db, userId: string, viewerId: string, year =
 		.as('ev');
 	const isCompleted = eq(ev.kind, 'completed');
 
-	const [totals, months, top, [genre], [habits], wall] = await Promise.all([
+	const [totals, months, top, [genre], [habits], wall, favorites] = await Promise.all([
 		db
 			.select({
 				type: ev.type,
@@ -147,7 +149,20 @@ export async function yearRecap(db: Db, userId: string, viewerId: string, year =
 			.where(and(isCompleted, sql`${ev.posterUrl} is not null`))
 			.groupBy(ev.mediaId, ev.title, ev.posterUrl)
 			.orderBy(desc(sql`max(${ev.local})`))
-			.limit(RECAP_WALL)
+			.limit(RECAP_WALL),
+		// The year's perfect scores (5/5 in every scale), latest first, with their full count
+		db
+			.select({
+				mediaId: ev.mediaId,
+				title: ev.title,
+				posterUrl: ev.posterUrl,
+				total: sql<number>`(count(*) over ())::int`
+			})
+			.from(ev)
+			.where(and(isCompleted, eq(ev.score, 100)))
+			.groupBy(ev.mediaId, ev.title, ev.posterUrl)
+			.orderBy(desc(sql`max(${ev.local})`))
+			.limit(RECAP_FAVORITES)
 	]);
 
 	const minutes = zeros();
@@ -177,6 +192,13 @@ export async function yearRecap(db: Db, userId: string, viewerId: string, year =
 		activeDays: habits?.days ?? 0,
 		top,
 		wall: wall as { mediaId: number; title: string; posterUrl: string }[],
+		/** Perfect scores of the year (at most `RECAP_FAVORITES` posters) and how many there are */
+		favorites: favorites.map((f) => ({
+			mediaId: f.mediaId,
+			title: f.title,
+			posterUrl: f.posterUrl
+		})),
+		favoritesCount: favorites[0]?.total ?? 0,
 		personality: personality({ completed, minutes, nightShare, tracked })
 	};
 }
