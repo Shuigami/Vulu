@@ -13,6 +13,9 @@ export const RECAP_RELEASE = new Date('2026-12-01T00:00:00+01:00');
 /** The home page banner (teaser, then the recap) disappears after this. */
 export const RECAP_BANNER_END = new Date('2027-02-01T00:00:00+01:00');
 
+/** Posters on the page's opening wall. */
+export const RECAP_WALL = 32;
+
 export const recapOpen = (now = new Date()) => now >= RECAP_RELEASE;
 
 const zeros = () => Object.fromEntries(MEDIA_TYPES.map((t) => [t, 0])) as Record<MediaType, number>;
@@ -86,7 +89,7 @@ export async function yearRecap(db: Db, userId: string, viewerId: string, year =
 		.as('ev');
 	const isCompleted = eq(ev.kind, 'completed');
 
-	const [totals, months, top, [genre], [habits]] = await Promise.all([
+	const [totals, months, top, [genre], [habits], wall] = await Promise.all([
 		db
 			.select({
 				type: ev.type,
@@ -136,7 +139,15 @@ export async function yearRecap(db: Db, userId: string, viewerId: string, year =
 				days: sql<number>`count(distinct ${ev.local}::date)::int`
 			})
 			.from(ev)
-			.where(ne(ev.source, 'import'))
+			.where(ne(ev.source, 'import')),
+		// Posters of the year's completions, latest first (the page's opening wall)
+		db
+			.select({ mediaId: ev.mediaId, title: ev.title, posterUrl: ev.posterUrl })
+			.from(ev)
+			.where(and(isCompleted, sql`${ev.posterUrl} is not null`))
+			.groupBy(ev.mediaId, ev.title, ev.posterUrl)
+			.orderBy(desc(sql`max(${ev.local})`))
+			.limit(RECAP_WALL)
 	]);
 
 	const minutes = zeros();
@@ -158,9 +169,14 @@ export async function yearRecap(db: Db, userId: string, viewerId: string, year =
 		completed,
 		units,
 		busiestMonth: busiest && (busiest.minutes || busiest.count) ? busiest.month : null,
+		/** Hours per month, January first */
+		perMonth: Array.from({ length: 12 }, (_, i) =>
+			Math.round((months.find((m) => m.month === i + 1)?.minutes ?? 0) / 60)
+		),
 		genre: genre?.name ?? null,
 		activeDays: habits?.days ?? 0,
 		top,
+		wall: wall as { mediaId: number; title: string; posterUrl: string }[],
 		personality: personality({ completed, minutes, nightShare, tracked })
 	};
 }

@@ -106,6 +106,9 @@ describe('yearRecap in the database', () => {
 		expect(own.top.map((t) => t.mediaId)).toEqual([secret, open]);
 		expect(own.busiestMonth).toBe(3);
 		expect(own.activeDays).toBe(3);
+		expect(own.perMonth[2]).toBe(2); // March: 120 min
+		expect(own.perMonth).toHaveLength(12);
+		expect(own.wall).toEqual([]); // no posters on the test media
 
 		const seen = await yearRecap(db, userId, ANONYMOUS_ID);
 		expect(seen.completed.movie).toBe(1);
