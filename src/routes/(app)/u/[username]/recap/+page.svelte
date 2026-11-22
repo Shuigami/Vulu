@@ -63,14 +63,22 @@
 	);
 	// The perfect scores make their own poster once there are enough of them; otherwise the top 5
 	const STARS_MIN = 3;
-	const starPosters = $derived.by(() => {
-		const withPoster = r?.favorites.filter((f) => f.posterUrl) ?? [];
-		return withPoster.length
-			? Array.from(
-					{ length: Math.max(90, withPoster.length) },
-					(_, i) => withPoster[i % withPoster.length]
-				)
-			: [];
+	// The posters fill the space left under the title: the column count that gives the largest poster
+	let gridW = $state(0);
+	let gridH = $state(0);
+	const starGrid = $derived.by(() => {
+		const n = r?.favorites.length ?? 0;
+		const gap = gridW < 640 ? 6 : 12;
+		let best = { cols: 1, w: 0 };
+		for (let cols = 1; cols <= n; cols++) {
+			const rows = Math.ceil(n / cols);
+			const w = Math.min(
+				(gridW - (cols - 1) * gap) / cols,
+				((gridH - (rows - 1) * gap) / rows) * (2 / 3)
+			);
+			if (w > best.w) best = { cols, w };
+		}
+		return { ...best, w: Math.floor(Math.min(best.w, 220)), gap };
 	});
 	const doneTypes = $derived(r ? MEDIA_TYPES.filter((t) => r.completed[t] > 0) : []);
 	const totalHours = $derived(
@@ -372,29 +380,12 @@
 						</ol>
 					</div>
 				{:else if active === 'stars'}
-					<!-- A poster of its own: every perfect score behind, the count in front -->
-					<div aria-hidden="true" class="absolute inset-0 -z-10 overflow-hidden">
-						<div class="grid grid-cols-4 gap-1.5 sm:grid-cols-9 sm:gap-2">
-							{#each starPosters as f, i (i)}
-								<img
-									src={f.posterUrl}
-									alt=""
-									referrerpolicy="no-referrer"
-									class="aspect-[2/3] w-full bg-surface-2 object-cover"
-								/>
-							{/each}
-						</div>
-					</div>
-					<div
-						aria-hidden="true"
-						class="absolute inset-0 -z-10 bg-[radial-gradient(ellipse_at_center,var(--color-surface)_25%,color-mix(in_oklab,var(--color-surface)_70%,transparent)_75%)]"
-					></div>
-					<div class="my-auto flex flex-col items-center gap-5 text-center">
-						<p class="flex gap-1.5 text-accent-ink" aria-label="5 étoiles sur 5">
+					<div class="flex flex-col gap-3">
+						<p class="flex gap-1 text-accent-ink" aria-label="5 étoiles sur 5">
 							{#each [1, 2, 3, 4, 5] as i (i)}
 								<svg
 									aria-hidden="true"
-									class="size-7 sm:size-9"
+									class="size-6 sm:size-7"
 									viewBox="0 0 24 24"
 									fill="currentColor"
 									><path
@@ -404,20 +395,45 @@
 							{/each}
 						</p>
 						<h2
-							class="font-display text-[clamp(44px,min(9vw,14vh),120px)] leading-[0.9] font-extrabold tracking-[-0.04em]"
+							class="font-display text-[clamp(36px,min(6.5vw,9vh),88px)] leading-[0.92] font-extrabold tracking-[-0.04em]"
 						>
-							{data.isSelf ? 'Mes' : 'Les'} 5 étoiles<br />de l’année
+							{data.isSelf ? 'Mes' : 'Les'} 5 étoiles de l’année
 						</h2>
-						<p class="max-w-xl text-lg sm:text-xl">
+						<p class="text-lg text-muted">
 							{fmt(r.favoritesCount)} œuvres notées {scale}/{scale}{data.isSelf
 								? ''
-								: ` par ${name}`}, sur {fmt(completedTotal)} terminées.
+								: ` par ${name}`}, sur {fmt(completedTotal)} terminées{r.favoritesCount >
+							r.favorites.length
+								? ` (les ${r.favorites.length} dernières ici)`
+								: ''}.
 						</p>
-						<p class="line-clamp-3 max-w-2xl text-muted">
-							{r.favorites.map((f) => f.title).join(' · ')}{r.favoritesCount > r.favorites.length
-								? '…'
-								: ''}
-						</p>
+					</div>
+					<!-- Every perfect score, as large as the slide allows -->
+					<div class="mt-6 min-h-0 flex-1" bind:clientWidth={gridW} bind:clientHeight={gridH}>
+						{#if starGrid.w > 0}
+							<ul
+								class="grid h-full content-center justify-start"
+								style:grid-template-columns="repeat({starGrid.cols}, {starGrid.w}px)"
+								style:gap="{starGrid.gap}px"
+							>
+								{#each r.favorites as f, i (f.mediaId)}
+									<li>
+										<a
+											href={resolve('/(app)/media/[id]', { id: String(f.mediaId) })}
+											title={f.title}
+											aria-label={f.title}
+										>
+											<Poster
+												src={f.posterUrl}
+												title={f.title}
+												delay={reduced ? 0 : Math.min(i * 35, 1200)}
+												class="w-full rounded-lg tile-frame"
+											/>
+										</a>
+									</li>
+								{/each}
+							</ul>
+						{/if}
 					</div>
 				{:else if active === 'top'}
 					<div class="my-auto flex flex-col gap-6 sm:gap-8">
