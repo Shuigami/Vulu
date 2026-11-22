@@ -50,6 +50,16 @@ export async function unfollow(db: Db, followerId: string, username: string) {
 		);
 }
 
+/** A member's public fields, or null when unknown or private to `viewerId`. */
+export async function findUser(db: Db, username: string, viewerId: string) {
+	const [user] = await db
+		.select({ ...publicUser, profileVisibility: users.profileVisibility })
+		.from(users)
+		.where(eq(users.username, username));
+	if (!user || (user.profileVisibility === 'private' && user.id !== viewerId)) return null;
+	return user;
+}
+
 /** A profile as seen by `viewerId`, or null when it does not exist or is private. */
 export async function profileByUsername(db: Db, username: string, viewerId: string) {
 	const [user] = await db

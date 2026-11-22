@@ -171,22 +171,6 @@ export type YearRecap = Awaited<ReturnType<typeof yearRecap>>;
 export const daysToRelease = (now = new Date()) =>
 	Math.max(0, Math.ceil((RECAP_RELEASE.getTime() - now.getTime()) / 86_400_000));
 
-/** The recap's owner as `viewerId` may see them, or null (unknown or private profile). */
-export async function recapOwner(db: Db, username: string, viewerId: string) {
-	const [user] = await db
-		.select({
-			id: users.id,
-			username: users.username,
-			displayName: users.displayName,
-			avatarUrl: users.avatarUrl,
-			profileVisibility: users.profileVisibility
-		})
-		.from(users)
-		.where(eq(users.username, username));
-	if (!user || (user.profileVisibility === 'private' && user.id !== viewerId)) return null;
-	return user;
-}
-
 /** "1er décembre": the release day as the pages and cards say it. */
 export function releaseLabel(d = RECAP_RELEASE) {
 	const [day, month] = new Intl.DateTimeFormat('fr-FR', {

@@ -48,6 +48,12 @@
 		<a href={resolve('/(app)/u/[username]/recap', { username: p.user.username })} class="btn-ghost"
 			>Récap {data.recapYear}</a
 		>
+		{#if !p.isSelf}
+			<a
+				href={resolve('/(app)/u/[username]/compat', { username: p.user.username })}
+				class="btn-ghost">Comparer nos goûts</a
+			>
+		{/if}
 		<ShareButton title={name} />
 		{#if p.isSelf}
 			<a href={resolve('settings')} class="btn-ghost">Réglages</a>

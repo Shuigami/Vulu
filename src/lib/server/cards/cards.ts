@@ -211,3 +211,46 @@ export function mediaCard(m: {
 		)
 	);
 }
+
+type Person = { name: string; avatar: string | null };
+
+export function compatCard(c: {
+	host: string;
+	a: Person;
+	b: Person;
+	percent: number | null;
+	verdict: string | null;
+	shared: number;
+	posters: { title: string; poster: string | null }[];
+}) {
+	return frame(
+		c.host,
+		h(
+			{ width: 640, flexDirection: 'column', justifyContent: 'center', gap: 18 },
+			h(
+				{ alignItems: 'center' },
+				avatar(c.a.avatar, c.a.name, 96),
+				h(
+					{ marginLeft: -24, borderRadius: 999, border: `6px solid ${C.bg}` },
+					avatar(c.b.avatar, c.b.name, 96)
+				)
+			),
+			h({ fontSize: 30, color: C.muted }, clip(`${c.a.name} & ${c.b.name}`, 40)),
+			c.percent === null
+				? h({ fontFamily: 'Display', fontSize: 56 }, 'Pas encore assez d’œuvres en commun')
+				: h(
+						{ alignItems: 'baseline', gap: 18 },
+						h(
+							{ fontFamily: 'Display', fontSize: 140, lineHeight: 0.9, color: C.accent },
+							`${c.percent} %`
+						),
+						h({ fontSize: 30, color: C.muted }, 'compatibles')
+					),
+			c.verdict && h({ fontSize: 34, fontWeight: 600 }, c.verdict)
+		),
+		h(
+			{ flexWrap: 'wrap', width: 2 * 130 + 14, gap: 14, alignContent: 'center' },
+			...c.posters.slice(0, 4).map((p) => poster(p.poster, p.title, 130, 195))
+		)
+	);
+}
