@@ -358,7 +358,8 @@
 		</section>
 	</div>
 
-	{#if data.user && nextUp}
+	{#if data.user && nextUp && !entry}
+		<!-- In the library, the next episode lives in the tracking card below -->
 		<section
 			aria-labelledby="next-up"
 			class="flex flex-wrap items-center gap-4 card rounded-[22px] p-4 sm:gap-5 sm:p-5"
@@ -540,6 +541,17 @@
 							style:top="{menuAt.top}px"
 							style:right="{menuAt.right}px"
 						>
+							{#if nextUp && lastAired && lastAired.id !== nextUp.id}
+								<button
+									type="button"
+									class="min-h-11 cursor-pointer rounded-lg px-2 text-left text-sm hover:bg-surface-2"
+									disabled={marking}
+									onclick={() => {
+										if (moreMenu) moreMenu.open = false;
+										mark('episode', { episodeId: lastAired.id, seen: 'true' });
+									}}>Marquer toute la série comme vue</button
+								>
+							{/if}
 							<label class="flex min-h-11 items-center gap-2.5 px-2 text-sm">
 								<input
 									name="isPrivate"
@@ -577,6 +589,32 @@
 
 				{#if unit}
 					<div class="flex flex-col gap-2">
+						{#if nextUp}
+							<div class="flex items-center gap-3 pb-1">
+								<a
+									href={episodeHref(nextUp.id)}
+									tabindex="-1"
+									aria-hidden="true"
+									class="w-24 shrink-0 sm:w-32"
+									><EpisodeStill src={nextUp.stillUrl} class="rounded-lg" /></a
+								>
+								<div class="flex min-w-0 flex-1 flex-col gap-0.5">
+									<span class="text-[11px] font-bold tracking-widest text-accent-ink uppercase"
+										>À voir ensuite</span
+									>
+									<a
+										href={episodeHref(nextUp.id)}
+										class="line-clamp-2 leading-snug font-semibold text-ink no-underline hover:underline"
+										>{nextUp.label} · {nextUp.title ?? `Épisode ${nextUp.number}`}</a
+									>
+									<span class="text-xs text-muted"
+										>{[nextUp.airDate, nextUp.runtime && `${nextUp.runtime} min`]
+											.filter(Boolean)
+											.join(' · ')}</span
+									>
+								</div>
+							</div>
+						{/if}
 						<div class="flex items-center gap-3">
 							<label for="progress" class="sr-only">Progression · {unit}</label>
 							<p
@@ -604,12 +642,33 @@
 									aria-label="Retirer un"
 									onclick={() => setProgress(progress - 1)}>−</button
 								>
-								<button
-									type="button"
-									class="btn-accent px-3.5"
-									onclick={() => setProgress(progress + 1)}
-									>+1<span class="max-[360px]:sr-only">{singular(unit)}</span></button
-								>
+								{#if nextUp}
+									<button
+										type="button"
+										class="btn-accent px-3.5"
+										disabled={marking}
+										aria-label="Marquer {nextUp.label} vu"
+										onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}
+										><svg
+											aria-hidden="true"
+											width="18"
+											height="18"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="3"
+											stroke-linecap="round"
+											stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"></path></svg
+										>Vu</button
+									>
+								{:else}
+									<button
+										type="button"
+										class="btn-accent px-3.5"
+										onclick={() => setProgress(progress + 1)}
+										>+1<span class="max-[360px]:sr-only">{singular(unit)}</span></button
+									>
+								{/if}
 							</div>
 						</div>
 						{#if m.totalUnits}
