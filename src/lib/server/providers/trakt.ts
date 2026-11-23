@@ -22,7 +22,7 @@ type Work = { title: string; year: number | null; ids: Ids; genres?: string[] };
 /** Trakt tags anime with the "anime" genre: AniList owns them, they are matched there later. */
 export type TraktItem = ImportItem & { anime?: { title: string; year: number | null } };
 type Watched = { plays: number; last_watched_at: string | null; movie?: Work; show?: Work };
-type Rated = { rating: number; movie?: Work; show?: Work };
+type Rated = { rating: number; rated_at: string | null; movie?: Work; show?: Work };
 type Listed = { movie?: Work; show?: Work };
 type HistoryEpisode = {
 	watched_at: string;
@@ -30,7 +30,9 @@ type HistoryEpisode = {
 	show: Work;
 };
 
-const day = (iso: string | null) => (iso ? iso.slice(0, 10) : null);
+// Trakt stores plays of unknown date at the epoch: no date
+const day = (iso: string | null) =>
+	iso && !iso.startsWith('1970-01-01') ? iso.slice(0, 10) : null;
 const keyOf = (type: 'movie' | 'tv', w: Work) =>
 	`${type}:${w.ids.tmdb ?? w.ids.slug ?? w.ids.trakt}`;
 
@@ -153,13 +155,14 @@ export function createTraktClient(opts: {
 			for (const h of history ?? []) {
 				if (h.episode.season <= 0) continue;
 				const key = keyOf('tv', h.show);
-				const d = day(h.watched_at)!;
+				if (!seen.has(key)) seen.set(key, new Set());
+				seen.get(key)!.add(`${h.episode.season}x${h.episode.number}`);
+				const d = day(h.watched_at);
+				if (!d) continue;
 				const s = span.get(key);
 				if (!s) span.set(key, { first: d, last: d });
 				else if (d < s.first) s.first = d;
 				else if (d > s.last) s.last = d;
-				if (!seen.has(key)) seen.set(key, new Set());
-				seen.get(key)!.add(`${h.episode.season}x${h.episode.number}`);
 			}
 
 			const items = new Map<string, TraktItem>();
@@ -222,6 +225,8 @@ export function createTraktClient(opts: {
 				const entry = row(r.movie ? 'movie' : 'tv', work);
 				entry.score = r.rating * 10; // Trakt ratings are out of 10
 				if (entry.status === 'planned') entry.status = 'completed'; // rated means seen
+				// Seen without a known day (rated only, plays of unknown date): the day it was rated
+				if (!entry.startedOn && !entry.completedOn) entry.completedOn = day(r.rated_at);
 			}
 			return [...items.values()];
 		}

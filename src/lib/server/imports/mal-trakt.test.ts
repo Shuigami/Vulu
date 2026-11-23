@@ -133,7 +133,8 @@ describe('Trakt', () => {
 			// As served today: no seasons, plays include rewatches
 			'/watched/shows': [
 				{ plays: 5, last_watched_at: null, show: { ...work('Show', 20), genres: ['anime'] } },
-				{ plays: 3, last_watched_at: null, show: work('No history', 21) }
+				{ plays: 3, last_watched_at: null, show: work('No history', 21) },
+				{ plays: 1, last_watched_at: null, show: work('Unknown day', 22) }
 			],
 			'/history/episodes': [
 				// Newest first, as Trakt serves the history
@@ -156,13 +157,19 @@ describe('Trakt', () => {
 					watched_at: '2025-01-01T21:00:00.000Z',
 					episode: { season: 0, number: 1 },
 					show: work('Show', 20)
-				} // special
+				}, // special
+				// Trakt's "unknown date": counted, not dated
+				{
+					watched_at: '1970-01-01T00:00:00.000Z',
+					episode: { season: 1, number: 1 },
+					show: work('Unknown day', 22)
+				}
 			],
 			'/ratings/movies': [
-				{ rating: 8, movie: work('Rated only', 12) },
-				{ rating: 7, movie: work('Seen', 11) }
+				{ rating: 8, rated_at: '2023-06-01T10:00:00.000Z', movie: work('Rated only', 12) },
+				{ rating: 7, rated_at: '2024-06-01T10:00:00.000Z', movie: work('Seen', 11) }
 			],
-			'/ratings/shows': [{ rating: 9, show: work('No id', null) }]
+			'/ratings/shows': [{ rating: 9, rated_at: null, show: work('No id', null) }]
 		};
 		const headers: Record<string, string>[] = [];
 		const urls: string[] = [];
@@ -197,9 +204,19 @@ describe('Trakt', () => {
 		expect(urls.find((u) => u.includes('/watched/shows'))).toContain('extended=full');
 		expect(urls.find((u) => u.includes('/history/episodes'))).not.toContain('extended');
 		expect(byLabel['No history (2020)'].entry.progress).toBe(3); // falls back to plays
-		expect(byLabel['Rated only (2020)'].entry).toMatchObject({ status: 'completed', score: 80 });
+		// Rated only: seen on the day it was rated; a rating does not move a known date
+		expect(byLabel['Rated only (2020)'].entry).toMatchObject({
+			status: 'completed',
+			score: 80,
+			completedOn: '2023-06-01'
+		});
+		expect(byLabel['Unknown day (2020)'].entry).toMatchObject({
+			progress: 1,
+			startedOn: null,
+			completedOn: null
+		});
 		expect(byLabel['No id (2020)'].ref).toBeUndefined();
-		expect(items).toHaveLength(6);
+		expect(items).toHaveLength(7);
 	});
 
 	it('finds an anime on AniList, then its TV sequels in order', async () => {
