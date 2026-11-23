@@ -26,5 +26,7 @@ export const variables = defineEnvVars({
 	TRAKT_CLIENT_ID: { schema: optional },
 	// Outgoing e-mail (password reset); without SMTP_URL e-mails are printed to the console
 	SMTP_URL: { schema: optional },
-	MAIL_FROM: { schema: optional }
+	MAIL_FROM: { schema: optional },
+	// Web push (release notifications): the browser subscribes with the public key
+	VAPID_PUBLIC_KEY: { schema: optional }
 });

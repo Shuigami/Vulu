@@ -1,8 +1,11 @@
 import { fail } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
-import { db } from '#lib/server/app.ts';
+import { VAPID_PUBLIC_KEY } from '$app/env/private';
+import { count, eq } from 'drizzle-orm';
+import { db, getBoss } from '#lib/server/app.ts';
 import { requireUser } from '#lib/server/guard.ts';
-import { users } from '#lib/server/db/schema.ts';
+import { pushSubscriptions, users } from '#lib/server/db/schema.ts';
+import { QUEUES, type PushTestJob } from '#lib/server/jobs.ts';
+import { getNotificationSettings, setReleaseEmail } from '#lib/server/notifications.ts';
 import { removeAvatar, saveAvatar, setDisplayName } from '#lib/server/profile.ts';
 import { RATING_SCALES } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
@@ -13,15 +16,27 @@ export const load: PageServerLoad = async ({ locals, cookies, url }) => {
 			profileVisibility: users.profileVisibility,
 			ratingScale: users.ratingScale,
 			displayName: users.displayName,
-			avatarUrl: users.avatarUrl
+			avatarUrl: users.avatarUrl,
+			email: users.email
 		})
 		.from(users)
 		.where(eq(users.id, requireUser(locals, url).id));
+	const userId = requireUser(locals, url).id;
+	const [{ devices }] = await db
+		.select({ devices: count() })
+		.from(pushSubscriptions)
+		.where(eq(pushSubscriptions.userId, userId));
+	const notifications = {
+		...(await getNotificationSettings(db, userId)),
+		devices,
+		// Without VAPID keys the page offers e-mail only
+		vapidPublicKey: VAPID_PUBLIC_KEY ?? null
+	};
 	// Set by the theme choice below; hooks.server.ts applies it to every page
 	const cookie = cookies.get('theme');
 	const theme: 'light' | 'dark' | 'system' =
 		(['light', 'dark'] as const).find((t) => t === cookie) ?? 'system';
-	return { ...u, theme };
+	return { ...u, theme, notifications };
 };
 
 export const actions: Actions = {
@@ -41,6 +56,16 @@ export const actions: Actions = {
 				return fail(400, { profileError: 'Cette image est trop lourde.' });
 		}
 		return { profileSaved: true };
+	},
+	notifications: async ({ request, locals, url }) => {
+		const form = await request.formData();
+		await setReleaseEmail(db, requireUser(locals, url).id, form.get('releaseEmail') === 'on');
+		return { notificationsSaved: true };
+	},
+	testPush: async ({ locals, url }) => {
+		const job: PushTestJob = { userId: requireUser(locals, url).id };
+		await (await getBoss()).send(QUEUES.pushTest, job);
+		return { pushTestSent: true };
 	},
 	removeAvatar: async ({ locals, url }) => {
 		await removeAvatar(db, requireUser(locals, url).id);

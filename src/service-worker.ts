@@ -41,3 +41,37 @@ self.addEventListener('fetch', (event) => {
 		);
 	}
 });
+
+// Release notifications (src/lib/server/notifications.ts, PushMessage): `url` is relative to the app
+self.addEventListener('push', (event) => {
+	const message = (event.data?.json() ?? {}) as {
+		title?: string;
+		body?: string;
+		url?: string;
+		tag?: string;
+	};
+	event.waitUntil(
+		self.registration.showNotification(message.title ?? 'Vulu', {
+			body: message.body,
+			tag: message.tag,
+			icon: url('icons/icon-192.png'),
+			data: { url: url(message.url ?? '') }
+		})
+	);
+});
+
+// Opens the page in an open Vulu window if there is one, otherwise in a new one
+self.addEventListener('notificationclick', (event) => {
+	event.notification.close();
+	const target: string = event.notification.data?.url ?? url('');
+	event.waitUntil(
+		(async () => {
+			const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+			const open = windows.find((w) => w.url.startsWith(self.registration.scope));
+			if (open) {
+				await open.focus();
+				await open.navigate(target);
+			} else await self.clients.openWindow(target);
+		})()
+	);
+});
