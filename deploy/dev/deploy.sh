@@ -21,9 +21,9 @@ docker compose pull -q
 docker compose up -d --remove-orphans || failed
 docker image prune -f > /dev/null
 
-# The app answers once it has started; version.json holds the commit it was built from
+# The app answers once it has started (127.0.0.1: localhost is ::1, node listens on IPv4)
 for _ in $(seq 30); do
-	version=$(docker compose exec -T dev-app wget -qO- http://localhost:3000/_app/version.json 2> /dev/null) && break
+	version=$(docker compose exec -T dev-app wget -qO- http://127.0.0.1:3000/_app/version.json 2> /dev/null) && break
 	sleep 2
 done
 echo "serving: ${version:-nothing}"
