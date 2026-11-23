@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { eq, inArray } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { airingWithoutEpisodes, upsertMedia, type Providers } from '../catalogue';
+import { listEntries } from '../library';
 import { createDb } from '../db';
 import { activityEvents, importJobs, libraryEntries, media, users } from '../db/schema';
 import { createAniListClient } from '../providers/anilist';
@@ -298,6 +299,17 @@ describe('runImport', () => {
 		expect(row).toMatchObject({ startedOn: '2024-03-03', completedOn: null });
 		const [ev] = await db.select().from(activityEvents).where(eq(activityEvents.mediaId, id));
 		expect(ev.occurredAt.toISOString().slice(0, 10)).toBe('2024-04-02');
+	});
+
+	it('sorts an entry imported without any date last by last seen', async () => {
+		const id = await upsertMedia(db, anime(4));
+		mediaIds.push(id);
+		const undated = { ...entry, startedOn: null, completedOn: null };
+		await saveImportedEntry(db, userId, id, 'trakt', undated);
+		const list = await listEntries(db, userId, { sort: 'seen' });
+		// After the entry dated 2024-04-02 above, though imported later
+		const pos = (pred: (e: (typeof list)[number]) => boolean) => list.findIndex(pred);
+		expect(pos((e) => e.mediaId === id)).toBeGreaterThan(pos((e) => e.progress === 5));
 	});
 
 	it('imports the seasons of a franchise as one entry, fetching the franchise once', async () => {

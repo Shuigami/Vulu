@@ -230,12 +230,15 @@ export type LibrarySort = (typeof LIBRARY_SORTS)[number];
 
 const sortOrder = {
 	updated: [sql`${libraryEntries.updatedAt} desc`],
-	// Last time a unit was seen or the work finished; imports date these at the original viewing
+	// Last time a unit was seen or the work finished; imports date these at the original viewing,
+	// or at the entry's creation when the source gave no date: those sort last
 	seen: [
 		sql`(select max(${activityEvents.occurredAt}) from ${activityEvents}
 			where ${activityEvents.userId} = ${libraryEntries.userId}
 			and ${activityEvents.mediaId} = ${libraryEntries.mediaId}
-			and ${activityEvents.kind} in ('episode', 'chapter', 'volume', 'pages', 'completed')) desc nulls last`
+			and ${activityEvents.kind} in ('episode', 'chapter', 'volume', 'pages', 'completed')
+			and not (${activityEvents.source} = 'import'
+				and ${activityEvents.occurredAt} = ${libraryEntries.createdAt})) desc nulls last`
 	],
 	added: [sql`${libraryEntries.createdAt} desc`],
 	title: [sql`lower(${media.title})`],

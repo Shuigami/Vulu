@@ -199,10 +199,9 @@ export async function saveImportedEntry(
 			!!m.total &&
 			progress >= m.total &&
 			(m.status === 'finished' || m.status === 'cancelled');
-		const at = (date: string | null) => (date ? new Date(`${date}T12:00:00Z`) : new Date());
 		const e = { ...imported, progress, ...(done && { status: 'completed' as const }) };
 		// Trakt shows carry their last day seen in completedOn: it dates the journal, not the entry
-		const when = at(e.completedOn ?? e.startedOn);
+		const date = e.completedOn ?? e.startedOn;
 		if (e.status === 'in_progress') e.completedOn = null;
 
 		const [created] = await tx
@@ -211,6 +210,9 @@ export async function saveImportedEntry(
 			.onConflictDoNothing()
 			.returning({ id: libraryEntries.id });
 		if (!created) return 'kept';
+		// Date unknown: the column default, now(), the transaction's time, so exactly the entry's
+		// created_at, which the "seen" sort of the library ignores
+		const when = date ? new Date(`${date}T12:00:00Z`) : undefined;
 
 		const key = (kind: string) => `import:${source}:${mediaId}:${kind}`;
 		const events: Omit<typeof activityEvents.$inferInsert, 'userId' | 'mediaId'>[] = [];
