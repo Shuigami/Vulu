@@ -9,7 +9,7 @@ import type { Fetch } from '../providers/http';
 import { createOpenLibraryClient } from '../providers/openlibrary';
 import type { ProviderMedia } from '../providers/types';
 import { parseCsv, parseGoodreads } from './goodreads';
-import { runImport } from './run';
+import { runImport, saveImportedEntry } from './run';
 import type { ImportItem } from './types';
 
 const noWait = async () => {};
@@ -286,6 +286,18 @@ describe('runImport', () => {
 		await runImport(db, providers, { importId: await newJob(), userId, source: 'anilist', items });
 		const after = await db.select().from(activityEvents).where(eq(activityEvents.userId, userId));
 		expect(after).toHaveLength(events.length);
+	});
+
+	it('dates the journal of an in-progress show with its last day seen, not today', async () => {
+		const id = await upsertMedia(db, anime(3));
+		mediaIds.push(id);
+		const shown = { ...entry, status: 'in_progress' as const, progress: 5, score: null };
+		const saved = { ...shown, startedOn: '2024-03-03', completedOn: '2024-04-02' };
+		await saveImportedEntry(db, userId, id, 'trakt', saved);
+		const [row] = await db.select().from(libraryEntries).where(eq(libraryEntries.mediaId, id));
+		expect(row).toMatchObject({ startedOn: '2024-03-03', completedOn: null });
+		const [ev] = await db.select().from(activityEvents).where(eq(activityEvents.mediaId, id));
+		expect(ev.occurredAt.toISOString().slice(0, 10)).toBe('2024-04-02');
 	});
 
 	it('imports the seasons of a franchise as one entry, fetching the franchise once', async () => {
