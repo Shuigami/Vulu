@@ -224,9 +224,10 @@ export function createTraktClient(opts: {
 				if (!work) continue;
 				const entry = row(r.movie ? 'movie' : 'tv', work);
 				entry.score = r.rating * 10; // Trakt ratings are out of 10
-				if (entry.status === 'planned') entry.status = 'completed'; // rated means seen
-				// Seen without a known day (rated only, plays of unknown date): the day it was rated
-				if (!entry.startedOn && !entry.completedOn) entry.completedOn = day(r.rated_at);
+				// A rating alone does not mean seen: without plays the title stays planned.
+				// Seen on unknown days (plays at the epoch): dated the day it was rated.
+				if (entry.status !== 'planned' && !entry.startedOn && !entry.completedOn)
+					entry.completedOn = day(r.rated_at);
 			}
 			return [...items.values()];
 		}

@@ -169,7 +169,10 @@ describe('Trakt', () => {
 				{ rating: 8, rated_at: '2023-06-01T10:00:00.000Z', movie: work('Rated only', 12) },
 				{ rating: 7, rated_at: '2024-06-01T10:00:00.000Z', movie: work('Seen', 11) }
 			],
-			'/ratings/shows': [{ rating: 9, rated_at: null, show: work('No id', null) }]
+			'/ratings/shows': [
+				{ rating: 9, rated_at: null, show: work('No id', null) },
+				{ rating: 6, rated_at: '2022-02-02T10:00:00.000Z', show: work('Unknown day', 22) }
+			]
 		};
 		const headers: Record<string, string>[] = [];
 		const urls: string[] = [];
@@ -204,16 +207,17 @@ describe('Trakt', () => {
 		expect(urls.find((u) => u.includes('/watched/shows'))).toContain('extended=full');
 		expect(urls.find((u) => u.includes('/history/episodes'))).not.toContain('extended');
 		expect(byLabel['No history (2020)'].entry.progress).toBe(3); // falls back to plays
-		// Rated only: seen on the day it was rated; a rating does not move a known date
+		// A rating alone is not a play: planned, rated, undated
 		expect(byLabel['Rated only (2020)'].entry).toMatchObject({
-			status: 'completed',
+			status: 'planned',
 			score: 80,
-			completedOn: '2023-06-01'
+			completedOn: null
 		});
+		// Plays of unknown date: dated the day it was rated
 		expect(byLabel['Unknown day (2020)'].entry).toMatchObject({
 			progress: 1,
 			startedOn: null,
-			completedOn: null
+			completedOn: '2022-02-02'
 		});
 		expect(byLabel['No id (2020)'].ref).toBeUndefined();
 		expect(items).toHaveLength(7);
