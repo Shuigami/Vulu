@@ -1,0 +1,46 @@
+# Dev environment, https://dev.vulu.shuii.net: the image built by .github/workflows/dev.yml, on the
+# vulu_dev database of the production postgres. Lives in /srv/vulu-dev with its own .env (see README).
+name: vulu-dev
+
+# Services are not named app/worker: they join vulu-prod_default, where those names are production's
+x-vulu: &vulu
+  image: ghcr.io/shuigami/vulu:dev
+  env_file: .env
+  restart: unless-stopped
+  # Must not starve production on the shared 4 GB server
+  mem_limit: 400m
+  networks: [prod]
+
+services:
+  dev-migrate:
+    <<: *vulu
+    restart: 'no'
+    command: ['node', '--import', 'tsx', 'src/lib/server/db/migrate.ts']
+
+  dev-worker:
+    <<: *vulu
+    command: ['node', '--import', 'tsx', 'src/worker/index.ts']
+    depends_on:
+      dev-migrate: { condition: service_completed_successfully }
+
+  dev-app:
+    <<: *vulu
+    environment:
+      ORIGIN: https://${VULU_DOMAIN:?set VULU_DOMAIN in .env}
+      BETTER_AUTH_URL: https://${VULU_DOMAIN}
+      BODY_SIZE_LIMIT: 6M
+    networks:
+      prod: {}
+      proxy:
+        aliases: [vulu-dev-app]
+    depends_on:
+      dev-migrate: { condition: service_completed_successfully }
+      dev-worker: { condition: service_started }
+
+networks:
+  # Production's network, for its postgres (DATABASE_URL=postgres://vulu:...@postgres:5432/vulu_dev)
+  prod:
+    name: vulu-prod_default
+    external: true
+  proxy:
+    external: true
