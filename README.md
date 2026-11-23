@@ -93,6 +93,24 @@ Mise à jour : pousser un tag (`git tag v0.2.0 && git push --tags`), attendre l'
 
 Pour essayer la pile en local : `docker build -t ghcr.io/shuigami/vulu:latest .`, puis `docker compose --env-file <fichier avec VULU_DOMAIN=localhost et POSTGRES_PASSWORD> up -d` (Caddy signe alors un certificat local). Le projet Compose s'appelle `vulu-prod` et ne touche pas à la base de développement.
 
+### Environnement de dev
+
+https://dev.vulu.shuii.net sert une branche à la fois, pour l'essayer (y compris sur téléphone) avant de la merger. Il tourne sur le même serveur, dans `/srv/vulu-dev` (`deploy/dev/`) : image `ghcr.io/shuigami/vulu:dev`, base `vulu_dev` dans le postgres de la prod, 400 Mo de RAM au plus par conteneur. Connexion par mot de passe uniquement (les URL de rappel Google et GitHub sont celles de la prod).
+
+**Déployer une branche** : `git push -f origin <branche>:dev`, ou `gh workflow run dev.yml -f ref=<branche>` (aussi depuis l'onglet Actions). Le workflow construit l'image, puis se connecte au serveur avec une clé SSH dédiée qui ne peut lancer que `deploy/dev/deploy.sh` : il tire l'image, redémarre la pile et échoue (avec l'état des conteneurs et les derniers logs) si les migrations échouent ou si l'app ne sert pas le bon commit. Une session Claude Code dans le cloud fait de même : elle n'a pas besoin de SSH, seulement de GitHub.
+
+**Vérifier le commit en ligne** : `curl https://dev.vulu.shuii.net/_app/version.json` (sans mot de passe) renvoie le SHA de l'image. Le reste du site demande l'identifiant et le mot de passe du basic auth ; une connexion réussie pose un cookie d'un an qui le remplace ensuite, car une app ajoutée à l'écran d'accueil de l'iPhone garde mal le basic auth. Restent publics, pour cette installation : `/manifest.webmanifest`, `/icons/*` et `/service-worker.js`.
+
+Les migrations d'une branche s'appliquent à `vulu_dev` et ne sont pas annulées. Si une autre branche échoue ensuite sur ses migrations, recréer la base (voir ci-dessous) puis redéployer.
+
+Installation (déjà faite sur le serveur) :
+
+1. DNS : `dev.vulu` (A et AAAA) vers le serveur.
+2. `/srv/vulu-dev` : copier `deploy/dev/docker-compose.yml` et `deploy/dev/deploy.sh`, puis créer `.env` (mode 600) : `VULU_DOMAIN=dev.vulu.shuii.net`, `DATABASE_URL=postgres://vulu:<POSTGRES_PASSWORD de la prod>@postgres:5432/vulu_dev`, un `BETTER_AUTH_SECRET` propre au dev, `TMDB_API_KEY`, `TRAKT_CLIENT_ID`, `SMTP_URL` et `MAIL_FROM` repris de la prod, des clés VAPID propres au dev. Pas de `GOOGLE_*` ni `GITHUB_*`.
+3. Base (et pour la recréer, `dropdb` avant) : `docker exec vulu-prod-postgres-1 createdb -U vulu -O vulu vulu_dev`.
+4. Clé de déploiement : `ssh-keygen -t ed25519 -N '' -f deploy`, ajouter `restrict,command="/srv/vulu-dev/deploy.sh" <deploy.pub>` à `~/.ssh/authorized_keys` de `shui`, puis les secrets GitHub `DEV_DEPLOY_SSH_KEY` (la clé privée) et `DEV_DEPLOY_KNOWN_HOSTS` (`ssh-keyscan vulu.shuii.net`). Supprimer la clé privée locale.
+5. Le bloc `dev.vulu.shuii.net` de `deploy/proxy/Caddyfile` dans `/srv/proxy/Caddyfile`, avec l'identifiant, le hash (`docker compose exec caddy caddy hash-password`) et un jeton de cookie (`openssl rand -hex 32`), jamais commités. Le fichier est monté seul dans le conteneur : le modifier sur place (pas de `mv`), puis `caddy validate` et `caddy reload`.
+
 ### Sauvegardes
 
 `scripts/backup.sh` envoie un `pg_dump` dans un dépôt [restic](https://restic.net) (en production : un bucket Cloudflare R2, via l'API S3), puis garde 7 sauvegardes quotidiennes, 4 hebdomadaires et 6 mensuelles. Il faut restic ≥ 0.17 sur le serveur et un fichier `/srv/vulu/.backup.env` (mode 600) :

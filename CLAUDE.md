@@ -64,6 +64,7 @@ src/routes/(auth)/       /login, /signup, /forgot-password, /reset-password
 src/worker/index.ts      worker entry point (pg-boss); only the worker calls external APIs
 .github/workflows/ci.yml lint, types, migrations on an empty database, schema drift check, tests
 .github/workflows/release.yml image to ghcr.io/shuigami/vulu on every v* tag
+.github/workflows/dev.yml image :dev, deployed to dev.vulu.shuii.net (deploy/dev/)
 Dockerfile, docker-compose.yml, Caddyfile  production: caddy, app, worker, postgres, one-shot migrate
 src/lib/server/db/migrate.ts migrations without drizzle-kit (production)
 scripts/backup.sh        nightly pg_dump into restic (host cron)
@@ -76,6 +77,15 @@ scripts/backup.sh        nightly pg_dump into restic (host cron)
 - The app sets `ORIGIN`, `BETTER_AUTH_URL` and `DATABASE_URL` from `VULU_DOMAIN` and `POSTGRES_PASSWORD`. `BODY_SIZE_LIMIT` must stay above the 5 MB import cap.
 - Deployed at https://vulu.shuii.net on a netcup VPS (Debian 13, 4 GB) shared with other projects: SSH as `shui` (key only), stack in `/srv/vulu`, shared Caddy in `/srv/proxy` (`deploy/proxy/`, the bundled caddy is disabled by `docker-compose.override.yml`). Release: push a `v*` tag, then `docker compose pull && docker compose up -d` in `/srv/vulu`.
 - netcup blocks outbound 25/465/587: mail goes through Brevo on port 2525. Nightly restic backup to Cloudflare R2 (shui's crontab, 03:30 UTC, log in `/srv/vulu/backup.log`).
+- `/_app/version.json` holds the commit the image was built from (`VULU_VERSION` build-arg -> `version.name` in `vite.config.ts`).
+
+## Dev environment
+
+https://dev.vulu.shuii.net runs one branch at a time to try it before merging (stack in `/srv/vulu-dev`, `deploy/dev/`): image `ghcr.io/shuigami/vulu:dev`, database `vulu_dev` in the production postgres, 400 MB per container, password sign-in only (no Google/GitHub OAuth). The site is behind basic auth, except `/_app/version.json`, `/manifest.webmanifest`, `/icons/*` and `/service-worker.js`.
+
+- Deploy a branch (works from a cloud session, no SSH needed): `git push -f origin HEAD:dev`, or `gh workflow run dev.yml -f ref=<branch>` (the branch must contain the `VULU_VERSION` change in `vite.config.ts`, i.e. be based on a main that has it). Then `gh run watch` on the run: its Deploy step pulls the image over SSH, restarts the stack, and fails with `docker compose ps` and the last logs if migrations fail or the app does not serve the commit.
+- Check what runs: `curl -s https://dev.vulu.shuii.net/_app/version.json` -> `{"version":"<sha>"}`.
+- The deploy key in GitHub secrets (`DEV_DEPLOY_SSH_KEY`, `DEV_DEPLOY_KNOWN_HOSTS`) can only run `/srv/vulu-dev/deploy.sh` (forced command in shui's `authorized_keys`). Migrations of a branch apply to `vulu_dev` and are not rolled back: if a later branch fails on them, drop and recreate `vulu_dev` on the server.
 
 ## Conventions
 
