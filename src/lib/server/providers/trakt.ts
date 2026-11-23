@@ -24,7 +24,11 @@ export type TraktItem = ImportItem & { anime?: { title: string; year: number | n
 type Watched = { plays: number; last_watched_at: string | null; movie?: Work; show?: Work };
 type Rated = { rating: number; movie?: Work; show?: Work };
 type Listed = { movie?: Work; show?: Work };
-type HistoryEpisode = { episode: { season: number; number: number }; show: Work };
+type HistoryEpisode = {
+	watched_at: string;
+	episode: { season: number; number: number };
+	show: Work;
+};
 
 const day = (iso: string | null) => (iso ? iso.slice(0, 10) : null);
 const keyOf = (type: 'movie' | 'tv', w: Work) =>
@@ -144,9 +148,16 @@ export function createTraktClient(opts: {
 
 			// Distinct episodes seen per show; specials (season 0) are outside TMDB's episode total
 			const seen = new Map<string, Set<string>>();
+			// First and last day an episode was seen per show: the journal is dated from them
+			const span = new Map<string, { first: string; last: string }>();
 			for (const h of history ?? []) {
 				if (h.episode.season <= 0) continue;
 				const key = keyOf('tv', h.show);
+				const d = day(h.watched_at)!;
+				const s = span.get(key);
+				if (!s) span.set(key, { first: d, last: d });
+				else if (d < s.first) s.first = d;
+				else if (d > s.last) s.last = d;
 				if (!seen.has(key)) seen.set(key, new Set());
 				seen.get(key)!.add(`${h.episode.season}x${h.episode.number}`);
 			}
@@ -195,8 +206,15 @@ export function createTraktClient(opts: {
 				if (!w.show) continue;
 				// Without history (hidden), plays is the best estimate; it is capped at the
 				// episode total on import. Completed automatically when every episode was seen.
-				const episodes = seen.get(keyOf('tv', w.show))?.size ?? w.plays;
-				Object.assign(row('tv', w.show), { status: 'in_progress', progress: episodes });
+				const key = keyOf('tv', w.show);
+				const episodes = seen.get(key)?.size ?? w.plays;
+				// completedOn = last episode seen; dropped on import unless the show ends up completed
+				Object.assign(row('tv', w.show), {
+					status: 'in_progress',
+					progress: episodes,
+					startedOn: span.get(key)?.first ?? null,
+					completedOn: span.get(key)?.last ?? day(w.last_watched_at)
+				});
 			}
 			for (const r of [...(rateMovies ?? []), ...(rateShows ?? [])]) {
 				const work = r.movie ?? r.show;

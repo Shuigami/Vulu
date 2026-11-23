@@ -115,7 +115,7 @@ async function franchiseEntry(
 	const finished =
 		counted && list.every((s) => s.status === 'finished' || s.status === 'cancelled');
 	// Favourite, private and spoiler stay false, their defaults: the sources do not carry them
-	return mergeEntries(
+	const merged = mergeEntries(
 		parts.map((p) => ({
 			season: p.season,
 			offset: starts.get(p.season) ?? 0,
@@ -124,6 +124,14 @@ async function franchiseEntry(
 		})),
 		{ aired: finished ? end : 0, total: counted ? end : 0, seasonEnds }
 	);
+	// In progress: the latest day seen still dates the journal (saveImportedEntry drops it after)
+	if (merged.status === 'in_progress')
+		merged.completedOn =
+			parts
+				.map((p) => p.entry.completedOn ?? '')
+				.sort()
+				.at(-1) || null;
+	return merged;
 }
 
 type Stats = { total: number; imported: number; kept: number; unmatched: number };
@@ -191,7 +199,11 @@ export async function saveImportedEntry(
 			!!m.total &&
 			progress >= m.total &&
 			(m.status === 'finished' || m.status === 'cancelled');
+		const at = (date: string | null) => (date ? new Date(`${date}T12:00:00Z`) : new Date());
 		const e = { ...imported, progress, ...(done && { status: 'completed' as const }) };
+		// Trakt shows carry their last day seen in completedOn: it dates the journal, not the entry
+		const when = at(e.completedOn ?? e.startedOn);
+		if (e.status === 'in_progress') e.completedOn = null;
 
 		const [created] = await tx
 			.insert(libraryEntries)
@@ -200,8 +212,6 @@ export async function saveImportedEntry(
 			.returning({ id: libraryEntries.id });
 		if (!created) return 'kept';
 
-		const at = (date: string | null) => (date ? new Date(`${date}T12:00:00Z`) : new Date());
-		const when = at(e.completedOn ?? e.startedOn);
 		const key = (kind: string) => `import:${source}:${mediaId}:${kind}`;
 		const events: Omit<typeof activityEvents.$inferInsert, 'userId' | 'mediaId'>[] = [];
 		if (e.progress > 0 && m.type !== 'movie') {

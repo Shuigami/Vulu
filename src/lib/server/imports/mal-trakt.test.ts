@@ -136,10 +136,27 @@ describe('Trakt', () => {
 				{ plays: 3, last_watched_at: null, show: work('No history', 21) }
 			],
 			'/history/episodes': [
-				{ episode: { season: 1, number: 1 }, show: work('Show', 20) },
-				{ episode: { season: 1, number: 1 }, show: work('Show', 20) }, // rewatch
-				{ episode: { season: 1, number: 2 }, show: work('Show', 20) },
-				{ episode: { season: 0, number: 1 }, show: work('Show', 20) } // special
+				// Newest first, as Trakt serves the history
+				{
+					watched_at: '2024-04-02T21:00:00.000Z',
+					episode: { season: 1, number: 1 },
+					show: work('Show', 20)
+				}, // rewatch
+				{
+					watched_at: '2024-03-10T21:00:00.000Z',
+					episode: { season: 1, number: 2 },
+					show: work('Show', 20)
+				},
+				{
+					watched_at: '2024-03-03T21:00:00.000Z',
+					episode: { season: 1, number: 1 },
+					show: work('Show', 20)
+				},
+				{
+					watched_at: '2025-01-01T21:00:00.000Z',
+					episode: { season: 0, number: 1 },
+					show: work('Show', 20)
+				} // special
 			],
 			'/ratings/movies': [
 				{ rating: 8, movie: work('Rated only', 12) },
@@ -168,7 +185,12 @@ describe('Trakt', () => {
 			ref: { provider: 'tmdb', externalId: '11' },
 			entry: { status: 'completed', completedOn: '2024-05-01', repeatCount: 1, score: 70 }
 		});
-		expect(byLabel['Show (2020)'].entry).toMatchObject({ status: 'in_progress', progress: 2 });
+		expect(byLabel['Show (2020)'].entry).toMatchObject({
+			status: 'in_progress',
+			progress: 2,
+			startedOn: '2024-03-03',
+			completedOn: '2024-04-02' // last day seen, dates the journal
+		});
 		expect(byLabel['Show (2020)'].anime).toEqual({ title: 'Show', year: 2020 });
 		expect(byLabel['Seen (2020)'].anime).toBeUndefined();
 		// Genres (extended=full) on the lists, not on the long episode history
