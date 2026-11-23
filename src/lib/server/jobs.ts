@@ -14,7 +14,9 @@ export const QUEUES = {
 	jellyfin: 'jellyfin-event',
 	purgeCache: 'cache-purge',
 	discover: 'provider-discover',
-	animeFranchises: 'anime-franchises'
+	animeFranchises: 'anime-franchises',
+	releaseNotifications: 'release-notifications',
+	pushTest: 'push-test'
 } as const;
 
 export type SearchJob = { type: MediaType; query: string };
@@ -41,6 +43,8 @@ export type LibraryImportJob = { importId: number; userId: string } & (
 	| { source: 'mal'; items: MalItem[] }
 );
 export type JellyfinJob = { integrationId: number; userId: string; event: JellyfinEvent };
+/** A test notification to every device of the user (button in /settings). */
+export type PushTestJob = { userId: string };
 export type ImportOutput = { mediaId: number | null };
 
 /**

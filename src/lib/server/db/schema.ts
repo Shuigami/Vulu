@@ -480,6 +480,28 @@ export const integrations = pgTable(
 	]
 );
 
+// Release notifications (episodes of followed media airing today, sent by the worker each morning).
+// A row exists once the user touched the setting or got a notification.
+export const notificationSettings = pgTable('notification_settings', {
+	userId: userRef().primaryKey(),
+	releaseEmail: boolean().notNull().default(false),
+	lastReleaseDay: date() // Paris day of the last release notification, so a day is sent once
+});
+
+// Web push subscriptions, one per browser or installed app (PushSubscription from the browser).
+export const pushSubscriptions = pgTable(
+	'push_subscriptions',
+	{
+		id: id(),
+		userId: userRef(),
+		endpoint: text().notNull().unique('push_subscriptions_endpoint_key'),
+		p256dh: text().notNull(), // browser public key, base64url
+		auth: text().notNull(), // auth secret, base64url
+		createdAt: createdAt()
+	},
+	(t) => [index('push_subscriptions_user_idx').on(t.userId)]
+);
+
 export const importJobs = pgTable(
 	'import_jobs',
 	{

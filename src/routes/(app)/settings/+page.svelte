@@ -1,5 +1,7 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import Avatar from '#lib/components/Avatar.svelte';
 	import { MEDIA_TYPES, RATING_SCALES, typePlural, type MediaType } from '#lib/labels.ts';
@@ -59,6 +61,75 @@
 		10: 'Demi-points possibles.',
 		100: 'Comme sur AniList.'
 	};
+
+	// Web push on this device. iOS only offers it to the app added to the home screen.
+	type PushState = 'loading' | 'unsupported' | 'ios-install' | 'denied' | 'off' | 'on' | 'busy';
+	let push = $state<PushState>('loading');
+	let pushError = $state<string | null>(null);
+
+	onMount(async () => {
+		const ios =
+			/iPad|iPhone|iPod/.test(navigator.userAgent) ||
+			(navigator.userAgent.includes('Macintosh') && navigator.maxTouchPoints > 1);
+		const standalone =
+			matchMedia('(display-mode: standalone)').matches ||
+			(navigator as { standalone?: boolean }).standalone === true;
+		if (!('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window)) {
+			push = ios && !standalone ? 'ios-install' : 'unsupported';
+			return;
+		}
+		if (Notification.permission === 'denied') return void (push = 'denied');
+		const registration = await navigator.serviceWorker.ready;
+		push = (await registration.pushManager.getSubscription()) ? 'on' : 'off';
+	});
+
+	const fromBase64url = (text: string) =>
+		Uint8Array.from(atob(text.replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0));
+
+	async function enablePush() {
+		pushError = null;
+		push = 'busy';
+		try {
+			const permission = await Notification.requestPermission();
+			if (permission !== 'granted') return void (push = permission === 'denied' ? 'denied' : 'off');
+			const registration = await navigator.serviceWorker.ready;
+			const subscription = await registration.pushManager.subscribe({
+				userVisibleOnly: true,
+				applicationServerKey: fromBase64url(data.notifications.vapidPublicKey!)
+			});
+			const res = await fetch(resolve('/(app)/settings/push'), {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(subscription)
+			});
+			if (!res.ok) {
+				await subscription.unsubscribe();
+				throw new Error(String(res.status));
+			}
+			push = 'on';
+			await invalidateAll();
+		} catch {
+			push = 'off';
+			pushError = 'Impossible d’activer les notifications sur cet appareil.';
+		}
+	}
+
+	async function disablePush() {
+		pushError = null;
+		push = 'busy';
+		const registration = await navigator.serviceWorker.ready;
+		const subscription = await registration.pushManager.getSubscription();
+		if (subscription) {
+			await fetch(resolve('/(app)/settings/push'), {
+				method: 'DELETE',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ endpoint: subscription.endpoint })
+			});
+			await subscription.unsubscribe();
+		}
+		push = 'off';
+		await invalidateAll();
+	}
 
 	// Theme: stored in the `theme` cookie (read by hooks.server.ts); "system" removes it
 	const themes = [
@@ -185,6 +256,89 @@
 			{#if form?.saved}<p role="status" class="text-sm text-success">Enregistré.</p>{/if}
 		</div>
 	</form>
+
+	<section class="flex flex-col gap-5 card p-5" aria-labelledby="notifications-title">
+		<div class="flex flex-col gap-1">
+			<h2 id="notifications-title" class="h2">Notifications de sorties</h2>
+			<p class="text-sm text-muted">
+				Chaque matin, les épisodes du jour des séries et anime que tu suis (à voir, en cours ou en
+				pause).
+			</p>
+		</div>
+		<form
+			method="post"
+			action="?/notifications"
+			use:enhance={() =>
+				({ update }) =>
+					update({ reset: false })}
+			class="flex flex-col gap-3"
+		>
+			<label class="flex min-h-11 items-start gap-2.5 text-sm">
+				<input
+					type="checkbox"
+					name="releaseEmail"
+					checked={data.notifications.releaseEmail}
+					class="mt-0.5 size-4 accent-accent"
+				/>
+				<span
+					><strong>Par e-mail</strong><br /><span class="text-muted"
+						>Un e-mail à {data.email} les jours où quelque chose sort.</span
+					></span
+				>
+			</label>
+			<div class="flex items-center gap-3">
+				<button class="btn-ink">Enregistrer</button>
+				{#if form?.notificationsSaved}<p role="status" class="text-sm text-success">
+						Enregistré.
+					</p>{/if}
+			</div>
+		</form>
+
+		{#if data.notifications.vapidPublicKey}
+			<div class="flex flex-col gap-3 border-t border-line pt-5">
+				<div class="text-sm">
+					<strong>Sur cet appareil</strong><br />
+					<span class="text-muted">
+						{#if push === 'on'}
+							Activées : tu recevras une notification les jours de sortie.
+						{:else if push === 'ios-install'}
+							Sur iPhone et iPad, ajoute d’abord Vulu à l’écran d’accueil (bouton Partager, « Sur
+							l’écran d’accueil »), puis ouvre Vulu depuis son icône et reviens ici.
+						{:else if push === 'unsupported'}
+							Ce navigateur ne gère pas les notifications.
+						{:else if push === 'denied'}
+							Les notifications sont bloquées pour Vulu : autorise-les dans les réglages du
+							navigateur, puis recharge la page.
+						{:else}
+							Une notification sur ton téléphone ou ton ordinateur, même quand Vulu est fermé.
+						{/if}
+					</span>
+				</div>
+				<div class="flex flex-wrap items-center gap-2">
+					{#if push === 'on'}
+						<button type="button" class="btn-ghost" onclick={disablePush}>Désactiver</button>
+						<form method="post" action="?/testPush" use:enhance>
+							<button class="btn-ghost">Envoyer un test</button>
+						</form>
+					{:else if push === 'off' || push === 'busy'}
+						<button type="button" class="btn-ink" disabled={push === 'busy'} onclick={enablePush}
+							>Activer les notifications</button
+						>
+					{/if}
+					{#if pushError}<p role="alert" class="text-sm text-danger">{pushError}</p>{/if}
+					{#if form?.pushTestSent}<p role="status" class="text-sm text-success">
+							Envoyée, elle arrive dans quelques secondes.
+						</p>{/if}
+				</div>
+				{#if data.notifications.devices > 0}
+					<p class="text-[13px] text-muted">
+						{data.notifications.devices}
+						{data.notifications.devices === 1 ? 'appareil reçoit' : 'appareils reçoivent'} les notifications.
+					</p>
+				{/if}
+			</div>
+		{/if}
+	</section>
 
 	<section class="flex flex-col gap-3 card p-5" aria-labelledby="theme-title">
 		<h2 id="theme-title" class="h2">Apparence</h2>

@@ -21,6 +21,7 @@ import {
 	type LibraryImportJob,
 	type ImportJob,
 	type ImportOutput,
+	type PushTestJob,
 	type SearchJob,
 	type SearchOutput
 } from '../lib/server/jobs';
@@ -33,6 +34,9 @@ import { runImport } from '../lib/server/imports/run';
 import type { ImportItem } from '../lib/server/imports/types';
 import { purgeExpired } from '../lib/server/providers/cache';
 import { createTraktClient } from '../lib/server/providers/trakt';
+import { createMailer } from '../lib/server/mail';
+import { pushToUser, sendReleaseNotifications } from '../lib/server/notifications';
+import { createPushSender } from '../lib/server/webpush';
 import { eventLabel, recordEvent, scrobble } from '../lib/server/scrobble';
 
 const url = process.env.DATABASE_URL;
@@ -45,6 +49,25 @@ const providers = createProviders(process.env);
 const trakt = process.env.TRAKT_CLIENT_ID
 	? createTraktClient({ clientId: process.env.TRAKT_CLIENT_ID })
 	: null;
+// Release notifications: e-mail (console without SMTP_URL) and web push when VAPID keys are set
+const sendMail = createMailer(process.env.SMTP_URL, process.env.MAIL_FROM);
+const { VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT } = process.env;
+const sendPush =
+	VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY
+		? createPushSender({
+				publicKey: VAPID_PUBLIC_KEY,
+				privateKey: VAPID_PRIVATE_KEY,
+				subject: VAPID_SUBJECT || 'mailto:noreply@localhost'
+			})
+		: null;
+if (!sendPush) console.warn('[worker] VAPID keys are not set: no push notifications');
+// Public URL for the links in e-mails (ORIGIN in production, BETTER_AUTH_URL in development)
+const origin = (
+	process.env.ORIGIN ??
+	process.env.BETTER_AUTH_URL ??
+	'http://localhost:5173'
+).replace(/\/$/, '');
+
 // LISTEN/NOTIFY (one connection) wakes workers as soon as the app sends a job the user waits on
 const boss = new PgBoss({ connectionString: url, useListenNotify: true });
 boss.on('error', (err) => console.error('[worker] pg-boss error', err));
@@ -208,6 +231,29 @@ await boss.work(QUEUES.purgeCache, async () => {
 	console.log(`[worker] purged ${await purgeExpired(db)} expired cache entries`);
 });
 await boss.schedule(QUEUES.purgeCache, '0 4 * * *'); // daily, 04:00 UTC
+
+// Morning digest of today's episodes, after the 03:00 UTC airing refresh
+await boss.work(QUEUES.releaseNotifications, async () => {
+	const stats = await sendReleaseNotifications(db, { sendMail, sendPush, origin });
+	console.log('[worker] release notifications', stats);
+});
+await boss.schedule(QUEUES.releaseNotifications, '0 8 * * *', null, { tz: 'Europe/Paris' });
+
+await boss.work<PushTestJob>(QUEUES.pushTest, async ([job]) => {
+	if (!sendPush) return;
+	const sent = await pushToUser(
+		db,
+		job.data.userId,
+		{
+			title: 'Vulu',
+			body: 'Les notifications fonctionnent sur cet appareil.',
+			url: 'settings',
+			tag: 'test'
+		},
+		sendPush
+	);
+	console.log(`[worker] test push for ${job.data.userId} -> ${sent} devices`);
+});
 
 console.log('[worker] started');
 

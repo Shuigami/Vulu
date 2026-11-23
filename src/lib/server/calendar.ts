@@ -7,7 +7,7 @@ import { episodes, libraryEntries, media, seasons } from './db/schema';
 export const TIMEZONE = 'Europe/Paris';
 
 /** Statuses that count as "followed" for the calendar. */
-const FOLLOWED = ['planned', 'in_progress', 'paused'] as const;
+export const FOLLOWED = ['planned', 'in_progress', 'paused'] as const;
 
 export function upcomingEpisodes(db: Db, userId: string, from: Date, to: Date) {
 	return db

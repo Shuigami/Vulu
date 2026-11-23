@@ -39,7 +39,10 @@ services:
   worker:
     <<: *vulu
     command: ['node', '--import', 'tsx', 'src/worker/index.ts']
-    environment: *database-url
+    environment:
+      <<: *database-url
+      # Links in notification e-mails
+      ORIGIN: https://${VULU_DOMAIN:?set VULU_DOMAIN in .env}
     depends_on:
       migrate: { condition: service_completed_successfully }
 
