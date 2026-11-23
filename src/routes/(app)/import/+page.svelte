@@ -68,12 +68,12 @@
 	<p role="status" class="mt-3 text-sm text-success">Import lancé.</p>
 {/if}
 
-<div class="mt-7 grid gap-4 sm:grid-cols-2">
+<div class="mt-7 grid grid-cols-1 gap-4 sm:grid-cols-2">
 	<form
 		method="post"
 		action="?/anilist"
 		use:enhance={submit('anilist')}
-		class="flex flex-col gap-3 card p-5"
+		class="flex min-w-0 flex-col gap-3 card p-5"
 	>
 		<h2 class="h2">AniList</h2>
 		<p class="text-sm text-muted">Anime et mangas de ton profil public.</p>
@@ -91,7 +91,7 @@
 		action="?/goodreads"
 		enctype="multipart/form-data"
 		use:enhance={submit('goodreads')}
-		class="flex flex-col gap-3 card p-5"
+		class="flex min-w-0 flex-col gap-3 card p-5"
 	>
 		<h2 class="h2">Goodreads</h2>
 		<p class="text-sm text-muted">
@@ -105,7 +105,7 @@
 				type="file"
 				accept=".csv,text/csv"
 				required
-				class="text-sm text-ink file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface-2 file:px-3 file:py-2 file:text-ink"
+				class="w-full min-w-0 text-sm text-ink file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface-2 file:px-3 file:py-2 file:text-ink"
 			/>
 		</label>
 		<button disabled={sending !== null || active} class="mt-auto btn-accent">
@@ -118,7 +118,7 @@
 		action="?/letterboxd"
 		enctype="multipart/form-data"
 		use:enhance={submit('letterboxd')}
-		class="flex flex-col gap-3 card p-5"
+		class="flex min-w-0 flex-col gap-3 card p-5"
 	>
 		<h2 class="h2">Letterboxd</h2>
 		<p class="text-sm text-muted">
@@ -133,7 +133,7 @@
 				accept=".zip,.csv"
 				multiple
 				required
-				class="text-sm text-ink file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface-2 file:px-3 file:py-2 file:text-ink"
+				class="w-full min-w-0 text-sm text-ink file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface-2 file:px-3 file:py-2 file:text-ink"
 			/>
 		</label>
 		<button disabled={sending !== null || active} class="mt-auto btn-accent">
@@ -146,7 +146,7 @@
 		action="?/mal"
 		enctype="multipart/form-data"
 		use:enhance={submit('mal')}
-		class="flex flex-col gap-3 card p-5"
+		class="flex min-w-0 flex-col gap-3 card p-5"
 	>
 		<h2 class="h2">MyAnimeList</h2>
 		<p class="text-sm text-muted">
@@ -160,7 +160,7 @@
 				type="file"
 				accept=".xml,.gz,.xml.gz"
 				required
-				class="text-sm text-ink file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface-2 file:px-3 file:py-2 file:text-ink"
+				class="w-full min-w-0 text-sm text-ink file:mr-3 file:rounded-lg file:border file:border-line file:bg-surface-2 file:px-3 file:py-2 file:text-ink"
 			/>
 		</label>
 		<button disabled={sending !== null || active} class="mt-auto btn-accent">
@@ -168,7 +168,7 @@
 		</button>
 	</form>
 
-	<div class="flex flex-col gap-3 card p-5">
+	<div class="flex min-w-0 flex-col gap-3 card p-5">
 		<h2 class="h2">Trakt</h2>
 		<p class="text-sm text-muted">Films et séries vus, notes et watchlist.</p>
 		{#if data.traktEnabled}
