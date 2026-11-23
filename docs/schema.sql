@@ -319,6 +319,24 @@ CREATE TABLE integrations (
   UNIQUE (user_id, kind)
 );
 
+-- Notifications de sorties : épisodes du jour des œuvres suivies, envoyés le matin par le worker
+CREATE TABLE notification_settings (
+  user_id           uuid PRIMARY KEY REFERENCES users (id) ON DELETE CASCADE,
+  release_email     boolean NOT NULL DEFAULT false,
+  last_release_day  date                      -- jour (Paris) de la dernière notification, envoyée une fois
+);
+
+-- Abonnements web push, un par navigateur ou application installée
+CREATE TABLE push_subscriptions (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id     uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+  endpoint    text NOT NULL UNIQUE,
+  p256dh      text NOT NULL,                  -- clé publique du navigateur (base64url)
+  auth        text NOT NULL,                  -- secret d'authentification (base64url)
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX push_subscriptions_user_idx ON push_subscriptions (user_id);
+
 CREATE TABLE import_jobs (
   id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   user_id      uuid NOT NULL REFERENCES users (id) ON DELETE CASCADE,

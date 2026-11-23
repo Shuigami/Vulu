@@ -92,6 +92,13 @@
       "when": 1795367325709,
       "tag": "0012_burly_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1795429693238,
+      "tag": "0013_release_notifications",
+      "breakpoints": true
     }
   ]
 }
