@@ -1,0 +1,57 @@
+name: Dev
+
+# Builds ghcr.io/shuigami/vulu:dev and deploys it to https://dev.vulu.shuii.net (deploy/dev/).
+# Push to the `dev` branch, or run it by hand for any branch: gh workflow run dev.yml -f ref=<branch>
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or commit to deploy (default, the ref the run was started on)
+        required: false
+
+# One deployment at a time; a newer pending run replaces an older pending one
+concurrency:
+  group: dev-deploy
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - id: sha
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/shuigami/vulu:dev
+          build-args: VULU_VERSION=${{ steps.sha.outputs.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      # The key can only run deploy/dev/deploy.sh (forced command in the server's authorized_keys),
+      # which pulls the image, restarts the dev stack and checks that it serves this commit
+      - name: Deploy
+        env:
+          SSH_KEY: ${{ secrets.DEV_DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEV_DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy shui@vulu.shuii.net "${{ steps.sha.outputs.sha }}"
+      - name: Check https://dev.vulu.shuii.net/_app/version.json
+        run: curl -fsS https://dev.vulu.shuii.net/_app/version.json | grep -F "${{ steps.sha.outputs.sha }}"

@@ -7,6 +7,9 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 FROM base AS build
 RUN pnpm install --frozen-lockfile
 COPY . .
+# Commit SHA, shown at /_app/version.json (vite.config.ts)
+ARG VULU_VERSION
+ENV VULU_VERSION=$VULU_VERSION
 # The build validates src/env.ts while analysing routes: placeholders, the real values are read at runtime
 RUN DATABASE_URL=postgres://build BETTER_AUTH_URL=http://build \
 	BETTER_AUTH_SECRET=build-placeholder-not-a-real-secret-000 pnpm build

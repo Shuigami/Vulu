@@ -9,6 +9,25 @@ status.shuii.net {
 	reverse_proxy uptime-kuma:3001
 }
 
+# Dev environment (deploy/dev). Basic auth, except what installing on the home screen and checking the
+# deployed commit need. A successful basic auth sets a one-year cookie that stands in for it (iOS home
+# screen apps do not keep basic auth credentials). <user>, <bcrypt hash> (caddy hash-password) and
+# <token> (openssl rand -hex 32, twice the same) only exist in /srv/proxy/Caddyfile: never commit them.
+dev.vulu.shuii.net {
+	encode zstd gzip
+	@locked {
+		not path /_app/version.json /manifest.webmanifest /icons/* /service-worker.js
+		not header Cookie *vulu_dev=<token>*
+	}
+	route {
+		basic_auth @locked {
+			<user> <bcrypt hash>
+		}
+		header @locked +Set-Cookie "vulu_dev=<token>; Path=/; Max-Age=31536000; Secure; HttpOnly; SameSite=Lax"
+		reverse_proxy vulu-dev-app:3000
+	}
+}
+
 grafana.shuii.net {
 	encode zstd gzip
 	reverse_proxy vulu-grafana:3000

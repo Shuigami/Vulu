@@ -13,7 +13,9 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+			adapter: adapter(),
+			// Commit of the image (Docker build-arg), readable at /_app/version.json; build timestamp otherwise
+			version: { name: process.env.VULU_VERSION || undefined }
 		})
 	],
 	test: {
