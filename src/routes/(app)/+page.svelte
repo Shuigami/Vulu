@@ -2,9 +2,12 @@
 	import { untrack } from 'svelte';
 	import { flip } from 'svelte/animate';
 	import type { TransitionConfig } from 'svelte/transition';
-	import { enhance } from '$app/forms';
+	import { cubicOut } from 'svelte/easing';
+	import { deserialize, enhance } from '$app/forms';
+	import { invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import ActivityFeed from '#lib/components/ActivityFeed.svelte';
+	import EntryMenu from '#lib/components/EntryMenu.svelte';
 	import Marquee from '#lib/components/Marquee.svelte';
 	import MediaShelf from '#lib/components/MediaShelf.svelte';
 	import Poster from '#lib/components/Poster.svelte';
@@ -12,11 +15,20 @@
 	import ShelfSkeleton from '#lib/components/ShelfSkeleton.svelte';
 	import StartHere from '#lib/components/StartHere.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
-	import { MEDIA_TYPES, toScale, typePlural, unitLabel } from '#lib/labels.ts';
+	import {
+		MEDIA_TYPES,
+		statusLabel,
+		toScale,
+		typePlural,
+		unitLabel,
+		type EntryStatus
+	} from '#lib/labels.ts';
 	import { haptic } from '#lib/haptics.ts';
-	import { toastError } from '#lib/toast.svelte.ts';
+	import { longpress, type PressPoint } from '#lib/longpress.ts';
+	import { postAction, toast, toastError } from '#lib/toast.svelte.ts';
 	import { seasonPosition } from '#lib/seasons.ts';
 	import type { DiscoverItem } from '#lib/server/discover.ts';
+	import type { StatusUndo } from '#lib/server/library.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -33,6 +45,15 @@
 		flip(node, move, {
 			duration: matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 450
 		});
+	// A card whose status changed leaves the row: it shrinks away while the others glide over
+	const leave: (node: Element) => TransitionConfig = () =>
+		matchMedia('(prefers-reduced-motion: reduce)').matches
+			? { duration: 0 }
+			: {
+					duration: 280,
+					easing: cubicOut,
+					css: (t: number) => `opacity: ${t}; transform: scale(${0.85 + 0.15 * t})`
+				};
 	const pitches = [
 		{
 			title: 'Une progression, cinq formats',
@@ -55,6 +76,86 @@
 		string
 	>;
 	const scale = $derived(data.ratingScale);
+
+	// Long press (right click, "⋯") on a "Reprendre" card: change its status from here
+	type Resume = (typeof data.entries)[number];
+	let menu = $state<{
+		entry: Resume;
+		via: PressPoint['via'];
+		anchor: DOMRect;
+		returnTo: HTMLElement | null;
+	} | null>(null);
+	// Hidden at once, until the reload confirms they left "En cours" (or brings them back)
+	let removed = $state<Record<number, true>>({});
+	const resume = $derived(data.entries.filter((e) => !removed[e.id]));
+
+	function openMenu(entry: Resume, via: PressPoint['via']) {
+		const card = document.querySelector<HTMLElement>(`[data-entry="${entry.id}"]`);
+		if (!card) return;
+		const focused = document.activeElement;
+		menu = {
+			entry,
+			via,
+			anchor: unscaled(card),
+			returnTo:
+				focused instanceof HTMLElement && card.contains(focused) ? focused : card.querySelector('a')
+		};
+		if (via === 'touch') haptic('tap');
+	}
+	/** The card's box at its normal size (it is still sunk by the long press when the menu opens). */
+	function unscaled(card: HTMLElement) {
+		const box = card.getBoundingClientRect();
+		const k = 1 / (Number(getComputedStyle(card).scale) || 1);
+		const [cx, cy, w, h] = [
+			box.left + box.width / 2,
+			box.top + box.height / 2,
+			box.width,
+			box.height
+		];
+		return new DOMRect(cx - (w * k) / 2, cy - (h * k) / 2, w * k, h * k);
+	}
+	function closeMenu() {
+		const m = menu;
+		menu = null;
+		// Keyboard and mouse: back to the card (a finger does not need the focus ring)
+		if (m && m.via !== 'touch' && !removed[m.entry.id]) m.returnTo?.focus({ preventScroll: true });
+	}
+	// "Terminé" fills the progress: asked first when that counts many units as seen
+	const completeJump = (e: Resume) => {
+		const unit = unitLabel[e.type];
+		const total = e.totalUnits;
+		if (!unit || !total || e.progress >= total) return null;
+		const seen = { épisodes: 'vu', chapitres: 'lu', pages: 'lue' }[unit] ?? 'vu';
+		const feminine = unit === 'pages';
+		const the = { épisodes: 'L’', chapitres: 'Le ', pages: 'La ' }[unit] ?? '';
+		if (e.progress + 1 === total)
+			return `${the}${singular[unit]} ${total} sera compté${feminine ? 'e' : ''} comme ${seen}.`;
+		return `Les ${unit} ${e.progress + 1} à ${total} seront compté${feminine ? 'es' : 's'} comme ${seen}s.`;
+	};
+	async function post(action: string, fields: Record<string, string | number>) {
+		const result = deserialize(await (await postAction(action, fields)).text());
+		if (result.type !== 'success') throw new Error(`${action} failed`);
+		return result.data;
+	}
+	async function setStatus(e: Resume, status: EntryStatus) {
+		removed[e.id] = true;
+		try {
+			const { undo } = (await post('?/status', { entryId: e.id, status })) as { undo: StatusUndo };
+			toast(`« ${e.title} » : ${statusLabel[status].toLowerCase()}`, () => restore(e, undo));
+			await invalidateAll();
+		} catch {
+			toastError('Le statut n’a pas pu être changé.');
+		}
+		delete removed[e.id];
+	}
+	async function restore(e: Resume, undo: StatusUndo) {
+		try {
+			await post('?/undoStatus', { entryId: e.id, undo: JSON.stringify(undo) });
+		} catch {
+			toastError('L’annulation a échoué.');
+		}
+		await invalidateAll();
+	}
 	// +1 reloads the page data: keep the first provider lists, or every shelf would load again
 	const { trending, discoveries } = untrack(() => data);
 	let trendType = $state<(typeof MEDIA_TYPES)[number]>('movie');
@@ -134,24 +235,48 @@
 	{#if data.user}
 		<section aria-labelledby="resume" class="flex flex-col gap-2.5 sm:gap-4">
 			<h2 id="resume" class="h2">Reprendre</h2>
-			{#if data.entries.length}
+			{#if resume.length}
 				<!-- One scrollable row, like the shelves below; the padding keeps card shadows visible -->
 				<ul
 					class="-mx-2 -mt-2 flex snap-x scroll-px-2 [scrollbar-width:thin] gap-4 overflow-x-auto px-2 pt-2 pb-2"
 				>
-					{#each data.entries as e (e.id)}
+					{#each resume as e (e.id)}
 						{@const unit = unitLabel[e.type]}
 						{@const progress = bumped[e.id] ?? e.progress}
 						{@const position = seasonPosition(e.seasons, progress)}
 						{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
 						<!-- The whole card opens the work (a link covers it), except the +1 button. The link is
-						     not the title: the scrolling title's transform would shrink its click area. -->
+						     not the title: the scrolling title's transform would shrink its click area.
+						     A long press (right click, "⋯") opens the status menu instead; no native callout. -->
 						<li
 							animate:glide
-							class="group relative flex w-[min(340px,85vw)] shrink-0 snap-start gap-4 card p-3.5 tile-frame"
+							transition:leave
+							data-entry={e.id}
+							use:longpress={{ onpress: (at) => openMenu(e, at.via) }}
+							class="group relative flex w-[min(340px,85vw)] shrink-0 snap-start gap-4 card p-3.5 tile-frame select-none [-webkit-touch-callout:none]"
 						>
-							<a {href} class="absolute inset-0 rounded-2xl"
+							<a {href} draggable="false" class="absolute inset-0 rounded-2xl"
 								><span class="sr-only">{e.title}</span></a
+							>
+							<!-- Mouse and keyboard: shown on hover or focus. Touch: the long press (kept for screen readers) -->
+							<button
+								type="button"
+								aria-haspopup="dialog"
+								aria-label="Changer le statut de {e.title}"
+								class="absolute top-2 right-2 z-10 grid size-8 cursor-pointer place-items-center rounded-full bg-surface text-muted opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-surface-2 hover:text-ink pointer-coarse:sr-only"
+								onclick={(ev) => openMenu(e, ev.detail === 0 ? 'keyboard' : 'mouse')}
+								><svg
+									aria-hidden="true"
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="currentColor"
+									><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle
+										cx="19"
+										cy="12"
+										r="2"
+									/></svg
+								></button
 							>
 							<!-- self-start: cards share the row's height, the poster keeps its 2:3 -->
 							<Poster
@@ -241,6 +366,18 @@
 				<StartHere title="Rien en cours pour l’instant" />
 			{/if}
 		</section>
+		{#if menu}
+			{@const e = menu.entry}
+			<EntryMenu
+				title={e.title}
+				status={e.status}
+				anchor={menu.anchor}
+				href={resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
+				confirmComplete={completeJump(e)}
+				onselect={(s) => setStatus(e, s)}
+				onclose={closeMenu}
+			/>
+		{/if}
 	{/if}
 
 	<section aria-labelledby="trending" class="flex flex-col gap-2.5 sm:gap-4">

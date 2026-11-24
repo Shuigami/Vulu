@@ -7,9 +7,11 @@ import { activityEvents, libraryEntries, media, users } from './db/schema';
 import {
 	addToLibrary,
 	applyChange,
+	changeStatus,
 	countByStatus,
 	incrementProgress,
 	listEntries,
+	undoStatus,
 	updateEntry
 } from './library';
 
@@ -227,5 +229,51 @@ describe('library entries in the database', () => {
 		const id = await addToLibrary(db, owner.userId, owner.mediaId);
 		expect(await updateEntry(db, other.userId, id, { progress: 1 })).toBe(false);
 		expect(await listEntries(db, owner.userId)).toMatchObject([{ progress: 0 }]);
+	});
+
+	it('changes the status from the home menu, and undoes it without a trace', async () => {
+		const { userId, mediaId } = await fixture();
+		const id = await addToLibrary(db, userId, mediaId);
+		await incrementProgress(db, userId, id);
+		const kinds = async () =>
+			(
+				await db
+					.select({ kind: activityEvents.kind })
+					.from(activityEvents)
+					.where(eq(activityEvents.userId, userId))
+					.orderBy(activityEvents.id)
+			).map((e) => e.kind);
+		const before = await kinds();
+		expect(before).toEqual(['episode', 'started']);
+
+		const paused = await changeStatus(db, userId, id, 'paused');
+		expect(paused).toMatchObject({ status: 'in_progress', progress: 1, completedOn: null });
+		expect(await listEntries(db, userId)).toMatchObject([{ status: 'paused', progress: 1 }]);
+		expect(await kinds()).toEqual([...before, 'status_changed']);
+		expect(await undoStatus(db, userId, id, paused!)).toBe(true);
+		expect(await listEntries(db, userId)).toMatchObject([{ status: 'in_progress', progress: 1 }]);
+		expect(await kinds()).toEqual(before);
+
+		// "Terminé" fills the progress; undoing it puts the progress and dates back
+		const done = await changeStatus(db, userId, id, 'completed');
+		expect(await listEntries(db, userId)).toMatchObject([{ status: 'completed', progress: 3 }]);
+		expect(await kinds()).toEqual([...before, 'episode', 'completed']);
+		await undoStatus(db, userId, id, done!);
+		const [entry] = await db.select().from(libraryEntries).where(eq(libraryEntries.id, id));
+		expect(entry).toMatchObject({ status: 'in_progress', progress: 1, completedOn: null });
+		expect(await kinds()).toEqual(before);
+
+		// Someone else's entry, or their events, cannot be touched
+		const other = await fixture();
+		expect(await changeStatus(db, other.userId, id, 'dropped')).toBeNull();
+		const otherId = await addToLibrary(db, other.userId, other.mediaId);
+		const [theirs] = await db
+			.insert(activityEvents)
+			.values({ userId: other.userId, mediaId: other.mediaId, kind: 'started' })
+			.returning({ id: activityEvents.id });
+		await undoStatus(db, userId, id, { ...done!, events: [theirs.id] });
+		expect(await undoStatus(db, userId, otherId, done!)).toBe(false);
+		const kept = await db.select().from(activityEvents).where(eq(activityEvents.id, theirs.id));
+		expect(kept).toHaveLength(1);
 	});
 });

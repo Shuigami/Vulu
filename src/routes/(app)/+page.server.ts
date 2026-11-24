@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import { db, getBoss } from '#lib/server/app.ts';
 import { ANONYMOUS_ID, requireUser } from '#lib/server/guard.ts';
 import {
@@ -7,7 +7,7 @@ import {
 	startOfToday,
 	upcomingEpisodes
 } from '#lib/server/calendar.ts';
-import { MEDIA_TYPES } from '#lib/labels.ts';
+import { isEntryStatus, MEDIA_TYPES } from '#lib/labels.ts';
 import {
 	popularOnVulu,
 	recommendations,
@@ -16,7 +16,13 @@ import {
 } from '#lib/server/discover.ts';
 import { seasonRanges, withSeasons } from '#lib/server/episodes.ts';
 import { seasonAt, type SeasonRange } from '#lib/seasons.ts';
-import { incrementProgress, listEntries } from '#lib/server/library.ts';
+import {
+	changeStatus,
+	incrementProgress,
+	listEntries,
+	undoStatus,
+	type StatusUndo
+} from '#lib/server/library.ts';
 import { feed, feedView } from '#lib/server/social.ts';
 import {
 	daysToRelease,
@@ -28,6 +34,36 @@ import {
 import type { Actions, PageServerLoad } from './$types';
 
 const WEEK = 7 * 24 * 3600 * 1000;
+
+const isDay = (v: unknown) =>
+	v === null || (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v));
+
+/** The `undo` field posted back by "Annuler" (what the status action returned), or null. */
+function parseUndo(raw: FormDataEntryValue | null): StatusUndo | null {
+	try {
+		const u = JSON.parse(String(raw));
+		const ids = (v: unknown) =>
+			Array.isArray(v) && v.length <= 10 && v.every((n) => Number.isSafeInteger(n));
+		if (
+			isEntryStatus(u?.status) &&
+			Number.isSafeInteger(u.progress) &&
+			u.progress >= 0 &&
+			isDay(u.startedOn) &&
+			isDay(u.completedOn) &&
+			ids(u.events)
+		)
+			return {
+				status: u.status,
+				progress: u.progress,
+				startedOn: u.startedOn,
+				completedOn: u.completedOn,
+				events: u.events
+			};
+	} catch {
+		// Not JSON
+	}
+	return null;
+}
 
 const countdown = (days: number) =>
 	days <= 0 ? 'Aujourd’hui' : days === 1 ? 'Demain' : `Dans ${Math.round(days)} j`;
@@ -164,6 +200,24 @@ export const actions: Actions = {
 	increment: async ({ request, locals, url }) => {
 		const entryId = Number((await request.formData()).get('entryId'));
 		if (!(await incrementProgress(db, requireUser(locals, url).id, entryId)))
+			error(404, 'Entrée introuvable');
+	},
+	// Long press menu on a "Reprendre" card
+	status: async ({ request, locals, url }) => {
+		const userId = requireUser(locals, url).id;
+		const form = await request.formData();
+		const status = form.get('status');
+		if (!isEntryStatus(status)) return fail(400, { message: 'Statut invalide.' });
+		const undo = await changeStatus(db, userId, Number(form.get('entryId')), status);
+		if (!undo) error(404, 'Entrée introuvable');
+		return { undo };
+	},
+	undoStatus: async ({ request, locals, url }) => {
+		const userId = requireUser(locals, url).id;
+		const form = await request.formData();
+		const undo = parseUndo(form.get('undo'));
+		if (!undo) return fail(400, { message: 'Annulation invalide.' });
+		if (!(await undoStatus(db, userId, Number(form.get('entryId')), undo)))
 			error(404, 'Entrée introuvable');
 	}
 };

@@ -1,5 +1,5 @@
 // Library entries: current state in library_entries, history in activity_events (docs/v1-spec.md).
-import { and, eq, like, sql } from 'drizzle-orm';
+import { and, eq, inArray, like, sql } from 'drizzle-orm';
 import type { MediaType } from '../labels';
 import type { Db } from './db';
 import { activityEvents, libraryEntries, media, mediaTitles } from './db/schema';
@@ -131,6 +131,13 @@ export type UpdateOptions = {
 	dedupKey?: string;
 	/** The episode marked, kept on the progress event. */
 	episodeId?: number;
+	/**
+	 * Undoes a change made a moment ago: these journal events (the user's, for this entry's work)
+	 * are deleted, and the change restoring the previous state logs nothing.
+	 */
+	revert?: number[];
+	/** Called inside the transaction with the entry before the change and the journaled event ids. */
+	onApplied?: (applied: { previous: Entry; eventIds: number[] }) => void;
 };
 
 /**
@@ -173,7 +180,18 @@ export async function updateEntry(
 		if (!row) return false;
 
 		const p = typeof patch === 'function' ? patch(row.entry) : patch;
-		const { next, events } = applyChange(row.entry, p, row, today);
+		const { next, events: logged } = applyChange(row.entry, p, row, today);
+		const events = opts.revert ? [] : logged;
+		if (opts.revert?.length)
+			await tx
+				.delete(activityEvents)
+				.where(
+					and(
+						inArray(activityEvents.id, opts.revert),
+						eq(activityEvents.userId, userId),
+						eq(activityEvents.mediaId, row.entry.mediaId)
+					)
+				);
 		const { status, progress, progressSecondary, repeatCount, score, startedOn, completedOn } =
 			next;
 		const { notes, review, reviewSpoiler, isFavorite, isPrivate, mediaId } = next;
@@ -194,19 +212,25 @@ export async function updateEntry(
 				isPrivate
 			})
 			.where(eq(libraryEntries.id, entryId));
+		let eventIds: number[] = [];
 		if (events.length) {
 			// A concurrent delivery of the same webhook fails here on the unique dedup key
-			await tx.insert(activityEvents).values(
-				events.map((e) => ({
-					...e,
-					userId,
-					mediaId,
-					episodeId: e.kind === 'episode' ? opts.episodeId : undefined,
-					source: opts.source ?? 'manual',
-					dedupKey: opts.dedupKey && `${opts.dedupKey}:${e.kind}`
-				}))
-			);
+			const inserted = await tx
+				.insert(activityEvents)
+				.values(
+					events.map((e) => ({
+						...e,
+						userId,
+						mediaId,
+						episodeId: e.kind === 'episode' ? opts.episodeId : undefined,
+						source: opts.source ?? 'manual',
+						dedupKey: opts.dedupKey && `${opts.dedupKey}:${e.kind}`
+					}))
+				)
+				.returning({ id: activityEvents.id });
+			eventIds = inserted.map((e) => e.id);
 		}
+		opts.onApplied?.({ previous: row.entry, eventIds });
 		return true;
 	});
 }
@@ -214,6 +238,39 @@ export async function updateEntry(
 /** +1 episode / chapter / page, used by the "En cours" page. */
 export const incrementProgress = (db: Db, userId: string, entryId: number) =>
 	updateEntry(db, userId, entryId, (e) => ({ progress: e.progress + 1 }));
+
+/** What a status change replaced, so "Annuler" can put it back (`undoStatus`). */
+export type StatusUndo = Pick<Entry, 'status' | 'progress' | 'startedOn' | 'completedOn'> & {
+	events: number[];
+};
+
+/** Quick status change (home page menu); returns what `undoStatus` needs, null if not theirs. */
+export async function changeStatus(
+	db: Db,
+	userId: string,
+	entryId: number,
+	status: Entry['status']
+): Promise<StatusUndo | null> {
+	let undo: StatusUndo | null = null;
+	const ok = await updateEntry(
+		db,
+		userId,
+		entryId,
+		{ status },
+		{
+			onApplied: ({ previous: { status, progress, startedOn, completedOn }, eventIds }) => {
+				undo = { status, progress, startedOn, completedOn, events: eventIds };
+			}
+		}
+	);
+	return ok ? undo : null;
+}
+
+/** "Annuler" after `changeStatus`: the previous state comes back and its events are deleted. */
+export const undoStatus = (db: Db, userId: string, entryId: number, undo: StatusUndo) => {
+	const { events, ...previous } = undo;
+	return updateEntry(db, userId, entryId, previous, { revert: events });
+};
 
 /** "Revoir" / "Relire" on a completed entry. */
 export const rewatchEntry = (db: Db, userId: string, entryId: number) =>
