@@ -258,13 +258,17 @@
 								action="?/increment"
 								class="pointer-events-auto absolute right-2 bottom-3"
 								use:enhance={() => {
+									// Shown at once, put back if the save fails
+									const before = progress;
 									pending = e.id;
+									bumped[e.id] = before + 1;
 									return async ({ result }) => {
 										pending = null;
-										if (result.type === 'success') {
-											bumped[e.id] = progress + 1;
-											haptic('success');
-										} else toastError('La progression n’a pas pu être enregistrée.');
+										if (result.type === 'success') haptic('success');
+										else {
+											bumped[e.id] = before;
+											toastError('La progression n’a pas pu être enregistrée.');
+										}
 									};
 								}}
 							>

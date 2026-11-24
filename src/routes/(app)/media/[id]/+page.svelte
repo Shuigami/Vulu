@@ -164,7 +164,8 @@
 	const nextUp = $derived.by(() => {
 		for (const s of data.seasons)
 			for (const e of s.episodes)
-				if (e.absolute !== null && e.aired && !e.seen)
+				// From the counter, not the seen flags: follows "Vu" before the page reloads
+				if (e.absolute !== null && e.aired && e.absolute > progress)
 					return {
 						...e,
 						label: s.number === null ? `Ép. ${e.number}` : `S${s.number}E${e.number}`
@@ -188,14 +189,24 @@
 				? 'Épisodes spéciaux'
 				: `Saison ${s.number}${s.title && s.title !== `Saison ${s.number}` ? ` · ${s.title}` : ''}`;
 	let marking = $state(false);
-	async function mark(action: 'episode' | 'season', fields: Record<string, string | number>) {
+	/** `upTo`: progress shown at once (the episode marked), put back if the save fails. */
+	async function mark(
+		action: 'episode' | 'season',
+		fields: Record<string, string | number>,
+		upTo?: number | null
+	) {
 		marking = true;
+		const before = progress;
+		if (upTo != null) progress = Math.max(progress, upTo);
 		const res = await postAction(`?/${action}`, fields).catch(() => null);
 		const result = res?.ok ? await res.json() : null;
 		await invalidateAll();
 		marking = false;
 		if (result?.type === 'success') haptic('success');
-		else toastError('Échec, réessaie.');
+		else {
+			progress = before;
+			toastError('Échec, réessaie.');
+		}
 	}
 	// Phones: a +1 bar stays at the bottom once the tracking block has scrolled out of view
 	let trackingVisible = $state(true);
@@ -409,7 +420,7 @@
 					type="button"
 					class="btn-accent max-sm:flex-1"
 					disabled={marking}
-					onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}
+					onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' }, nextUp.absolute)}
 					><svg
 						aria-hidden="true"
 						width="18"
@@ -675,7 +686,8 @@
 										disabled={marking}
 										aria-busy={marking}
 										aria-label="Marquer {nextUp.label} vu"
-										onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}
+										onclick={() =>
+											mark('episode', { episodeId: nextUp.id, seen: 'true' }, nextUp.absolute)}
 										><svg
 											aria-hidden="true"
 											width="18"
@@ -1322,7 +1334,8 @@
 				class="btn-accent shrink-0"
 				disabled={marking}
 				aria-busy={marking}
-				onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}>Marquer vu</button
+				onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' }, nextUp.absolute)}
+				>Marquer vu</button
 			>
 		{:else}
 			<div class="flex min-w-0 flex-1 flex-col">

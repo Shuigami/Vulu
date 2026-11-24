@@ -14,6 +14,7 @@
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, toScale, typePlural, unitLabel } from '#lib/labels.ts';
 	import { haptic } from '#lib/haptics.ts';
+	import { toastError } from '#lib/toast.svelte.ts';
 	import { seasonPosition } from '#lib/seasons.ts';
 	import type { DiscoverItem } from '#lib/server/discover.ts';
 	import type { PageProps } from './$types';
@@ -47,6 +48,8 @@
 		}
 	];
 	let pending = $state<number | null>(null);
+	// +1 shown before the server answers, until the page data is reloaded
+	let bumped = $state<Record<number, number>>({});
 	const singular = { épisodes: 'épisode', chapitres: 'chapitre', pages: 'page' } as Record<
 		string,
 		string
@@ -138,7 +141,8 @@
 				>
 					{#each data.entries as e (e.id)}
 						{@const unit = unitLabel[e.type]}
-						{@const position = seasonPosition(e.seasons, e.progress)}
+						{@const progress = bumped[e.id] ?? e.progress}
+						{@const position = seasonPosition(e.seasons, progress)}
 						{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
 						<!-- The whole card opens the work (a link covers it), except the +1 button. The link is
 						     not the title: the scrolling title's transform would shrink its click area. -->
@@ -181,23 +185,21 @@
 												/>
 												<p class="text-[13px] text-muted tabular-nums">
 													<span class="font-semibold text-ink">S{position.season}</span> · Ép.
-													{#key e.progress}<strong
-															in:pop
-															class="inline-block font-semibold text-ink">{position.seen}</strong
+													{#key progress}<strong in:pop class="inline-block font-semibold text-ink"
+															>{position.seen}</strong
 														>{/key} / {position.count}
 												</p>
 											{:else}
 												{#if e.totalUnits}
 													<Progress
-														value={e.progress}
+														value={progress}
 														max={e.totalUnits}
 														label="Progression de {e.title}"
 													/>
 												{/if}
 												<p class="text-[13px] text-muted tabular-nums">
-													{#key e.progress}<strong
-															in:pop
-															class="inline-block font-semibold text-ink">{e.progress}</strong
+													{#key progress}<strong in:pop class="inline-block font-semibold text-ink"
+															>{progress}</strong
 														>{/key}{e.totalUnits ? ` / ${e.totalUnits}` : ''}
 													{unit}
 												</p>
@@ -208,11 +210,16 @@
 											method="post"
 											action="?/increment"
 											use:enhance={() => {
+												// Shown at once; the reload brings the saved value (or the old one back)
 												pending = e.id;
+												bumped[e.id] = progress + 1;
 												return async ({ update, result }) => {
-													await update();
+													if (result.type === 'success') {
+														await update();
+														haptic('success');
+													} else toastError('La progression n’a pas pu être enregistrée.');
 													pending = null;
-													haptic(result.type === 'success' ? 'success' : 'error');
+													delete bumped[e.id];
 												};
 											}}
 										>
