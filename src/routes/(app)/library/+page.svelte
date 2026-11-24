@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { toast } from '#lib/toast.svelte.ts';
+	import { haptic } from '#lib/haptics.ts';
+	import { toastError } from '#lib/toast.svelte.ts';
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
 	import StartHere from '#lib/components/StartHere.svelte';
@@ -260,14 +261,17 @@
 									pending = e.id;
 									return async ({ result }) => {
 										pending = null;
-										if (result.type === 'success') bumped[e.id] = progress + 1;
-										else toast('La progression n’a pas pu être enregistrée.');
+										if (result.type === 'success') {
+											bumped[e.id] = progress + 1;
+											haptic('success');
+										} else toastError('La progression n’a pas pu être enregistrée.');
 									};
 								}}
 							>
 								<input type="hidden" name="entryId" value={e.id} />
 								<button
 									disabled={pending === e.id}
+									aria-busy={pending === e.id}
 									aria-label="+1 pour {e.title}"
 									class="btn-accent min-h-9 rounded-lg px-3 text-sm shadow-lg">+1</button
 								>

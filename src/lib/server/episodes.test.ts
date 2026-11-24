@@ -513,20 +513,29 @@ describe('episodes in the database', () => {
 				posterUrl: null
 			})),
 			episodes: [
-				{ seasonNumber: 0, number: 1, absoluteNumber: null, title: null, airDate: null },
+				{
+					seasonNumber: 0,
+					number: 1,
+					absoluteNumber: null,
+					title: null,
+					airDate: null,
+					runtimeMinutes: null
+				},
 				...[1, 2, 3].map((n) => ({
 					seasonNumber: 1,
 					number: n,
 					absoluteNumber: n,
 					title: null,
-					airDate: null
+					airDate: null,
+					runtimeMinutes: null
 				})),
 				...[1, 2].map((n) => ({
 					seasonNumber: 2,
 					number: n,
 					absoluteNumber: 3 + n,
 					title: null,
-					airDate: null
+					airDate: null,
+					runtimeMinutes: null
 				}))
 			]
 		});

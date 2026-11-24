@@ -14,7 +14,7 @@
 		type EntryStatus,
 		type MediaType
 	} from '#lib/labels.ts';
-	import { postAction, toast } from '#lib/toast.svelte.ts';
+	import { postAction, toast, toastError } from '#lib/toast.svelte.ts';
 
 	type Entry = { status: EntryStatus; progress: number };
 	type Result = {
@@ -191,7 +191,7 @@
 			dialog?.close();
 			await goto(result.location);
 		} else {
-			toast('L’ajout a échoué, réessaie.');
+			toastError('L’ajout a échoué, réessaie.');
 		}
 	}
 
@@ -202,7 +202,7 @@
 		const res = await postAction(`${mediaHref(r)}?/rewatch`, {}).catch(() => null);
 		const result = res?.ok ? await res.json() : null;
 		pending = false;
-		if (result?.type !== 'success') return toast('Échec, réessaie.');
+		if (result?.type !== 'success') return toastError('Échec, réessaie.');
 		// A movie stays completed (one more viewing logged); the rest starts over
 		if (r.type !== 'movie') r.entry = { status: 'in_progress', progress: 0 };
 		dialog?.close();

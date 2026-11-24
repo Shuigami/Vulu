@@ -13,6 +13,7 @@
 	import StartHere from '#lib/components/StartHere.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, toScale, typePlural, unitLabel } from '#lib/labels.ts';
+	import { haptic } from '#lib/haptics.ts';
 	import { seasonPosition } from '#lib/seasons.ts';
 	import type { DiscoverItem } from '#lib/server/discover.ts';
 	import type { PageProps } from './$types';
@@ -208,15 +209,17 @@
 											action="?/increment"
 											use:enhance={() => {
 												pending = e.id;
-												return async ({ update }) => {
+												return async ({ update, result }) => {
 													await update();
 													pending = null;
+													haptic(result.type === 'success' ? 'success' : 'error');
 												};
 											}}
 										>
 											<input type="hidden" name="entryId" value={e.id} />
 											<button
 												disabled={pending === e.id}
+												aria-busy={pending === e.id}
 												aria-label="+1 {singular[unit]} pour {e.title}"
 												class="btn-accent min-w-14">+1</button
 											>
