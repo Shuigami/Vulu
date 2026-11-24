@@ -10,8 +10,9 @@ const show = [
 describe('season position', () => {
 	it('places the absolute progress in its season', () => {
 		expect(seasonPosition(show, 29)).toEqual({ season: 3, seen: 5, count: 12 });
-		// End of a season: that season, full, until the next episode is seen
-		expect(seasonPosition(show, 24)).toEqual({ season: 2, seen: 12, count: 12 });
+		// End of a season: the next one, not started yet; the last season stays full
+		expect(seasonPosition(show, 24)).toEqual({ season: 3, seen: 0, count: 12 });
+		expect(seasonPosition(show, 36)).toEqual({ season: 3, seen: 12, count: 12 });
 		expect(seasonPosition(show, 25)).toEqual({ season: 3, seen: 1, count: 12 });
 		expect(seasonPosition(show, 0)).toEqual({ season: 1, seen: 0, count: 12 });
 	});

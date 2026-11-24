@@ -111,6 +111,10 @@
 	html {
 		-webkit-tap-highlight-color: transparent;
 	}
+	/* iOS haptic switches (src/lib/haptics.ts): a disabled button lets taps through, untouched */
+	button:disabled > [data-haptic-overlay] {
+		pointer-events: none;
+	}
 	/* An action on its way: the disabled button breathes until the answer comes */
 	@media (prefers-reduced-motion: no-preference) {
 		[aria-busy='true'] {

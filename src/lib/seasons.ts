@@ -13,15 +13,16 @@ export type SeasonPosition = {
 };
 
 /**
- * Where `progress` stands: the season holding the last episode seen (the first season before
- * anything is seen). Null for a work with fewer than two seasons, or a progress past the known
+ * Where `progress` stands: the season holding the next episode to watch, so a finished season
+ * moves on to the next one at 0 (the last season stays full). Null for a work with fewer than two seasons, or a progress past the known
  * episodes: those keep the absolute count.
  */
 export function seasonPosition(
 	ranges: readonly SeasonRange[],
 	progress: number
 ): SeasonPosition | null {
-	const at = seasonAt(ranges, Math.max(1, progress), progress);
+	// The next episode's season: a finished season moves on to the next one at 0
+	const at = seasonAt(ranges, progress + 1, progress) ?? seasonAt(ranges, progress, progress);
 	return at && { season: at.season, seen: at.seen, count: at.count };
 }
 
