@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { goto, invalidateAll } from '$app/navigation';
+	import { afterNavigate, goto, invalidateAll } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { navigating, page } from '$app/state';
 	import { authClient } from '#lib/auth-client.ts';
+	import { followNavigation } from '#lib/browse.svelte.ts';
 	import Avatar from '#lib/components/Avatar.svelte';
 	import MediaSkeleton from '#lib/components/MediaSkeleton.svelte';
 	import QuickAdd from '#lib/components/QuickAdd.svelte';
@@ -13,6 +14,9 @@
 	import type { LayoutProps } from './$types';
 
 	let { data, children }: LayoutProps = $props();
+
+	// The row of works a media page was opened from lives while browsing its works (#97)
+	afterNavigate(followNavigation);
 
 	// Placeholder while a work loads, only past a short delay so fast loads do not flash
 	const loadingMedia = $derived(opening.active || navigating.to?.route.id === '/(app)/media/[id]');

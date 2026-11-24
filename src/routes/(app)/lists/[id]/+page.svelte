@@ -2,6 +2,7 @@
 	import Meta from '#lib/components/Meta.svelte';
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
+	import { startBrowse } from '#lib/browse.svelte.ts';
 	import Poster from '#lib/components/Poster.svelte';
 	import ShareButton from '#lib/components/ShareButton.svelte';
 	import { MEDIA_TYPES, toScale, typeLabel, typePlural } from '#lib/labels.ts';
@@ -255,11 +256,12 @@
 
 	{#if shown.length}
 		<ol class="grid [grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] gap-x-5 gap-y-7">
-			{#each shown as item (item.mediaId)}
+			{#each shown as item, index (item.mediaId)}
 				<li class="flex flex-col gap-2">
 					<a
 						href={resolve('/(app)/media/[id]', { id: String(item.mediaId) })}
 						class="group flex flex-col gap-2.5 text-ink no-underline"
+						onclick={() => startBrowse(shown, index)}
 					>
 						<div class="overflow-hidden rounded-xl tile-frame">
 							<Poster src={item.posterUrl} title={item.title} class="w-full" />

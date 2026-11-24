@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import { resolve } from '$app/paths';
 	import Avatar from '#lib/components/Avatar.svelte';
+	import { startBrowse } from '#lib/browse.svelte.ts';
 	import Poster from '#lib/components/Poster.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, typePlural } from '#lib/labels.ts';
@@ -11,6 +12,12 @@
 
 	let { data, form }: PageProps = $props();
 	let adding = $state<string | null>(null);
+	// Opening a result remembers them all, in their order: the media page swipes along them
+	const browseFrom = (index: number) =>
+		startBrowse(
+			results.map((r) => ({ ...r, mediaId: r.id ?? null })),
+			index
+		);
 
 	const filterHref = (type?: string) =>
 		`${resolve('search')}?${new URLSearchParams({ q: data.q, ...(type && { type }) })}`;
@@ -123,7 +130,7 @@
 			<h2 id="results" class="sr-only">Œuvres</h2>
 			{#if results.length}
 				<ul class="flex flex-col gap-2">
-					{#each results as r (r.key)}
+					{#each results as r, index (r.key)}
 						<!-- The title's ::after covers the card, so the whole card opens the work -->
 						<li
 							aria-busy={adding === r.key}
@@ -136,6 +143,7 @@
 								{#if r.id}
 									<a
 										href={resolve('/(app)/media/[id]', { id: String(r.id) })}
+										onclick={() => browseFrom(index)}
 										class="text-base font-semibold text-ink no-underline after:absolute after:inset-0 after:z-10 after:rounded-[14px] hover:underline"
 										>{r.title}</a
 									>
@@ -145,6 +153,7 @@
 										method="post"
 										action={actionUrl('open')}
 										use:enhance={() => {
+											browseFrom(index);
 											opening.active = true;
 											return async ({ update }) => {
 												await update();

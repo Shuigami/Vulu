@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
+	import { startBrowse } from '#lib/browse.svelte.ts';
 	import { haptic } from '#lib/haptics.ts';
 	import { toastError } from '#lib/toast.svelte.ts';
 	import { resolve } from '$app/paths';
@@ -182,7 +183,7 @@
 		<ul
 			class="grid [grid-template-columns:repeat(auto-fill,minmax(100px,1fr))] gap-x-3 gap-y-5 sm:[grid-template-columns:repeat(auto-fill,minmax(140px,1fr))] sm:gap-x-5 sm:gap-y-7"
 		>
-			{#each data.entries as e (e.id)}
+			{#each data.entries as e, index (e.id)}
 				{@const unit = unitLabel[e.type]}
 				{@const progress = bumped[e.id] ?? e.progress}
 				{@const position = seasonPosition(e.seasons, progress)}
@@ -195,6 +196,7 @@
 					<a
 						href={resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
 						class="group flex flex-col gap-2.5 text-ink no-underline"
+						onclick={() => startBrowse(data.entries, index)}
 					>
 						<div class="relative overflow-hidden rounded-xl tile-frame">
 							<Poster src={e.posterUrl} title={e.title} type={e.type} class="w-full" />

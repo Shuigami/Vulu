@@ -25,8 +25,10 @@
 	};
 </script>
 
+<!-- data-no-swipe: sliding along the stars rates, it does not open another work -->
 <div
 	class="flex touch-pan-y text-line"
+	data-no-swipe
 	role="group"
 	aria-label="Note en étoiles"
 	onpointerleave={(e) => e.pointerType === 'mouse' && (hovered = 0)}
