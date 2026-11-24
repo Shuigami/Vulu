@@ -96,11 +96,23 @@
 		menu = {
 			entry,
 			via,
-			anchor: card.getBoundingClientRect(),
+			anchor: unscaled(card),
 			returnTo:
 				focused instanceof HTMLElement && card.contains(focused) ? focused : card.querySelector('a')
 		};
 		if (via === 'touch') haptic('tap');
+	}
+	/** The card's box at its normal size (it is still sunk by the long press when the menu opens). */
+	function unscaled(card: HTMLElement) {
+		const box = card.getBoundingClientRect();
+		const k = 1 / (Number(getComputedStyle(card).scale) || 1);
+		const [cx, cy, w, h] = [
+			box.left + box.width / 2,
+			box.top + box.height / 2,
+			box.width,
+			box.height
+		];
+		return new DOMRect(cx - (w * k) / 2, cy - (h * k) / 2, w * k, h * k);
 	}
 	function closeMenu() {
 		const m = menu;
@@ -111,8 +123,14 @@
 	// "Terminé" fills the progress: asked first when that counts many units as seen
 	const completeJump = (e: Resume) => {
 		const unit = unitLabel[e.type];
-		if (!unit || !e.totalUnits || e.progress >= e.totalUnits) return null;
-		return `Ta progression passera de ${e.progress} à ${e.totalUnits} ${unit}, comptés comme vus dans tes statistiques.`;
+		const total = e.totalUnits;
+		if (!unit || !total || e.progress >= total) return null;
+		const seen = { épisodes: 'vu', chapitres: 'lu', pages: 'lue' }[unit] ?? 'vu';
+		const feminine = unit === 'pages';
+		const the = { épisodes: 'L’', chapitres: 'Le ', pages: 'La ' }[unit] ?? '';
+		if (e.progress + 1 === total)
+			return `${the}${singular[unit]} ${total} sera compté${feminine ? 'e' : ''} comme ${seen}.`;
+		return `Les ${unit} ${e.progress + 1} à ${total} seront compté${feminine ? 'es' : 's'} comme ${seen}s.`;
 	};
 	async function post(action: string, fields: Record<string, string | number>) {
 		const result = deserialize(await (await postAction(action, fields)).text());
