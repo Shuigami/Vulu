@@ -320,7 +320,15 @@
 									>{w.mediaTitle}</a
 								>
 								<div class="mt-auto flex flex-col gap-1.5 pt-1">
-									{#if w.totalUnits}
+									{#if w.season}
+										<!-- Series: the season coming out, not the whole show -->
+										<Progress
+											value={w.season.seen}
+											max={w.season.count}
+											release={w.season.release}
+											label="Progression de {w.mediaTitle}, saison {w.season.number}"
+										/>
+									{:else if w.totalUnits}
 										<Progress
 											value={w.progress}
 											max={w.totalUnits}
@@ -332,7 +340,12 @@
 										<span class="truncate"
 											>{w.episode}{w.count > 1 ? ` · ${w.count} épisodes` : ''}</span
 										>
-										{#if w.totalUnits}<span class="shrink-0 tabular-nums"
+										{#if w.season}<span class="shrink-0 tabular-nums"
+												>S{w.season.number} ·
+												<strong class="font-semibold text-ink">{w.season.seen}</strong> / {w.season
+													.count} vus</span
+											>
+										{:else if w.totalUnits}<span class="shrink-0 tabular-nums"
 												><strong class="font-semibold text-ink">{w.progress}</strong> / {w.totalUnits}
 												vus</span
 											>{/if}

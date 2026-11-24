@@ -21,14 +21,28 @@ export function seasonPosition(
 	ranges: readonly SeasonRange[],
 	progress: number
 ): SeasonPosition | null {
+	const at = seasonAt(ranges, Math.max(1, progress), progress);
+	return at && { season: at.season, seen: at.seen, count: at.count };
+}
+
+/**
+ * The season holding episode `absolute`, with what `progress` covers of it (0 to all of it).
+ * Null under the same conditions as `seasonPosition`.
+ */
+export function seasonAt(
+	ranges: readonly SeasonRange[],
+	absolute: number,
+	progress: number
+): (SeasonPosition & { first: number }) | null {
 	if (ranges.length < 2) return null;
-	const at = Math.max(1, progress);
-	const r = ranges.find((s) => s.first <= at && at <= s.last);
+	const r = ranges.find((s) => s.first <= absolute && absolute <= s.last);
 	if (!r) return null;
+	const count = r.last - r.first + 1;
 	return {
 		season: r.season,
-		seen: Math.max(0, progress - r.first + 1),
-		count: r.last - r.first + 1
+		first: r.first,
+		seen: Math.min(count, Math.max(0, progress - r.first + 1)),
+		count
 	};
 }
 

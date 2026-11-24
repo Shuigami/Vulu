@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { rangesOf, seasonLabel, seasonPosition } from './seasons';
+import { rangesOf, seasonAt, seasonLabel, seasonPosition } from './seasons';
 
 const show = [
 	{ season: 1, first: 1, last: 12 },
@@ -20,6 +20,12 @@ describe('season position', () => {
 		expect(seasonPosition([show[0]], 5)).toBeNull();
 		expect(seasonPosition([], 5)).toBeNull();
 		expect(seasonPosition(show, 40)).toBeNull();
+	});
+
+	it('gives the season of a given episode, the progress clamped to it', () => {
+		expect(seasonAt(show, 25, 24)).toEqual({ season: 3, first: 25, seen: 0, count: 12 });
+		expect(seasonAt(show, 13, 30)).toEqual({ season: 2, first: 13, seen: 12, count: 12 });
+		expect(seasonAt([show[0]], 3, 1)).toBeNull();
 	});
 
 	it('labels the position', () => {

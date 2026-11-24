@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { haptic, HAPTICS_KEY, setHapticsEnabled } from '#lib/haptics.ts';
+	import { haptic, hapticSupport, HAPTICS_KEY, setHapticsEnabled } from '#lib/haptics.ts';
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -134,7 +134,9 @@
 
 	// Haptics: a per-device choice, kept in localStorage (src/lib/haptics.ts)
 	let haptics = $state(true);
+	let support = $state<ReturnType<typeof hapticSupport> | null>(null);
 	$effect(() => {
+		support = hapticSupport();
 		try {
 			haptics = localStorage.getItem(HAPTICS_KEY) !== 'off';
 		} catch {
@@ -381,11 +383,29 @@
 			/>
 			<span
 				><strong>Vibrations</strong><br /><span class="text-muted"
-					>Un léger retour quand tu touches un bouton, sur cet appareil (Android, et iPhone depuis
-					iOS 18). Coupées si « réduire les animations » est activé.</span
+					>Un léger retour quand tu touches un bouton, sur cet appareil.</span
 				></span
 			>
 		</label>
+		<div class="flex flex-wrap items-center gap-3">
+			<button
+				type="button"
+				class="btn-ghost min-h-10 text-sm"
+				disabled={!haptics || support === 'none' || support === 'ios-old'}
+				onclick={() => haptic('success')}>Tester</button
+			>
+			<p class="text-[13px] text-muted">
+				{#if support === 'vibrate'}
+					Si rien ne vibre, vérifie que les vibrations sont activées dans les réglages du téléphone.
+				{:else if support === 'ios'}
+					Sur iPhone, active « Retour haptique système » dans Réglages › Sons et vibrations.
+				{:else if support === 'ios-old'}
+					Sur iPhone, les vibrations demandent iOS 18 ou plus récent.
+				{:else if support === 'none'}
+					Ce navigateur ne permet pas les vibrations.
+				{/if}
+			</p>
+		</div>
 	</section>
 
 	<section class="flex flex-col gap-3 card p-5" aria-labelledby="export-title">
