@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { haptic, hapticSupport, HAPTICS_KEY, setHapticsEnabled } from '#lib/haptics.ts';
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { invalidateAll } from '$app/navigation';
@@ -129,6 +130,23 @@
 		}
 		push = 'off';
 		await invalidateAll();
+	}
+
+	// Haptics: a per-device choice, kept in localStorage (src/lib/haptics.ts)
+	let haptics = $state(true);
+	let support = $state<ReturnType<typeof hapticSupport> | null>(null);
+	$effect(() => {
+		support = hapticSupport();
+		try {
+			haptics = localStorage.getItem(HAPTICS_KEY) !== 'off';
+		} catch {
+			// Storage blocked: the default stays
+		}
+	});
+	function toggleHaptics(on: boolean) {
+		haptics = on;
+		setHapticsEnabled(on);
+		if (on) haptic('success');
 	}
 
 	// Theme: stored in the `theme` cookie (read by hooks.server.ts); "system" removes it
@@ -356,6 +374,38 @@
 		<p class="text-[13px] text-muted">
 			« Système » suit le réglage clair ou sombre de ton appareil.
 		</p>
+		<label class="flex min-h-11 items-start gap-2.5 text-sm">
+			<input
+				type="checkbox"
+				checked={haptics}
+				onchange={(e) => toggleHaptics(e.currentTarget.checked)}
+				class="mt-0.5 size-4 accent-accent"
+			/>
+			<span
+				><strong>Vibrations</strong><br /><span class="text-muted"
+					>Un léger retour quand tu touches un bouton, sur cet appareil.</span
+				></span
+			>
+		</label>
+		<div class="flex flex-wrap items-center gap-3">
+			<button
+				type="button"
+				class="btn-ghost min-h-10 text-sm"
+				disabled={!haptics || support === 'none' || support === 'ios-old'}
+				onclick={() => haptic('success')}>Tester</button
+			>
+			<p class="text-[13px] text-muted">
+				{#if support === 'vibrate'}
+					Si rien ne vibre, vérifie que les vibrations sont activées dans les réglages du téléphone.
+				{:else if support === 'ios'}
+					Sur iPhone, active « Retour haptique système » dans Réglages › Sons et vibrations.
+				{:else if support === 'ios-old'}
+					Sur iPhone, les vibrations demandent iOS 18 ou plus récent.
+				{:else if support === 'none'}
+					Ce navigateur ne permet pas les vibrations.
+				{/if}
+			</p>
+		</div>
 	</section>
 
 	<section class="flex flex-col gap-3 card p-5" aria-labelledby="export-title">

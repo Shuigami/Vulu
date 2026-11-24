@@ -107,6 +107,20 @@
 	:focus-visible {
 		@apply outline-2 outline-offset-2 outline-accent;
 	}
+	/* Our own press feedback (scale, ripple) replaces the grey flash of mobile browsers */
+	html {
+		-webkit-tap-highlight-color: transparent;
+	}
+	/* iOS haptic switches (src/lib/haptics.ts): a disabled button lets taps through, untouched */
+	button:disabled > [data-haptic-overlay] {
+		pointer-events: none;
+	}
+	/* An action on its way: the disabled button breathes until the answer comes */
+	@media (prefers-reduced-motion: no-preference) {
+		[aria-busy='true'] {
+			animation: busy 0.9s ease-in-out infinite alternate;
+		}
+	}
 	/* Press feedback: anything clickable sinks a little while held */
 	@media (prefers-reduced-motion: no-preference) {
 		:where(button, label:has(> input:is([type='checkbox'], [type='radio']))) {
@@ -225,6 +239,11 @@
 	}
 	100% {
 		transform: translateX(0);
+	}
+}
+@keyframes busy {
+	to {
+		opacity: 0.35;
 	}
 }
 @keyframes shimmer {

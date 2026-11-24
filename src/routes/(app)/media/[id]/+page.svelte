@@ -24,7 +24,9 @@
 		typeLabel,
 		unitLabel
 	} from '#lib/labels.ts';
-	import { postAction, toast } from '#lib/toast.svelte.ts';
+	import { haptic } from '#lib/haptics.ts';
+	import { rangesOf, seasonLabel, seasonPosition } from '#lib/seasons.ts';
+	import { postAction, toast, toastError } from '#lib/toast.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { data, form }: PageProps = $props();
@@ -109,6 +111,8 @@
 
 	let entryForm: HTMLFormElement | undefined = $state();
 	let progress = $derived(entry?.progress ?? 0);
+	// Series with several seasons: progress shown within the current season
+	const position = $derived(seasonPosition(rangesOf(data.seasons), progress));
 	let confirmRemove = $state(false);
 	let expanded = $state(false);
 	// Closed again once the entry changes (removed, re-added, or another work opened)
@@ -160,7 +164,8 @@
 	const nextUp = $derived.by(() => {
 		for (const s of data.seasons)
 			for (const e of s.episodes)
-				if (e.absolute !== null && e.aired && !e.seen)
+				// From the counter, not the seen flags: follows "Vu" before the page reloads
+				if (e.absolute !== null && e.aired && e.absolute > progress)
 					return {
 						...e,
 						label: s.number === null ? `Ép. ${e.number}` : `S${s.number}E${e.number}`
@@ -184,13 +189,24 @@
 				? 'Épisodes spéciaux'
 				: `Saison ${s.number}${s.title && s.title !== `Saison ${s.number}` ? ` · ${s.title}` : ''}`;
 	let marking = $state(false);
-	async function mark(action: 'episode' | 'season', fields: Record<string, string | number>) {
+	/** `upTo`: progress shown at once (the episode marked), put back if the save fails. */
+	async function mark(
+		action: 'episode' | 'season',
+		fields: Record<string, string | number>,
+		upTo?: number | null
+	) {
 		marking = true;
+		const before = progress;
+		if (upTo != null) progress = Math.max(progress, upTo);
 		const res = await postAction(`?/${action}`, fields).catch(() => null);
 		const result = res?.ok ? await res.json() : null;
 		await invalidateAll();
 		marking = false;
-		if (result?.type !== 'success') toast('Échec, réessaie.');
+		if (result?.type === 'success') haptic('success');
+		else {
+			progress = before;
+			toastError('Échec, réessaie.');
+		}
 	}
 	// Phones: a +1 bar stays at the bottom once the tracking block has scrolled out of view
 	let trackingVisible = $state(true);
@@ -404,7 +420,7 @@
 					type="button"
 					class="btn-accent max-sm:flex-1"
 					disabled={marking}
-					onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}
+					onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' }, nextUp.absolute)}
 					><svg
 						aria-hidden="true"
 						width="18"
@@ -623,24 +639,38 @@
 							</div>
 						{/if}
 						<div class="flex items-center gap-3">
-							<label for="progress" class="sr-only">Progression · {unit}</label>
+							{#if !position}<label for="progress" class="sr-only">Progression · {unit}</label>{/if}
 							<p
 								class="flex min-w-0 items-baseline gap-1.5 font-display text-[28px] leading-none font-extrabold tabular-nums sm:text-[34px]"
 							>
-								<input
-									id="progress"
-									name="progress"
-									type="number"
-									min="0"
-									max={m.totalUnits ?? undefined}
-									bind:value={progress}
-									style:width="{String(progress).length + 0.6}ch"
-									class="rounded-lg bg-transparent text-right outline-offset-4"
-								/>
-								<span class="truncate font-sans text-[15px] font-semibold text-muted"
-									>{#if m.totalUnits}/ {m.totalUnits}{/if}
-									{unit}</span
-								>
+								{#if position}
+									<!-- Series: the season being watched; episodes are marked in the list below -->
+									<input type="hidden" name="progress" value={progress} />
+									<span>S{position.season}</span>
+									<span class="font-sans text-[15px] font-semibold text-muted">·</span>
+									<span
+										><span class="font-sans text-[15px] font-semibold text-muted">Ép.</span>
+										{position.seen}</span
+									>
+									<span class="truncate font-sans text-[15px] font-semibold text-muted"
+										>/ {position.count}</span
+									>
+								{:else}
+									<input
+										id="progress"
+										name="progress"
+										type="number"
+										min="0"
+										max={m.totalUnits ?? undefined}
+										bind:value={progress}
+										style:width="{String(progress).length + 0.6}ch"
+										class="rounded-lg bg-transparent text-right outline-offset-4"
+									/>
+									<span class="truncate font-sans text-[15px] font-semibold text-muted"
+										>{#if m.totalUnits}/ {m.totalUnits}{/if}
+										{unit}</span
+									>
+								{/if}
 							</p>
 							<div class="ml-auto flex shrink-0 gap-2">
 								<button
@@ -654,8 +684,10 @@
 										type="button"
 										class="btn-accent px-3.5"
 										disabled={marking}
+										aria-busy={marking}
 										aria-label="Marquer {nextUp.label} vu"
-										onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}
+										onclick={() =>
+											mark('episode', { episodeId: nextUp.id, seen: 'true' }, nextUp.absolute)}
 										><svg
 											aria-hidden="true"
 											width="18"
@@ -678,7 +710,20 @@
 								{/if}
 							</div>
 						</div>
-						{#if m.totalUnits}
+						{#if position}
+							<Progress
+								value={position.seen}
+								max={position.count}
+								label="Progression de la saison {position.season}"
+							/>
+							<span class="text-xs text-muted tabular-nums"
+								>Saison {position.season} : {Math.round((position.seen / position.count) * 100)} % · {progress}{#if m.totalUnits}/{m.totalUnits}{/if}
+								{unit} au total{#if m.totalUnits && progress < m.totalUnits && m.runtimeMinutes}
+									{` · reste environ ${duration(
+										(m.totalUnits - progress) * m.runtimeMinutes
+									)}`}{/if}</span
+							>
+						{:else if m.totalUnits}
 							<Progress value={progress} max={m.totalUnits} label="Progression" />
 							<span class="text-xs text-muted"
 								>{Math.round((progress / m.totalUnits) * 100)} %{#if progress < m.totalUnits}
@@ -1288,13 +1333,17 @@
 				type="button"
 				class="btn-accent shrink-0"
 				disabled={marking}
-				onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' })}>Marquer vu</button
+				aria-busy={marking}
+				onclick={() => mark('episode', { episodeId: nextUp.id, seen: 'true' }, nextUp.absolute)}
+				>Marquer vu</button
 			>
 		{:else}
 			<div class="flex min-w-0 flex-1 flex-col">
 				<span class="truncate text-sm font-semibold">{m.title}</span>
 				<span class="text-[13px] text-muted tabular-nums"
-					>{progress}{m.totalUnits ? ` / ${m.totalUnits}` : ''} {unit}</span
+					>{position
+						? seasonLabel(position)
+						: `${progress}${m.totalUnits ? ` / ${m.totalUnits}` : ''} ${unit}`}</span
 				>
 			</div>
 			<button type="button" class="btn-accent shrink-0" onclick={() => setProgress(progress + 1)}

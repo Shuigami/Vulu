@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { toast } from '#lib/toast.svelte.ts';
+	import { haptic } from '#lib/haptics.ts';
+	import { toastError } from '#lib/toast.svelte.ts';
 	import { resolve } from '$app/paths';
 	import Poster from '#lib/components/Poster.svelte';
 	import StartHere from '#lib/components/StartHere.svelte';
@@ -13,6 +14,7 @@
 		typePlural,
 		unitLabel
 	} from '#lib/labels.ts';
+	import { seasonLabel, seasonPosition } from '#lib/seasons.ts';
 	import type { PageProps } from './$types';
 
 	const typeDot = {
@@ -183,6 +185,10 @@
 			{#each data.entries as e (e.id)}
 				{@const unit = unitLabel[e.type]}
 				{@const progress = bumped[e.id] ?? e.progress}
+				{@const position = seasonPosition(e.seasons, progress)}
+				{@const bar = position
+					? position.seen / position.count
+					: e.totalUnits && progress / e.totalUnits}
 				{@const canBump =
 					!!unit && e.status === 'in_progress' && (!e.totalUnits || progress < e.totalUnits)}
 				<li class="relative">
@@ -218,22 +224,25 @@
 									></span
 								>
 							{/if}
-							{#if unit && e.totalUnits && progress > 0 && e.status !== 'completed'}
+							{#if unit && bar && e.status !== 'completed'}
 								<span class="absolute inset-x-0 bottom-0 h-1 bg-black/50">
 									<span
 										class="block h-full bg-accent"
-										style:width="{Math.min(100, Math.round((progress / e.totalUnits) * 100))}%"
+										style:width="{Math.min(100, Math.round(bar * 100))}%"
 									></span>
 								</span>
 							{/if}
 						</div>
 						<div>
 							<p class="leading-snug font-semibold group-hover:underline">{e.title}</p>
+							<!-- Series: the season being watched ("S3 · Ép. 5/12"), not the whole show -->
 							<p class="mt-0.5 text-[13px] text-muted">
 								{[
-									unit && progress
-										? `${progress}${e.totalUnits ? `/${e.totalUnits}` : ''} ${unit}`
-										: e.year,
+									position && progress
+										? seasonLabel(position)
+										: unit && progress
+											? `${progress}${e.totalUnits ? `/${e.totalUnits}` : ''} ${unit}`
+											: e.year,
 									e.score !== null && `★ ${toScale(e.score, scale)}`
 								]
 									.filter(Boolean)
@@ -249,17 +258,24 @@
 								action="?/increment"
 								class="pointer-events-auto absolute right-2 bottom-3"
 								use:enhance={() => {
+									// Shown at once, put back if the save fails
+									const before = progress;
 									pending = e.id;
+									bumped[e.id] = before + 1;
 									return async ({ result }) => {
 										pending = null;
-										if (result.type === 'success') bumped[e.id] = progress + 1;
-										else toast('La progression n’a pas pu être enregistrée.');
+										if (result.type === 'success') haptic('success');
+										else {
+											bumped[e.id] = before;
+											toastError('La progression n’a pas pu être enregistrée.');
+										}
 									};
 								}}
 							>
 								<input type="hidden" name="entryId" value={e.id} />
 								<button
 									disabled={pending === e.id}
+									aria-busy={pending === e.id}
 									aria-label="+1 pour {e.title}"
 									class="btn-accent min-h-9 rounded-lg px-3 text-sm shadow-lg">+1</button
 								>

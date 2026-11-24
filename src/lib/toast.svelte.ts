@@ -1,4 +1,6 @@
 /** Short confirmations shown at the bottom of the screen (src/lib/components/Toaster.svelte). */
+import { haptic } from './haptics';
+
 export type Toast = { id: number; message: string; undo?: () => unknown };
 
 export const toasts = $state<Toast[]>([]);
@@ -9,12 +11,23 @@ export function dismiss(id: number) {
 	if (i !== -1) toasts.splice(i, 1);
 }
 
-/** Shows `message` for a few seconds; `undo` adds an "Annuler" button. */
-export function toast(message: string, undo?: Toast['undo']) {
+function show(message: string, undo?: Toast['undo']) {
 	const id = next++;
 	toasts.push({ id, message, undo });
 	if (toasts.length > 3) toasts.shift();
 	setTimeout(() => dismiss(id), undo ? 6000 : 3500);
+}
+
+/** Shows `message` for a few seconds; `undo` adds an "Annuler" button. Phones confirm with a haptic. */
+export function toast(message: string, undo?: Toast['undo']) {
+	haptic('success');
+	show(message, undo);
+}
+
+/** A failure: same toast, with the error haptic. */
+export function toastError(message: string) {
+	haptic('error');
+	show(message);
 }
 
 /** Posts `fields` to a form action of the current page, as `use:enhance` would (no redirect). */

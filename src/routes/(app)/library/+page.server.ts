@@ -8,6 +8,7 @@ import {
 	listEntries,
 	type LibrarySort
 } from '#lib/server/library.ts';
+import { withSeasons } from '#lib/server/episodes.ts';
 import { isEntryStatus, isMediaType } from '#lib/labels.ts';
 import type { Actions, PageServerLoad } from './$types';
 
@@ -47,7 +48,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 		page,
 		pages: Math.ceil(total / PAGE_SIZE),
 		total,
-		entries
+		entries: await withSeasons(db, entries)
 	};
 };
 

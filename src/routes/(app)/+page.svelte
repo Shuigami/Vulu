@@ -13,6 +13,9 @@
 	import StartHere from '#lib/components/StartHere.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, toScale, typePlural, unitLabel } from '#lib/labels.ts';
+	import { haptic } from '#lib/haptics.ts';
+	import { toastError } from '#lib/toast.svelte.ts';
+	import { seasonPosition } from '#lib/seasons.ts';
 	import type { DiscoverItem } from '#lib/server/discover.ts';
 	import type { PageProps } from './$types';
 
@@ -45,6 +48,8 @@
 		}
 	];
 	let pending = $state<number | null>(null);
+	// +1 shown before the server answers, until the page data is reloaded
+	let bumped = $state<Record<number, number>>({});
 	const singular = { épisodes: 'épisode', chapitres: 'chapitre', pages: 'page' } as Record<
 		string,
 		string
@@ -136,6 +141,8 @@
 				>
 					{#each data.entries as e (e.id)}
 						{@const unit = unitLabel[e.type]}
+						{@const progress = bumped[e.id] ?? e.progress}
+						{@const position = seasonPosition(e.seasons, progress)}
 						{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
 						<!-- The whole card opens the work (a link covers it), except the +1 button. The link is
 						     not the title: the scrolling title's transform would shrink its click area. -->
@@ -169,35 +176,57 @@
 								{#if unit}
 									<div class="mt-auto flex items-center gap-3">
 										<div class="flex flex-1 flex-col gap-1.5">
-											{#if e.totalUnits}
+											{#if position}
+												<!-- Series: the season being watched, not the whole show -->
 												<Progress
-													value={e.progress}
-													max={e.totalUnits}
-													label="Progression de {e.title}"
+													value={position.seen}
+													max={position.count}
+													label="Progression de {e.title}, saison {position.season}"
 												/>
+												<p class="text-[13px] text-muted tabular-nums">
+													<span class="font-semibold text-ink">S{position.season}</span> · Ép.
+													{#key progress}<strong in:pop class="inline-block font-semibold text-ink"
+															>{position.seen}</strong
+														>{/key} / {position.count}
+												</p>
+											{:else}
+												{#if e.totalUnits}
+													<Progress
+														value={progress}
+														max={e.totalUnits}
+														label="Progression de {e.title}"
+													/>
+												{/if}
+												<p class="text-[13px] text-muted tabular-nums">
+													{#key progress}<strong in:pop class="inline-block font-semibold text-ink"
+															>{progress}</strong
+														>{/key}{e.totalUnits ? ` / ${e.totalUnits}` : ''}
+													{unit}
+												</p>
 											{/if}
-											<p class="text-[13px] text-muted tabular-nums">
-												{#key e.progress}<strong in:pop class="inline-block font-semibold text-ink"
-														>{e.progress}</strong
-													>{/key}{e.totalUnits ? ` / ${e.totalUnits}` : ''}
-												{unit}
-											</p>
 										</div>
 										<form
 											class="relative z-10"
 											method="post"
 											action="?/increment"
 											use:enhance={() => {
+												// Shown at once; the reload brings the saved value (or the old one back)
 												pending = e.id;
-												return async ({ update }) => {
-													await update();
+												bumped[e.id] = progress + 1;
+												return async ({ update, result }) => {
+													if (result.type === 'success') {
+														await update();
+														haptic('success');
+													} else toastError('La progression n’a pas pu être enregistrée.');
 													pending = null;
+													delete bumped[e.id];
 												};
 											}}
 										>
 											<input type="hidden" name="entryId" value={e.id} />
 											<button
 												disabled={pending === e.id}
+												aria-busy={pending === e.id}
 												aria-label="+1 {singular[unit]} pour {e.title}"
 												class="btn-accent min-w-14">+1</button
 											>
@@ -298,7 +327,15 @@
 									>{w.mediaTitle}</a
 								>
 								<div class="mt-auto flex flex-col gap-1.5 pt-1">
-									{#if w.totalUnits}
+									{#if w.season}
+										<!-- Series: the season coming out, not the whole show -->
+										<Progress
+											value={w.season.seen}
+											max={w.season.count}
+											release={w.season.release}
+											label="Progression de {w.mediaTitle}, saison {w.season.number}"
+										/>
+									{:else if w.totalUnits}
 										<Progress
 											value={w.progress}
 											max={w.totalUnits}
@@ -310,7 +347,12 @@
 										<span class="truncate"
 											>{w.episode}{w.count > 1 ? ` · ${w.count} épisodes` : ''}</span
 										>
-										{#if w.totalUnits}<span class="shrink-0 tabular-nums"
+										{#if w.season}<span class="shrink-0 tabular-nums"
+												>S{w.season.number} ·
+												<strong class="font-semibold text-ink">{w.season.seen}</strong> / {w.season
+													.count} vus</span
+											>
+										{:else if w.totalUnits}<span class="shrink-0 tabular-nums"
 												><strong class="font-semibold text-ink">{w.progress}</strong> / {w.totalUnits}
 												vus</span
 											>{/if}

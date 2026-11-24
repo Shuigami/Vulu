@@ -14,6 +14,8 @@ import {
 	trending,
 	type DiscoverItem
 } from '#lib/server/discover.ts';
+import { seasonRanges, withSeasons } from '#lib/server/episodes.ts';
+import { seasonAt, type SeasonRange } from '#lib/seasons.ts';
 import { incrementProgress, listEntries } from '#lib/server/library.ts';
 import { feed, feedView } from '#lib/server/social.ts';
 import {
@@ -30,8 +32,30 @@ const WEEK = 7 * 24 * 3600 * 1000;
 const countdown = (days: number) =>
 	days <= 0 ? 'Aujourd’hui' : days === 1 ? 'Demain' : `Dans ${Math.round(days)} j`;
 
+/**
+ * Series: the season of the first episode coming out, with what was seen of it and the release
+ * as a segment of that season (for the progress bar).
+ */
+function weekSeason(ranges: SeasonRange[], release: [number, number], progress: number) {
+	const at = seasonAt(ranges, release[0], progress);
+	if (!at) return null;
+	const n = (absolute: number) => Math.min(at.count, absolute - at.first + 1);
+	return {
+		number: at.season,
+		seen: at.seen,
+		count: at.count,
+		release: [n(release[0]), n(release[1])] as [number, number]
+	};
+}
+
 /** One tile per work and day: a season dropped at once shows as "S3E1 à S3E4", not four tiles. */
-function groupWeek(rows: Awaited<ReturnType<typeof upcomingEpisodes>>) {
+function groupWeek({
+	rows,
+	ranges
+}: {
+	rows: Awaited<ReturnType<typeof upcomingEpisodes>>;
+	ranges: Awaited<ReturnType<typeof seasonRanges>>;
+}) {
 	const tiles = new Map<
 		string,
 		{
@@ -75,6 +99,7 @@ function groupWeek(rows: Awaited<ReturnType<typeof upcomingEpisodes>>) {
 	}
 	return [...tiles.values()].map(({ episodes, ...t }) => ({
 		...t,
+		season: weekSeason(ranges.get(t.mediaId) ?? [], t.release, t.progress),
 		episode: episodes.length > 1 ? `${episodes[0]} à ${episodes.at(-1)}` : episodes[0],
 		count: episodes.length,
 		countdown: countdown((Date.parse(t.key.split(':')[1]) - today) / 86_400_000)
@@ -86,8 +111,18 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const userId = locals.user?.id;
 	const from = startOfToday();
 	const [entries, upcoming, friends, popular] = await Promise.all([
-		userId ? listEntries(db, userId, { status: 'in_progress' }) : [],
-		userId ? upcomingEpisodes(db, userId, from, new Date(from.getTime() + WEEK)) : [],
+		userId
+			? listEntries(db, userId, { status: 'in_progress' }).then((r) => withSeasons(db, r))
+			: [],
+		userId
+			? upcomingEpisodes(db, userId, from, new Date(from.getTime() + WEEK)).then(async (rows) => ({
+					rows,
+					ranges: await seasonRanges(
+						db,
+						rows.map((r) => r.mediaId)
+					)
+				}))
+			: { rows: [], ranges: new Map() },
 		userId ? feed(db, { viewerId: userId, limit: 12 }) : { items: [] },
 		popularOnVulu(db, userId ?? ANONYMOUS_ID)
 	]);

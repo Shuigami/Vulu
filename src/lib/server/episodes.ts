@@ -14,6 +14,7 @@ import {
 import { addToLibrary, updateEntry } from './library';
 import { episodeLabel, shortDate } from './calendar';
 import { visibleTo } from './social';
+import type { SeasonRange } from '../seasons';
 
 type Entry = { progress: number; startedOn: string | null } | null;
 
@@ -104,6 +105,49 @@ export async function seasonList(db: Db, mediaId: number, userId: string, entry:
 		});
 	}
 	return list;
+}
+
+/**
+ * Numbered seasons of each work with the absolute numbers of their first and last episodes, so
+ * pages can show a series' progress season by season (`seasonPosition`). One query for a list.
+ */
+export async function seasonRanges(db: Db, mediaIds: number[]) {
+	const ranges = new Map<number, SeasonRange[]>();
+	if (!mediaIds.length) return ranges;
+	const rows = await db
+		.select({
+			mediaId: episodes.mediaId,
+			season: seasons.number,
+			first: sql<number>`min(${episodes.absoluteNumber})::int`,
+			last: sql<number>`max(${episodes.absoluteNumber})::int`
+		})
+		.from(episodes)
+		.innerJoin(seasons, eq(seasons.id, episodes.seasonId))
+		.where(
+			and(
+				inArray(episodes.mediaId, [...new Set(mediaIds)]),
+				gt(seasons.number, 0),
+				sql`${episodes.absoluteNumber} is not null`
+			)
+		)
+		.groupBy(episodes.mediaId, seasons.number)
+		.orderBy(asc(sql`min(${episodes.absoluteNumber})`));
+	for (const { mediaId, ...r } of rows) {
+		const list = ranges.get(mediaId) ?? [];
+		list.push(r);
+		ranges.set(mediaId, list);
+	}
+	return ranges;
+}
+
+/** Adds each series' season ranges (empty for other types) to library rows. */
+export async function withSeasons<T extends { mediaId: number; type: string }>(db: Db, rows: T[]) {
+	const series = (r: T) => r.type === 'tv' || r.type === 'anime';
+	const ranges = await seasonRanges(
+		db,
+		rows.filter(series).map((r) => r.mediaId)
+	);
+	return rows.map((r) => ({ ...r, seasons: (series(r) && ranges.get(r.mediaId)) || [] }));
 }
 
 /**

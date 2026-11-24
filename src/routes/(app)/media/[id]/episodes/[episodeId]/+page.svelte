@@ -7,7 +7,7 @@
 	import RatingHistogram from '#lib/components/RatingHistogram.svelte';
 	import StarRating from '#lib/components/StarRating.svelte';
 	import { toScale } from '#lib/labels.ts';
-	import { postAction, toast } from '#lib/toast.svelte.ts';
+	import { postAction, toastError } from '#lib/toast.svelte.ts';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -42,7 +42,7 @@
 		const result = res?.ok ? await res.json() : null;
 		await invalidateAll();
 		busy = false;
-		if (result?.type !== 'success') toast('Échec, réessaie.');
+		if (result?.type !== 'success') toastError('Échec, réessaie.');
 	}
 	// The season strip opens on this episode, without scrolling the page itself, then slides
 	// to each episode reached from it (previous / next, the strip itself)
