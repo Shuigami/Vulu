@@ -13,6 +13,7 @@
 		typePlural,
 		unitLabel
 	} from '#lib/labels.ts';
+	import { seasonLabel, seasonPosition } from '#lib/seasons.ts';
 	import type { PageProps } from './$types';
 
 	const typeDot = {
@@ -183,6 +184,10 @@
 			{#each data.entries as e (e.id)}
 				{@const unit = unitLabel[e.type]}
 				{@const progress = bumped[e.id] ?? e.progress}
+				{@const position = seasonPosition(e.seasons, progress)}
+				{@const bar = position
+					? position.seen / position.count
+					: e.totalUnits && progress / e.totalUnits}
 				{@const canBump =
 					!!unit && e.status === 'in_progress' && (!e.totalUnits || progress < e.totalUnits)}
 				<li class="relative">
@@ -218,22 +223,25 @@
 									></span
 								>
 							{/if}
-							{#if unit && e.totalUnits && progress > 0 && e.status !== 'completed'}
+							{#if unit && bar && e.status !== 'completed'}
 								<span class="absolute inset-x-0 bottom-0 h-1 bg-black/50">
 									<span
 										class="block h-full bg-accent"
-										style:width="{Math.min(100, Math.round((progress / e.totalUnits) * 100))}%"
+										style:width="{Math.min(100, Math.round(bar * 100))}%"
 									></span>
 								</span>
 							{/if}
 						</div>
 						<div>
 							<p class="leading-snug font-semibold group-hover:underline">{e.title}</p>
+							<!-- Series: the season being watched ("S3 · Ép. 5/12"), not the whole show -->
 							<p class="mt-0.5 text-[13px] text-muted">
 								{[
-									unit && progress
-										? `${progress}${e.totalUnits ? `/${e.totalUnits}` : ''} ${unit}`
-										: e.year,
+									position && progress
+										? seasonLabel(position)
+										: unit && progress
+											? `${progress}${e.totalUnits ? `/${e.totalUnits}` : ''} ${unit}`
+											: e.year,
 									e.score !== null && `★ ${toScale(e.score, scale)}`
 								]
 									.filter(Boolean)

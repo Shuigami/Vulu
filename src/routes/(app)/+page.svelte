@@ -13,6 +13,7 @@
 	import StartHere from '#lib/components/StartHere.svelte';
 	import TypeTag from '#lib/components/TypeTag.svelte';
 	import { MEDIA_TYPES, toScale, typePlural, unitLabel } from '#lib/labels.ts';
+	import { seasonPosition } from '#lib/seasons.ts';
 	import type { DiscoverItem } from '#lib/server/discover.ts';
 	import type { PageProps } from './$types';
 
@@ -136,6 +137,7 @@
 				>
 					{#each data.entries as e (e.id)}
 						{@const unit = unitLabel[e.type]}
+						{@const position = seasonPosition(e.seasons, e.progress)}
 						{@const href = resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
 						<!-- The whole card opens the work (a link covers it), except the +1 button. The link is
 						     not the title: the scrolling title's transform would shrink its click area. -->
@@ -169,19 +171,36 @@
 								{#if unit}
 									<div class="mt-auto flex items-center gap-3">
 										<div class="flex flex-1 flex-col gap-1.5">
-											{#if e.totalUnits}
+											{#if position}
+												<!-- Series: the season being watched, not the whole show -->
 												<Progress
-													value={e.progress}
-													max={e.totalUnits}
-													label="Progression de {e.title}"
+													value={position.seen}
+													max={position.count}
+													label="Progression de {e.title}, saison {position.season}"
 												/>
+												<p class="text-[13px] text-muted tabular-nums">
+													<span class="font-semibold text-ink">S{position.season}</span> · Ép.
+													{#key e.progress}<strong
+															in:pop
+															class="inline-block font-semibold text-ink">{position.seen}</strong
+														>{/key} / {position.count}
+												</p>
+											{:else}
+												{#if e.totalUnits}
+													<Progress
+														value={e.progress}
+														max={e.totalUnits}
+														label="Progression de {e.title}"
+													/>
+												{/if}
+												<p class="text-[13px] text-muted tabular-nums">
+													{#key e.progress}<strong
+															in:pop
+															class="inline-block font-semibold text-ink">{e.progress}</strong
+														>{/key}{e.totalUnits ? ` / ${e.totalUnits}` : ''}
+													{unit}
+												</p>
 											{/if}
-											<p class="text-[13px] text-muted tabular-nums">
-												{#key e.progress}<strong in:pop class="inline-block font-semibold text-ink"
-														>{e.progress}</strong
-													>{/key}{e.totalUnits ? ` / ${e.totalUnits}` : ''}
-												{unit}
-											</p>
 										</div>
 										<form
 											class="relative z-10"

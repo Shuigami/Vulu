@@ -12,7 +12,15 @@ import {
 } from './catalogue';
 import { createDb } from './db';
 import { activityEvents, episodes, episodeViews, libraryEntries, media, users } from './db/schema';
-import { episodePage, markEpisode, markSeason, rateEpisode, seasonList } from './episodes';
+import {
+	episodePage,
+	markEpisode,
+	markSeason,
+	rateEpisode,
+	seasonList,
+	seasonRanges,
+	withSeasons
+} from './episodes';
 import type { ProviderEpisodes, ProviderMedia } from './providers/types';
 
 describe('calendar helpers', () => {
@@ -490,6 +498,51 @@ describe('episodes in the database', () => {
 
 		// Another media's episode is refused
 		expect(await markEpisode(db, userId, await newMedia(10), s1e2, true)).toBe(false);
+	});
+
+	it('gives the season ranges of series, specials and other media left out', async () => {
+		const id = await newMedia(20);
+		const other = await newMedia(21);
+		await storeEpisodes(db, id, {
+			upcomingOnly: false,
+			seasons: [0, 1, 2].map((number) => ({
+				number,
+				title: null,
+				airDate: null,
+				episodeCount: null,
+				posterUrl: null
+			})),
+			episodes: [
+				{ seasonNumber: 0, number: 1, absoluteNumber: null, title: null, airDate: null },
+				...[1, 2, 3].map((n) => ({
+					seasonNumber: 1,
+					number: n,
+					absoluteNumber: n,
+					title: null,
+					airDate: null
+				})),
+				...[1, 2].map((n) => ({
+					seasonNumber: 2,
+					number: n,
+					absoluteNumber: 3 + n,
+					title: null,
+					airDate: null
+				}))
+			]
+		});
+		const ranges = await seasonRanges(db, [id, other]);
+		expect(ranges.get(id)).toEqual([
+			{ season: 1, first: 1, last: 3 },
+			{ season: 2, first: 4, last: 5 }
+		]);
+		expect(ranges.has(other)).toBe(false);
+		expect(await seasonRanges(db, [])).toEqual(new Map());
+
+		const rows = await withSeasons(db, [
+			{ mediaId: id, type: 'tv' },
+			{ mediaId: id, type: 'book' }
+		]);
+		expect(rows.map((r) => r.seasons.length)).toEqual([2, 0]);
 	});
 
 	it('builds the episode page and rates episodes with the entry visibility', async () => {

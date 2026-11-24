@@ -14,6 +14,7 @@ import {
 	trending,
 	type DiscoverItem
 } from '#lib/server/discover.ts';
+import { withSeasons } from '#lib/server/episodes.ts';
 import { incrementProgress, listEntries } from '#lib/server/library.ts';
 import { feed, feedView } from '#lib/server/social.ts';
 import {
@@ -86,7 +87,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 	const userId = locals.user?.id;
 	const from = startOfToday();
 	const [entries, upcoming, friends, popular] = await Promise.all([
-		userId ? listEntries(db, userId, { status: 'in_progress' }) : [],
+		userId
+			? listEntries(db, userId, { status: 'in_progress' }).then((r) => withSeasons(db, r))
+			: [],
 		userId ? upcomingEpisodes(db, userId, from, new Date(from.getTime() + WEEK)) : [],
 		userId ? feed(db, { viewerId: userId, limit: 12 }) : { items: [] },
 		popularOnVulu(db, userId ?? ANONYMOUS_ID)

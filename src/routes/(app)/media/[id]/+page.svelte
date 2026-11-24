@@ -24,6 +24,7 @@
 		typeLabel,
 		unitLabel
 	} from '#lib/labels.ts';
+	import { rangesOf, seasonPosition } from '#lib/seasons.ts';
 	import { postAction, toast } from '#lib/toast.svelte.ts';
 	import type { PageProps } from './$types';
 
@@ -109,6 +110,8 @@
 
 	let entryForm: HTMLFormElement | undefined = $state();
 	let progress = $derived(entry?.progress ?? 0);
+	// Series with several seasons: progress shown within the current season
+	const position = $derived(seasonPosition(rangesOf(data.seasons), progress));
 	let confirmRemove = $state(false);
 	let expanded = $state(false);
 	// Closed again once the entry changes (removed, re-added, or another work opened)
@@ -623,24 +626,38 @@
 							</div>
 						{/if}
 						<div class="flex items-center gap-3">
-							<label for="progress" class="sr-only">Progression · {unit}</label>
+							{#if !position}<label for="progress" class="sr-only">Progression · {unit}</label>{/if}
 							<p
 								class="flex min-w-0 items-baseline gap-1.5 font-display text-[28px] leading-none font-extrabold tabular-nums sm:text-[34px]"
 							>
-								<input
-									id="progress"
-									name="progress"
-									type="number"
-									min="0"
-									max={m.totalUnits ?? undefined}
-									bind:value={progress}
-									style:width="{String(progress).length + 0.6}ch"
-									class="rounded-lg bg-transparent text-right outline-offset-4"
-								/>
-								<span class="truncate font-sans text-[15px] font-semibold text-muted"
-									>{#if m.totalUnits}/ {m.totalUnits}{/if}
-									{unit}</span
-								>
+								{#if position}
+									<!-- Series: the season being watched; episodes are marked in the list below -->
+									<input type="hidden" name="progress" value={progress} />
+									<span>S{position.season}</span>
+									<span class="font-sans text-[15px] font-semibold text-muted">·</span>
+									<span
+										><span class="font-sans text-[15px] font-semibold text-muted">Ép.</span>
+										{position.seen}</span
+									>
+									<span class="truncate font-sans text-[15px] font-semibold text-muted"
+										>/ {position.count}</span
+									>
+								{:else}
+									<input
+										id="progress"
+										name="progress"
+										type="number"
+										min="0"
+										max={m.totalUnits ?? undefined}
+										bind:value={progress}
+										style:width="{String(progress).length + 0.6}ch"
+										class="rounded-lg bg-transparent text-right outline-offset-4"
+									/>
+									<span class="truncate font-sans text-[15px] font-semibold text-muted"
+										>{#if m.totalUnits}/ {m.totalUnits}{/if}
+										{unit}</span
+									>
+								{/if}
 							</p>
 							<div class="ml-auto flex shrink-0 gap-2">
 								<button
@@ -678,7 +695,20 @@
 								{/if}
 							</div>
 						</div>
-						{#if m.totalUnits}
+						{#if position}
+							<Progress
+								value={position.seen}
+								max={position.count}
+								label="Progression de la saison {position.season}"
+							/>
+							<span class="text-xs text-muted tabular-nums"
+								>Saison {position.season} : {Math.round((position.seen / position.count) * 100)} % · {progress}{#if m.totalUnits}/{m.totalUnits}{/if}
+								{unit} au total{#if m.totalUnits && progress < m.totalUnits && m.runtimeMinutes}
+									· reste environ {duration(
+										(m.totalUnits - progress) * m.runtimeMinutes
+									)}{/if}</span
+							>
+						{:else if m.totalUnits}
 							<Progress value={progress} max={m.totalUnits} label="Progression" />
 							<span class="text-xs text-muted"
 								>{Math.round((progress / m.totalUnits) * 100)} %{#if progress < m.totalUnits}
