@@ -6,7 +6,9 @@
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import Avatar from '#lib/components/Avatar.svelte';
+	import BrowseNav from '#lib/components/BrowseNav.svelte';
 	import Marquee from '#lib/components/Marquee.svelte';
+	import MediaSkeleton from '#lib/components/MediaSkeleton.svelte';
 	import Poster from '#lib/components/Poster.svelte';
 	import RatingHistogram from '#lib/components/RatingHistogram.svelte';
 	import EpisodeStill from '#lib/components/EpisodeStill.svelte';
@@ -24,7 +26,9 @@
 		typeLabel,
 		unitLabel
 	} from '#lib/labels.ts';
+	import { neighbours, peekOf, step } from '#lib/browse.svelte.ts';
 	import { haptic } from '#lib/haptics.ts';
+	import { swipe } from '#lib/swipe.ts';
 	import { rangesOf, seasonLabel, seasonPosition } from '#lib/seasons.ts';
 	import { postAction, toast, toastError } from '#lib/toast.svelte.ts';
 	import type { PageProps } from './$types';
@@ -32,6 +36,8 @@
 	let { data, form }: PageProps = $props();
 
 	const m = $derived(data.media);
+	// The works before and after this one in the row it was opened from (swiping, #97)
+	const around = $derived(neighbours(m.id));
 	const entry = $derived(data.entry);
 	const scale = $derived(data.ratingScale);
 	const unit = $derived(unitLabel[m.type]);
@@ -263,7 +269,30 @@
 	onkeydown={(e) => e.key === 'Escape' && closeMenu()}
 />
 
-<div class="flex flex-col gap-6 sm:gap-10">
+<BrowseNav mediaId={m.id} />
+
+<!-- Opened from a row of works (library, home shelves, a list, search): swiping moves along it.
+	 While swiping, the neighbours' placeholders sit right beside the page, like a carousel -->
+<div
+	class="group/swipe relative flex flex-col gap-6 sm:gap-10"
+	use:swipe={{
+		can: (dir) => !!around[dir === 1 ? 'next' : 'prev'],
+		go: (dir, slid) => step(m.id, dir, slid)
+	}}
+>
+	{#each [around.prev, around.next] as item, i (i)}
+		{#if item}
+			<div
+				class="pointer-events-none absolute hidden w-full group-data-swiping/swipe:block"
+				style:top="var(--peek-top, 0px)"
+				style:left={i ? 'calc(100% + var(--peek-gap, 2rem))' : undefined}
+				style:right={i ? undefined : 'calc(100% + var(--peek-gap, 2rem))'}
+				inert
+			>
+				<MediaSkeleton work={peekOf(item)} bar={false} />
+			</div>
+		{/if}
+	{/each}
 	<div class="flex flex-col">
 		{#if m.backdropUrl}
 			<!-- The bottom fades into the page so the poster and title sit on it. Phones: edge to

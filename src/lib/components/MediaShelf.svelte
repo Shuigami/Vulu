@@ -4,6 +4,7 @@
 	import { SvelteMap } from 'svelte/reactivity';
 	import Poster from '#lib/components/Poster.svelte';
 	import type { MediaType } from '#lib/labels.ts';
+	import { startBrowse } from '#lib/browse.svelte.ts';
 	import { opening } from '#lib/opening.svelte.ts';
 
 	/** A work in the catalogue (`mediaId`) or a provider result, imported when opened. */
@@ -19,6 +20,8 @@
 		note?: string;
 	};
 	let { items, label }: { items: Item[]; label: string } = $props();
+	// Opening a work remembers the row: the media page swipes along it
+	const browseFrom = (index: number) => startBrowse(items, index);
 	// Room for the hover frame (2 px outline, 2 px offset): the padding keeps it unclipped and
 	// scroll-padding keeps the snap from pushing the first poster against the edge
 	const caption = 'flex flex-col gap-0.5 text-left text-[13px] leading-tight';
@@ -70,12 +73,13 @@
 	class="-mx-2 -mt-2 flex snap-x scroll-px-2 [scrollbar-width:thin] gap-3.5 overflow-x-auto px-2 pt-2 pb-2"
 	aria-label={label}
 >
-	{#each items as i (i.key)}
+	{#each items as i, index (i.key)}
 		<li class="w-[118px] shrink-0 snap-start sm:w-[132px]" use:nearby={i.key}>
 			{#if i.mediaId !== null}
 				<a
 					href={resolve('/(app)/media/[id]', { id: String(i.mediaId) })}
 					class="group flex flex-col gap-2 text-ink no-underline"
+					onclick={() => browseFrom(index)}
 				>
 					{@render poster(i)}
 					<span class={caption}>
@@ -88,6 +92,7 @@
 					method="post"
 					action="{resolve('search')}?/open"
 					use:enhance={() => {
+						browseFrom(index);
 						opening.active = true;
 						return async ({ update }) => {
 							await update();
