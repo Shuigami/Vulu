@@ -79,30 +79,34 @@
 
 	// Long press (right click, "⋯") on a "Reprendre" card: change its status from here
 	type Resume = (typeof data.entries)[number];
-	let menu = $state<{ entry: Resume; at: PressPoint; returnTo: HTMLElement | null } | null>(null);
+	let menu = $state<{
+		entry: Resume;
+		via: PressPoint['via'];
+		anchor: DOMRect;
+		returnTo: HTMLElement | null;
+	} | null>(null);
 	// Hidden at once, until the reload confirms they left "En cours" (or brings them back)
 	let removed = $state<Record<number, true>>({});
 	const resume = $derived(data.entries.filter((e) => !removed[e.id]));
 
-	function openMenu(entry: Resume, at: PressPoint) {
+	function openMenu(entry: Resume, via: PressPoint['via']) {
 		const card = document.querySelector<HTMLElement>(`[data-entry="${entry.id}"]`);
+		if (!card) return;
 		const focused = document.activeElement;
 		menu = {
 			entry,
-			at,
+			via,
+			anchor: card.getBoundingClientRect(),
 			returnTo:
-				focused instanceof HTMLElement && card?.contains(focused)
-					? focused
-					: (card?.querySelector('a') ?? null)
+				focused instanceof HTMLElement && card.contains(focused) ? focused : card.querySelector('a')
 		};
-		if (at.via === 'touch') haptic('tap');
+		if (via === 'touch') haptic('tap');
 	}
 	function closeMenu() {
 		const m = menu;
 		menu = null;
 		// Keyboard and mouse: back to the card (a finger does not need the focus ring)
-		if (m && m.at.via !== 'touch' && !removed[m.entry.id])
-			m.returnTo?.focus({ preventScroll: true });
+		if (m && m.via !== 'touch' && !removed[m.entry.id]) m.returnTo?.focus({ preventScroll: true });
 	}
 	// "Terminé" fills the progress: asked first when that counts many units as seen
 	const completeJump = (e: Resume) => {
@@ -230,7 +234,7 @@
 							animate:glide
 							transition:leave
 							data-entry={e.id}
-							use:longpress={{ onpress: (at) => openMenu(e, at) }}
+							use:longpress={{ onpress: (at) => openMenu(e, at.via) }}
 							class="group relative flex w-[min(340px,85vw)] shrink-0 snap-start gap-4 card p-3.5 tile-frame select-none [-webkit-touch-callout:none]"
 						>
 							<a {href} draggable="false" class="absolute inset-0 rounded-2xl"
@@ -242,14 +246,7 @@
 								aria-haspopup="dialog"
 								aria-label="Changer le statut de {e.title}"
 								class="absolute top-2 right-2 z-10 grid size-8 cursor-pointer place-items-center rounded-full bg-surface text-muted opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-surface-2 hover:text-ink pointer-coarse:sr-only"
-								onclick={(ev) => {
-									const box = ev.currentTarget.getBoundingClientRect();
-									openMenu(e, {
-										x: box.left,
-										y: box.bottom + 4,
-										via: ev.detail === 0 ? 'keyboard' : 'mouse'
-									});
-								}}
+								onclick={(ev) => openMenu(e, ev.detail === 0 ? 'keyboard' : 'mouse')}
 								><svg
 									aria-hidden="true"
 									width="18"
@@ -356,7 +353,7 @@
 			<EntryMenu
 				title={e.title}
 				status={e.status}
-				at={menu.at}
+				anchor={menu.anchor}
 				href={resolve('/(app)/media/[id]', { id: String(e.mediaId) })}
 				confirmComplete={completeJump(e)}
 				onselect={(s) => setStatus(e, s)}

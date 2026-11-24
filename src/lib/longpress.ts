@@ -27,6 +27,31 @@ export function longpress(node: HTMLElement, options: LongpressOptions) {
 	let fired = false;
 	let lastTouch = -Infinity;
 	let swallowUntil = -Infinity;
+	// The card sinks while the finger stays down (`scale`, free of the `transform` of animations)
+	let squeeze: Animation | undefined;
+	let squeezeTimer: ReturnType<typeof setTimeout> | undefined;
+	const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+	function sink(duration: number) {
+		if (reduced()) return;
+		squeeze = node.animate([{ scale: '1' }, { scale: '0.96' }], {
+			duration,
+			easing: 'cubic-bezier(0.4, 0, 0.6, 1)',
+			fill: 'forwards'
+		});
+	}
+	/** Back to its size: a springy bounce when the menu opens, a quick ease otherwise. */
+	function rise(bounce: boolean) {
+		clearTimeout(squeezeTimer);
+		if (!squeeze) return;
+		const from = getComputedStyle(node).scale;
+		squeeze.cancel();
+		squeeze = undefined;
+		node.animate([{ scale: from === 'none' ? '1' : from }, { scale: '1' }], {
+			duration: bounce ? 380 : 160,
+			easing: bounce ? 'cubic-bezier(0.34, 1.8, 0.64, 1)' : 'ease-out'
+		});
+	}
 
 	// While a finger is down, followed on window: once the menu opens the card is inert
 	const listen = (on: boolean) => {
@@ -38,12 +63,14 @@ export function longpress(node: HTMLElement, options: LongpressOptions) {
 		toggle('scroll', cancel, true);
 	};
 	function cancel() {
+		rise(false);
 		clearTimeout(timer);
 		timer = undefined;
 		start = null;
 	}
 	function fire() {
 		const at = start;
+		rise(true);
 		cancel();
 		if (!at) return;
 		fired = true;
@@ -73,7 +100,10 @@ export function longpress(node: HTMLElement, options: LongpressOptions) {
 		if (!e.isPrimary || (e.target as Element | null)?.closest(IGNORED)) return;
 		start = { x: e.clientX, y: e.clientY, id: e.pointerId };
 		listen(true);
-		timer = setTimeout(fire, opts.delay ?? 500);
+		const delay = opts.delay ?? 500;
+		timer = setTimeout(fire, delay);
+		// Not at once: a tap or the start of a scroll does not flicker the card
+		squeezeTimer = setTimeout(() => sink(delay - 100), 100);
 	};
 	const onClick = (e: MouseEvent) => {
 		if (e.timeStamp > swallowUntil) return;
