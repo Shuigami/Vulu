@@ -2,13 +2,19 @@
 // clearly horizontal touch gesture counts: vertical scrolling stays native (`touch-action:
 // pan-y`), and gestures starting on something that scrolls sideways (season tabs, shelves), a
 // field, the stars (`data-no-swipe`) or near the screen edges (the system "back" gesture) are left
-// alone. The page follows the finger, slides out, then the new one slides in from the other side.
+// alone.
+//
+// The two pages sit side by side like a carousel: while the finger moves, the node gets
+// `data-swiping` and the page shows the neighbour's placeholder right beside it (positioned with
+// `--peek-gap`, the page gutters, and `--peek-top`, the top of the visible part). On release the
+// row slides until the neighbour is in place, then the real page replaces the placeholder where
+// it stands.
 
 export type SwipeOptions = {
 	/** Whether there is a work in that direction (1: next, swiping left; -1: previous). */
 	can: (dir: 1 | -1) => boolean;
-	/** Opens it; false when it could not be, and the page comes back. */
-	go: (dir: 1 | -1) => Promise<boolean>;
+	/** Opens it (`slid`: the placeholder stands in meanwhile); false when it could not be. */
+	go: (dir: 1 | -1, slid: boolean) => Promise<boolean>;
 };
 
 /** Gestures starting on these keep their own behaviour. */
@@ -17,10 +23,7 @@ const IGNORED = 'input, textarea, select, [contenteditable], [data-no-swipe]';
 const EDGE = 24;
 /** Pixels before the gesture's direction is decided. */
 const SLOP = 10;
-
-// Direction of the swipe that opened the page being loaded: its page slides in from that side,
-// even when it is a new element (the layout shows a skeleton while a slow page loads)
-let entering: { dir: 1 | -1; at: number } | null = null;
+const EASE_OUT = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
 
 const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -40,53 +43,37 @@ function blocked(target: EventTarget | null, root: HTMLElement) {
 	return false;
 }
 
-// A page moved sideways must not widen the document: phones would zoom out to show it all
-function clip(node: HTMLElement, on: boolean) {
-	if (node.parentElement) node.parentElement.style.overflowX = on ? 'clip' : '';
-}
-
-/** Keeps the parent clipped until the animation ends. */
-function clipping(node: HTMLElement, animation: Animation) {
-	clip(node, true);
-	animation.finished.then(
-		() => clip(node, false),
-		() => {}
-	);
-	return animation;
-}
-
-function slideIn(node: HTMLElement, dir: 1 | -1) {
-	if (reduced()) return;
-	clipping(
-		node,
-		node.animate(
-			[
-				{ translate: `${dir * 24}% 0`, opacity: 0 },
-				{ translate: '0 0', opacity: 1 }
-			],
-			{ duration: 220, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }
-		)
-	);
-}
-
 export function swipe(node: HTMLElement, options: SwipeOptions) {
 	let opts = options;
 	let start: { x: number; y: number; t: number; id: number } | null = null;
 	let horizontal = false;
 	let busy = false;
 	let dx = 0;
+	// Distance between the two pages' content, and the page's top in the document
+	let gap = 0;
+	let top = 0;
 	let swallowUntil = -Infinity;
 
 	node.style.touchAction = 'pan-y pinch-zoom';
-	if (entering && performance.now() - entering.at < 5000) {
-		slideIn(node, entering.dir);
-		entering = null;
+
+	const move = (x: number) => (node.style.translate = x ? `${x}px 0` : '');
+
+	// The pages side by side must not widen the document: phones would zoom out to show it all
+	function show(on: boolean) {
+		node.toggleAttribute('data-swiping', on);
+		if (node.parentElement) node.parentElement.style.overflowX = on ? 'clip' : '';
 	}
 
-	const move = (x: number, opacity = 1) => {
-		node.style.translate = x ? `${x}px 0` : '';
-		node.style.opacity = opacity < 1 ? String(opacity) : '';
-	};
+	function setUp() {
+		const parent = node.parentElement;
+		const pad = parent ? getComputedStyle(parent) : null;
+		gap = pad ? parseFloat(pad.paddingLeft) + parseFloat(pad.paddingRight) : 32;
+		top = node.getBoundingClientRect().top + scrollY;
+		node.style.setProperty('--peek-gap', `${gap}px`);
+		// The neighbour shows from the top of what is on screen, not above it
+		node.style.setProperty('--peek-top', `${Math.max(0, scrollY - top)}px`);
+		show(true);
+	}
 
 	function reset() {
 		start = null;
@@ -94,49 +81,37 @@ export function swipe(node: HTMLElement, options: SwipeOptions) {
 		dx = 0;
 	}
 
-	function back() {
-		const from = dx;
-		move(0);
-		if (from && !reduced())
-			clipping(
-				node,
-				node.animate([{ translate: `${from}px 0` }, { translate: '0 0' }], {
-					duration: 200,
-					easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+	async function slide(from: number, to: number, duration: number) {
+		move(to);
+		if (from !== to)
+			await node
+				.animate([{ translate: `${from}px 0` }, { translate: `${to}px 0` }], {
+					duration,
+					easing: EASE_OUT
 				})
-			);
-		else clip(node, false);
+				.finished.catch(() => {});
 	}
 
-	async function finish(dir: 1 | -1) {
+	async function back(from: number) {
 		busy = true;
-		const width = node.offsetWidth;
-		if (!reduced()) {
-			const out = node.animate(
-				[
-					{ translate: `${dx}px 0`, opacity: 1 },
-					{ translate: `${-dir * width}px 0`, opacity: 0 }
-				],
-				{ duration: 180, easing: 'cubic-bezier(0.4, 0, 1, 1)', fill: 'forwards' }
-			);
+		await slide(from, 0, 220);
+		show(false);
+		busy = false;
+	}
+
+	async function finish(dir: 1 | -1, from: number) {
+		busy = true;
+		const target = -dir * (node.offsetWidth + gap);
+		// Quicker when the finger already went most of the way
+		await slide(from, target, Math.max(140, 300 * (1 - Math.abs(from / target))));
+		const scrolled = scrollY;
+		const ok = await opts.go(dir, true).catch(() => false);
+		if (ok) {
+			// The new page takes the placeholder's place: the page top, or the top of the screen
+			show(false);
 			move(0);
-			await out.finished.catch(() => {});
-			entering = { dir, at: performance.now() };
-			const ok = await opts.go(dir).catch(() => false);
-			out.cancel();
-			clip(node, false);
-			if (!ok) {
-				entering = null;
-				slideIn(node, -dir as 1 | -1);
-			} else if (node.isConnected && entering) {
-				// Same element, new work: it slides in from the side the finger came from
-				entering = null;
-				slideIn(node, dir);
-			}
-		} else {
-			move(0);
-			await opts.go(dir).catch(() => false);
-		}
+			scrollTo(0, Math.min(scrolled, top));
+		} else await back(target);
 		busy = false;
 	}
 
@@ -157,12 +132,12 @@ export function swipe(node: HTMLElement, options: SwipeOptions) {
 			if (Math.abs(x) < Math.abs(y) * 1.5) return reset();
 			horizontal = true;
 			node.setPointerCapture(e.pointerId);
-			clip(node, true);
+			if (!reduced()) setUp();
 		}
 		const dir = x < 0 ? 1 : -1;
 		// Nothing that way: a short elastic pull, no wrap-around
 		dx = opts.can(dir) ? x : Math.sign(x) * Math.min(40, Math.abs(x) / 4);
-		if (!reduced()) move(dx, 1 - Math.min(0.4, Math.abs(dx) / node.offsetWidth));
+		if (!reduced()) move(dx);
 	}
 
 	function up(e: PointerEvent) {
@@ -173,15 +148,20 @@ export function swipe(node: HTMLElement, options: SwipeOptions) {
 		const speed = Math.abs(x) / Math.max(1, e.timeStamp - start.t);
 		const dir = x < 0 ? 1 : -1;
 		const far = Math.abs(x) > node.offsetWidth * 0.25 || (speed > 0.5 && Math.abs(x) > 40);
-		if (far && opts.can(dir)) void finish(dir);
-		else back();
+		const from = dx;
 		reset();
+		if (reduced()) {
+			if (far && opts.can(dir)) void opts.go(dir, false);
+		} else if (far && opts.can(dir)) void finish(dir, from);
+		else void back(from);
 	}
 
 	function cancel(e: PointerEvent) {
 		if (!start || e.pointerId !== start.id) return;
-		back();
+		const from = dx;
+		const was = horizontal;
 		reset();
+		if (was && !reduced()) void back(from);
 	}
 
 	// The click following a swipe that ended on a link or a button does nothing
@@ -200,6 +180,7 @@ export function swipe(node: HTMLElement, options: SwipeOptions) {
 	return {
 		update: (next: SwipeOptions) => (opts = next),
 		destroy() {
+			if (node.parentElement) node.parentElement.style.overflowX = '';
 			node.removeEventListener('pointerdown', down);
 			node.removeEventListener('pointermove', pointermove);
 			node.removeEventListener('pointerup', up);

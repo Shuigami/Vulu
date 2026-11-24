@@ -14,8 +14,22 @@ export type BrowseItem = {
 	mediaId: number | null;
 	title: string;
 	type: string;
+	posterUrl?: string | null;
 	provider?: string | null;
 	externalId?: string | null;
+};
+
+/**
+ * What the page beside the current one shows while swiping (`MediaSkeleton`): the card's title
+ * and poster, then the work's backdrop and facts once its data is preloaded.
+ */
+export type Peek = {
+	title: string;
+	type: string;
+	posterUrl: string | null;
+	/** Undefined while not known (a backdrop is assumed), null when the work has none. */
+	backdropUrl?: string | null;
+	line?: string;
 };
 
 type Row = { items: BrowseItem[]; index: number };
@@ -41,6 +55,10 @@ function save() {
 }
 
 const state = $state<{ row: Row | null }>({ row: browser ? load() : null });
+// Works preloaded for the swipe, by media id (not persisted: preloaded again after a reload)
+const peeks = $state<Record<number, Peek>>({});
+/** True while a swipe opens the next work: the page beside stands in, no skeleton. */
+export const sliding = $state({ active: false });
 // Set by a card tap, read by the next navigation: only a tapped card starts a row
 let armed = false;
 
@@ -48,10 +66,11 @@ let armed = false;
 export function startBrowse(items: BrowseItem[], index: number) {
 	// Only what moving along needs: the row is kept in sessionStorage
 	state.row = {
-		items: items.map(({ mediaId, title, type, provider, externalId }) => ({
+		items: items.map(({ mediaId, title, type, posterUrl, provider, externalId }) => ({
 			mediaId,
 			title,
 			type,
+			posterUrl: posterUrl ?? null,
 			...(mediaId === null && { provider, externalId })
 		})),
 		index
@@ -121,11 +140,58 @@ export function neighbours(mediaId: number) {
 
 const mediaHref = (id: number) => resolve('/(app)/media/[id]', { id: String(id) });
 
-/** Warms the neighbours' data so a swipe lands at once (provider results cannot be). */
+/** What to show of a neighbour while swiping towards it. */
+export function peekOf(item: BrowseItem): Peek {
+	return (
+		(item.mediaId !== null && peeks[item.mediaId]) || {
+			title: item.title,
+			type: item.type,
+			posterUrl: item.posterUrl ?? null
+		}
+	);
+}
+
+type Preloaded = {
+	media?: {
+		title: string;
+		type: string;
+		posterUrl: string | null;
+		backdropUrl: string | null;
+		startDate: string | null;
+		runtimeMinutes: number | null;
+	};
+};
+
+/**
+ * Warms the neighbours' data so a swipe lands at once (provider results cannot be), and keeps
+ * what the page beside needs to look like the work, images included.
+ */
 export function preloadNeighbours(mediaId: number) {
 	const { prev, next } = neighbours(mediaId);
-	for (const item of [next, prev])
-		if (item?.mediaId != null) preloadData(mediaHref(item.mediaId)).catch(() => {});
+	for (const item of [next, prev]) {
+		const id = item?.mediaId;
+		if (id == null) continue;
+		preloadData(mediaHref(id))
+			.then((result) => {
+				const media = result.type === 'loaded' ? (result.data as Preloaded).media : undefined;
+				if (!media) return;
+				peeks[id] = {
+					title: media.title,
+					type: media.type,
+					posterUrl: media.posterUrl,
+					backdropUrl: media.backdropUrl,
+					line: [
+						media.startDate?.slice(0, 4),
+						media.runtimeMinutes && `${media.runtimeMinutes} min`
+					]
+						.filter(Boolean)
+						.join(' · ')
+				};
+				for (const src of [media.posterUrl, media.backdropUrl])
+					if (src) Object.assign(new Image(), { referrerPolicy: 'no-referrer', src });
+			})
+			.catch(() => {});
+	}
 }
 
 /** Imports a provider result like a tap on it does (`search?/open`): the page to open. */
@@ -147,23 +213,34 @@ async function importItem(item: BrowseItem): Promise<string | null> {
 /**
  * Opens the previous (-1) or next (1) work of the row. The history entry is replaced, so Back
  * returns to the page of the row. False when there is no such work or it could not be opened.
+ * `swiped`: the page beside stands in while loading (no skeleton), and the scroll position is
+ * left to the swipe.
  */
-export async function step(mediaId: number, dir: 1 | -1): Promise<boolean> {
+export async function step(mediaId: number, dir: 1 | -1, swiped = false): Promise<boolean> {
 	const at = indexOf(mediaId);
 	const item = at < 0 ? undefined : state.row!.items[at + dir];
 	if (!item) return false;
+	if (swiped) sliding.active = true;
+	try {
+		return await open(item, at + dir, swiped);
+	} finally {
+		sliding.active = false;
+	}
+}
+
+async function open(item: BrowseItem, index: number, swiped: boolean) {
 	let href: string | null;
 	if (item.mediaId === null) {
-		opening.active = true;
+		if (!swiped) opening.active = true;
 		href = await importItem(item);
 		opening.active = false;
 		const id = href?.match(/\/media\/(\d+)/)?.[1];
 		if (!href || !id) return false;
 		item.mediaId = Number(id);
 	} else href = mediaHref(item.mediaId);
-	state.row!.index = at + dir;
+	state.row!.index = index;
 	save();
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- resolved above, or the action's redirect
-	await goto(href, { replace: true });
+	await goto(href, { replace: true, reset: !swiped });
 	return true;
 }
